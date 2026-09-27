@@ -1,0 +1,3 @@
+# Phase 1 has no third-party runtime dependencies.
+# tkinter/ttk ship with the standard python.org Windows installer.
+# Phase 2 will add: edge-tts
