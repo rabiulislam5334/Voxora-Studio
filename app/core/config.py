@@ -22,6 +22,7 @@ class AppConfig:
     projects_dir: Path = field(init=False)
     output_dir: Path = field(init=False)
     cache_dir: Path = field(init=False)
+    previews_dir: Path = field(init=False)
     temp_dir: Path = field(init=False)
     logs_dir: Path = field(init=False)
     assets_dir: Path = field(init=False)
@@ -29,11 +30,17 @@ class AppConfig:
     default_language: str = "en"
     default_theme: str = constants.DEFAULT_THEME
 
+    # --- Phase 2: TTS defaults ---
+    default_tts_provider: str = constants.DEFAULT_TTS_PROVIDER
+    default_voice_id: Optional[str] = None
+    default_speed: float = constants.DEFAULT_SPEED
+
     def __post_init__(self) -> None:
         self.root_dir = Path(self.root_dir)
         self.projects_dir = self.root_dir / constants.DIR_PROJECTS
         self.output_dir = self.root_dir / constants.DIR_OUTPUT
         self.cache_dir = self.root_dir / constants.DIR_CACHE
+        self.previews_dir = self.cache_dir / "previews"
         self.temp_dir = self.root_dir / constants.DIR_TEMP
         self.logs_dir = self.root_dir / constants.DIR_LOGS
         self.assets_dir = self.root_dir / constants.DIR_ASSETS
@@ -43,6 +50,7 @@ class AppConfig:
             self.projects_dir,
             self.output_dir,
             self.cache_dir,
+            self.previews_dir,
             self.temp_dir,
             self.logs_dir,
         ]

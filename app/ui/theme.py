@@ -13,6 +13,9 @@ DARK = {
     "fg_muted": "#9a9ba6",
     "accent": "#6c8cff",
     "border": "#33343f",
+    "error": "#ff6b6b",
+    "success": "#4cd97b",
+    "field_bg": "#12131a",
 }
 
 LIGHT = {
@@ -23,6 +26,9 @@ LIGHT = {
     "fg_muted": "#5b5d68",
     "accent": "#3f5fdb",
     "border": "#d7d8de",
+    "error": "#c62828",
+    "success": "#1e8e3e",
+    "field_bg": "#ffffff",
 }
 
 _PALETTES = {"dark": DARK, "light": LIGHT}
@@ -34,8 +40,8 @@ def get_palette(theme: Theme) -> dict:
 
 def apply_theme(style: ttk.Style, theme: Theme) -> dict:
     """Configure every ttk style used by the shell. Returns the palette so
-    callers (main_window) can use raw colors for things ttk styles can't
-    reach (e.g. root window background)."""
+    callers can use raw colors for things ttk styles can't reach (root
+    window background, plain tk.Text widgets, etc.)."""
     palette = get_palette(theme)
     style.theme_use("clam")  # 'clam' honors background/border overrides reliably
 
@@ -51,7 +57,7 @@ def apply_theme(style: ttk.Style, theme: Theme) -> dict:
         borderwidth=1,
     )
 
-    # Labels — one style per background context so text never mismatches its frame
+    # Labels
     style.configure("App.TLabel", background=palette["bg"], foreground=palette["fg"],
                      font=("Segoe UI", 10))
     style.configure("PageTitle.TLabel", background=palette["bg"], foreground=palette["fg"],
@@ -66,6 +72,12 @@ def apply_theme(style: ttk.Style, theme: Theme) -> dict:
                      font=("Segoe UI", 9, "bold"))
     style.configure("Status.TLabel", background=palette["bg_alt"], foreground=palette["fg_muted"],
                      font=("Segoe UI", 9))
+    style.configure("Error.TLabel", background=palette["bg"], foreground=palette["error"],
+                     font=("Segoe UI", 9, "bold"))
+    style.configure("Success.TLabel", background=palette["bg"], foreground=palette["success"],
+                     font=("Segoe UI", 9, "bold"))
+    style.configure("SectionTitle.TLabel", background=palette["bg"], foreground=palette["fg"],
+                     font=("Segoe UI", 11, "bold"))
 
     # Buttons
     style.configure("Nav.TButton", background=palette["sidebar_bg"], foreground=palette["fg"],
@@ -80,115 +92,36 @@ def apply_theme(style: ttk.Style, theme: Theme) -> dict:
                      padding=(12, 8), font=("Segoe UI", 10, "bold"))
     style.map("Primary.TButton", background=[("active", palette["accent"])])
 
+    style.configure("Secondary.TButton", background=palette["bg_alt"], foreground=palette["fg"],
+                     padding=(10, 6), font=("Segoe UI", 9))
+    style.map("Secondary.TButton", background=[("active", palette["border"])])
+
+    # Treeview (voice list)
+    style.configure(
+        "Voice.Treeview",
+        background=palette["field_bg"],
+        fieldbackground=palette["field_bg"],
+        foreground=palette["fg"],
+        borderwidth=0,
+        rowheight=26,
+        font=("Segoe UI", 9),
+    )
+    style.map("Voice.Treeview", background=[("selected", palette["accent"])],
+              foreground=[("selected", "#ffffff")])
+    style.configure(
+        "Voice.Treeview.Heading",
+        background=palette["bg_alt"],
+        foreground=palette["fg_muted"],
+        font=("Segoe UI", 9, "bold"),
+        borderwidth=0,
+    )
+
+    # Combobox
+    style.configure("App.TCombobox", fieldbackground=palette["field_bg"],
+                     background=palette["field_bg"], foreground=palette["fg"])
+
+    # Progressbar
+    style.configure("App.Horizontal.TProgressbar", background=palette["accent"],
+                     troughcolor=palette["bg_alt"], borderwidth=0)
+
     return palette
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
