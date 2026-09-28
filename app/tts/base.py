@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional
 
 from app.models.voice import Voice
@@ -36,9 +37,10 @@ class SynthResult:
 class TTSProvider(ABC):
     """Contract every TTS provider adapter must implement.
 
-    Phase 1 defines the interface only — no subclass exists yet, no network
-    I/O happens here. Edge TTS lands in Phase 2 as the first concrete
-    implementation (app/tts/edge_tts_provider.py).
+    The UI and GenerationQueue (future phase) never talk to a concrete
+    provider directly -- they go through TTSManager, which in turn only
+    knows this interface. That is what lets ElevenLabs/OpenAI/Azure/Piper
+    be added later without touching UI code.
     """
 
     provider_id: str = "base"
@@ -60,5 +62,19 @@ class TTSProvider(ABC):
 
     @abstractmethod
     async def generate(self, text: str, voice_id: str, **settings) -> SynthResult:
-        """Synthesize speech. Implemented by concrete providers in Phase 2+."""
+        """Synthesize speech. `settings` is expected to include at least
+        `output_path: Path` and may include `speed`, `pitch`, `volume`,
+        `style`, etc. -- providers ignore settings they don't support."""
         raise NotImplementedError
+
+    async def preview_voice(
+        self,
+        voice_id: str,
+        output_path: Path,
+        sample_text: Optional[str] = None,
+    ) -> SynthResult:
+        """Default preview implementation: generate a short sample using
+        the normal generate() path. Providers may override this if their
+        API offers a lighter-weight/dedicated preview mechanism."""
+        text = sample_text or "This is a short voice preview."
+        return await self.generate(text, voice_id, output_path=output_path, speed=1.0)
