@@ -5,19 +5,24 @@ from tkinter import ttk
 from typing import Dict, Optional
 
 from app.core import constants
+from app.core.async_bridge import AsyncBridge
 from app.core.config import get_config
 from app.core.logger import get_logger
+from app.tts.edge_tts_provider import EdgeTTSProvider
+from app.tts.manager import TTSManager
 from app.ui.sidebar import Sidebar
 from app.ui.status_bar import StatusBar
 from app.ui.theme import apply_theme
+from app.ui.voice_panel import VoicePanel
 
 logger = get_logger("ui.main_window")
+
+_POLL_INTERVAL_MS = 120
 
 _PAGE_DESCRIPTIONS: Dict[str, str] = {
     "Dashboard": "Overview of your projects and current TTS provider status.",
     "Projects": "The project browser will be implemented in a later phase.",
-    "Script": "The script editor will be implemented in Phase 3.",
-    "Voice": "Voice library and voice settings will be implemented in Phase 2/3.",
+    "Script": "The full scene-based script editor will be implemented in Phase 3.",
     "Audio": "Audio preview and processing tools will be implemented in Phase 6.",
     "Timeline": "The scene/audio timeline will be implemented in Phase 12.",
     "Subtitles": "SRT subtitle generation will be implemented in Phase 8.",
@@ -33,6 +38,10 @@ class MainWindow:
         self.theme_name = self.config.default_theme
         self.palette = apply_theme(self.style, self.theme_name)
 
+        self.tts_manager = TTSManager()
+        self.tts_manager.register(EdgeTTSProvider(), set_active=True)
+        self.async_bridge = AsyncBridge()
+
         self._pages: Dict[str, ttk.Frame] = {}
         self._current_page: Optional[str] = None
         self._unsaved_changes = False
@@ -41,6 +50,7 @@ class MainWindow:
         self._build_window()
         self._build_layout()
         self._show_page("Dashboard")
+        self._poll_async_bridge()
 
         logger.info("Main window initialized")
 
@@ -96,6 +106,19 @@ class MainWindow:
     def _build_pages(self) -> None:
         for name, description in _PAGE_DESCRIPTIONS.items():
             self._pages[name] = self._build_placeholder_page(name, description)
+        self._pages["Voice"] = self._build_voice_page()
+
+    def _build_voice_page(self) -> VoicePanel:
+        panel = VoicePanel(
+            self.content,
+            tts_manager=self.tts_manager,
+            async_bridge=self.async_bridge,
+            config=self.config,
+            palette=self.palette,
+            on_status=self.status_bar.set_text,
+        )
+        panel.grid(row=0, column=0, sticky="nsew")
+        return panel
 
     def _build_placeholder_page(self, name: str, description: str) -> ttk.Frame:
         page = ttk.Frame(self.content, style="App.TFrame")
@@ -131,7 +154,7 @@ class MainWindow:
         card_info = [
             ("Projects", "0 saved locally"),
             ("Recent Project", "None yet"),
-            ("TTS Provider", "Not yet configured (Phase 2)"),
+            ("TTS Provider", self.tts_manager.get_provider_name()),
             ("Application Status", "Ready"),
         ]
         for i, (title, value) in enumerate(card_info):
@@ -151,7 +174,13 @@ class MainWindow:
         self.status_bar.set_text(name)
         logger.debug("Navigated to page: %s", name)
 
-    # ---------- actions (placeholders — wired up in later phases) ----------
+    # ---------- background task polling ----------
+
+    def _poll_async_bridge(self) -> None:
+        self.async_bridge.poll()
+        self.root.after(_POLL_INTERVAL_MS, self._poll_async_bridge)
+
+    # ---------- actions ----------
 
     def _on_new_project(self) -> None:
         self.status_bar.set_text("New project — full flow implemented in a later phase.")
@@ -167,16 +196,20 @@ class MainWindow:
         self.palette = apply_theme(self.style, self.theme_name)
         self.root.configure(background=self.palette["bg"])
 
-        current = self._current_page or "Dashboard"
+        # ttk widgets restyle themselves automatically via the style names
+        # they were created with. Only pages holding raw tk widgets (e.g.
+        # VoicePanel's tk.Text) need an explicit recolor -- rebuilding
+        # every page from scratch would wipe in-progress script text.
         for page in self._pages.values():
-            page.destroy()
-        self._pages.clear()
-        self._build_pages()
-        self._show_page(current)
+            if hasattr(page, "apply_theme"):
+                page.apply_theme(self.palette)
+
         logger.info("Theme switched to %s", self.theme_name)
 
     def _on_close(self) -> None:
         if self._unsaved_changes:
             logger.info("Closing with unsaved changes (autosave/prompt lands in a later phase)")
+        logger.info("Shutting down background TTS worker")
+        self.async_bridge.shutdown()
         logger.info("Application closing")
         self.root.destroy()
