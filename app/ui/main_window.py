@@ -207,8 +207,18 @@ class MainWindow:
         logger.info("Theme switched to %s", self.theme_name)
 
     def _on_close(self) -> None:
+        for page in self._pages.values():
+            if hasattr(page, "confirm_close") and not page.confirm_close():
+                logger.info("Close cancelled by page veto (e.g. unsaved audio)")
+                return
+
         if self._unsaved_changes:
             logger.info("Closing with unsaved changes (autosave/prompt lands in a later phase)")
+
+        for page in self._pages.values():
+            if hasattr(page, "shutdown"):
+                page.shutdown()
+
         logger.info("Shutting down background TTS worker")
         self.async_bridge.shutdown()
         logger.info("Application closing")

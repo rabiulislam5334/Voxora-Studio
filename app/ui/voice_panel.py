@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
 
+from app.audio.player import AudioPlayer, PlaybackState, VoicePreviewPlayer
+from app.audio.session import GeneratedAudioSession
 from app.core.async_bridge import AsyncBridge
 from app.core.config import AppConfig
 from app.core.constants import SPEED_PRESETS
-from app.core.exceptions import TTSProviderError
+from app.core.exceptions import AudioProcessingError, TTSProviderError
 from app.core.filenames import safe_filename
 from app.core.logger import get_logger
 from app.models.voice import Voice
 from app.tts.manager import TTSManager
 from app.tts.base import SynthResult
-from app.audio.player import AudioPlayer
 
 logger = get_logger("ui.voice_panel")
 
@@ -26,16 +27,27 @@ _LANGUAGE_LABELS = {
 _ALL_LANGUAGES = "All Languages"
 _ALL_GENDERS = "All Genders"
 
+_UI_REFRESH_MS = 200
+
 
 def _language_label(prefix: str) -> str:
     return _LANGUAGE_LABELS.get(prefix, prefix)
 
 
+def _format_time(seconds: float) -> str:
+    total = max(0, int(seconds))
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
 class VoicePanel(ttk.Frame):
     """Voice Library (discovery/filter/preview) + a functional
-    text-to-speech generation lab, backed by TTSManager. This is the
-    Phase 2 working slice; the full scene-based script editor and the
-    dedicated Voice Settings panel (pitch/volume/style) land in Phase 3+.
+    text-to-speech generation lab with a full in-app audio player
+    (Phase 2.1): play/pause/resume/stop/seek/volume, plus an explicit
+    Save As export step. Generation always writes to one deterministic
+    app-owned temp folder (see app/audio/session.py) -- there is no
+    longer a separate, independently-editable "output folder" field for
+    generation to silently disagree with; Save As is the only way audio
+    leaves the app's own storage.
     """
 
     def __init__(
@@ -53,16 +65,22 @@ class VoicePanel(ttk.Frame):
         self._config = config
         self._palette = palette
         self._on_status = on_status or (lambda text: None)
-        self._player = AudioPlayer()
+
+        self._preview_player = VoicePreviewPlayer()
+        self._audio_player = AudioPlayer()
+        self._session = GeneratedAudioSession(config.generated_audio_dir)
 
         self._all_voices: List[Voice] = []
         self._filtered_voices: List[Voice] = []
         self._selected_voice: Optional[Voice] = None
         self._busy = False
-        self._output_dir = config.output_dir
+        self._seeking = False
+        self._ui_update_job: Optional[str] = None
+        self._player_controls_enabled = False
 
         self._build_layout()
         self._load_voices(initial=True)
+        self._schedule_ui_update()
 
     # ------------------------------------------------------------------
     # Layout
@@ -177,7 +195,7 @@ class VoicePanel(ttk.Frame):
         )
 
         self._text_widget = tk.Text(
-            parent, height=10, wrap="word", font=("Segoe UI", 10),
+            parent, height=9, wrap="word", font=("Segoe UI", 10),
             background=self._palette["field_bg"], foreground=self._palette["fg"],
             insertbackground=self._palette["fg"], relief="flat", padx=8, pady=8,
         )
@@ -195,50 +213,98 @@ class VoicePanel(ttk.Frame):
             controls_row, textvariable=self._speed_var, values=speed_values,
             state="readonly", style="App.TCombobox", width=8,
         )
-        speed_combo.grid(row=0, column=1, padx=(8, 16))
+        speed_combo.grid(row=0, column=1, padx=(8, 0))
 
-        ttk.Label(controls_row, text="Output folder:", style="Muted.TLabel").grid(row=0, column=2, sticky="w")
-        self._output_dir_var = tk.StringVar(value=str(self._output_dir))
-        output_entry = ttk.Entry(controls_row, textvariable=self._output_dir_var, state="readonly", width=26)
-        output_entry.grid(row=0, column=3, padx=(8, 8))
-        ttk.Button(
-            controls_row, text="Browse...", style="Secondary.TButton", command=self._on_browse_output_dir
-        ).grid(row=0, column=4)
-
-        actions_row = ttk.Frame(parent, style="App.TFrame")
-        actions_row.grid(row=3, column=0, sticky="ew", pady=(0, 8))
         self._generate_btn = ttk.Button(
-            actions_row, text="Generate", style="Primary.TButton", command=self._on_generate_click
+            controls_row, text="Generate", style="Primary.TButton", command=self._on_generate_click
         )
-        self._generate_btn.pack(side="left")
-        self._open_folder_btn = ttk.Button(
-            actions_row, text="Open Output Folder", style="Secondary.TButton",
-            command=self._on_open_output_folder,
-        )
-        self._open_folder_btn.pack(side="left", padx=(8, 0))
+        self._generate_btn.grid(row=0, column=2, padx=(16, 0))
 
         self._progress = ttk.Progressbar(
             parent, mode="indeterminate", style="App.Horizontal.TProgressbar"
         )
-        self._progress.grid(row=4, column=0, sticky="ew", pady=(0, 8))
+        self._progress.grid(row=3, column=0, sticky="ew", pady=(0, 4))
 
         self._generation_status = ttk.Label(parent, text="", style="Muted.TLabel", wraplength=480, justify="left")
-        self._generation_status.grid(row=5, column=0, sticky="w")
+        self._generation_status.grid(row=4, column=0, sticky="w", pady=(0, 12))
+
+        self._build_player(parent)
+
+    def _build_player(self, parent: ttk.Frame) -> None:
+        ttk.Separator(parent, orient="horizontal").grid(row=5, column=0, sticky="ew", pady=(0, 12))
+
+        ttk.Label(parent, text="Generated Audio Player", style="SectionTitle.TLabel").grid(
+            row=6, column=0, sticky="w", pady=(0, 8)
+        )
+
+        transport_row = ttk.Frame(parent, style="App.TFrame")
+        transport_row.grid(row=7, column=0, sticky="ew", pady=(0, 8))
+
+        self._play_pause_btn = ttk.Button(
+            transport_row, text="\u25b6 Play", style="Primary.TButton",
+            command=self._on_play_pause_click, state="disabled",
+        )
+        self._play_pause_btn.pack(side="left")
+
+        self._stop_btn = ttk.Button(
+            transport_row, text="\u25a0 Stop", style="Secondary.TButton",
+            command=self._on_stop_click, state="disabled",
+        )
+        self._stop_btn.pack(side="left", padx=(8, 0))
+
+        self._save_as_btn = ttk.Button(
+            transport_row, text="Save As...", style="Secondary.TButton",
+            command=self._on_save_as_click, state="disabled",
+        )
+        self._save_as_btn.pack(side="left", padx=(8, 0))
+
+        self._regenerate_btn = ttk.Button(
+            transport_row, text="Regenerate", style="Secondary.TButton",
+            command=self._on_generate_click, state="disabled",
+        )
+        self._regenerate_btn.pack(side="left", padx=(8, 0))
+
+        seek_row = ttk.Frame(parent, style="App.TFrame")
+        seek_row.grid(row=8, column=0, sticky="ew", pady=(0, 4))
+        seek_row.columnconfigure(0, weight=1)
+
+        self._seek_scale = ttk.Scale(
+            seek_row, from_=0, to=1, orient="horizontal", command=self._on_seek_drag
+        )
+        self._seek_scale.grid(row=0, column=0, sticky="ew")
+        self._seek_scale.state(["disabled"])
+        self._seek_scale.bind("<ButtonPress-1>", self._on_seek_press)
+        self._seek_scale.bind("<ButtonRelease-1>", self._on_seek_release)
+
+        time_volume_row = ttk.Frame(parent, style="App.TFrame")
+        time_volume_row.grid(row=9, column=0, sticky="ew", pady=(0, 8))
+
+        self._time_label = ttk.Label(time_volume_row, text="00:00 / 00:00", style="Muted.TLabel")
+        self._time_label.pack(side="left")
+
+        ttk.Label(time_volume_row, text="Volume:", style="Muted.TLabel").pack(side="left", padx=(24, 4))
+        self._volume_scale = ttk.Scale(
+            time_volume_row, from_=0, to=100, orient="horizontal",
+            command=self._on_volume_change, length=120,
+        )
+        self._volume_scale.set(100)
+        self._volume_scale.pack(side="left")
+
+        self._playback_status = ttk.Label(parent, text="Ready", style="Muted.TLabel")
+        self._playback_status.grid(row=10, column=0, sticky="w")
 
     # ------------------------------------------------------------------
     # Theme
     # ------------------------------------------------------------------
 
     def apply_theme(self, palette: dict) -> None:
-        """Called by MainWindow on theme toggle. ttk widgets restyle
-        themselves automatically; only raw tk.Text needs manual recoloring."""
         self._palette = palette
         self._text_widget.configure(
             background=palette["field_bg"], foreground=palette["fg"], insertbackground=palette["fg"]
         )
 
     # ------------------------------------------------------------------
-    # Voice loading / filtering
+    # Voice loading / filtering (unchanged from Phase 2)
     # ------------------------------------------------------------------
 
     def _load_voices(self, force_refresh: bool = False, initial: bool = False) -> None:
@@ -318,7 +384,7 @@ class VoicePanel(ttk.Frame):
             self._preview_btn.configure(state="normal")
 
     # ------------------------------------------------------------------
-    # Preview
+    # Preview (independent audio channel -- never touches the main player)
     # ------------------------------------------------------------------
 
     def _on_preview_click(self) -> None:
@@ -340,7 +406,7 @@ class VoicePanel(ttk.Frame):
         self._set_busy(False)
         self._library_status.configure(text="Playing preview...", style="Success.TLabel")
         self._on_status("Playing voice preview.")
-        self._player.play(
+        self._preview_player.play(
             Path(result.audio_path),
             on_error=lambda exc: self._on_playback_error(exc),
         )
@@ -353,32 +419,12 @@ class VoicePanel(ttk.Frame):
         logger.error("Preview failed: %s", error)
 
     def _on_playback_error(self, error: Exception) -> None:
-        self._library_status.configure(text=f"Playback failed: {error}", style="Error.TLabel")
-        logger.error("Playback failed: %s", error)
+        self._library_status.configure(text=f"Preview playback failed: {error}", style="Error.TLabel")
+        logger.error("Preview playback failed: %s", error)
 
     # ------------------------------------------------------------------
     # Generation
     # ------------------------------------------------------------------
-
-    def _on_browse_output_dir(self) -> None:
-        chosen = filedialog.askdirectory(initialdir=str(self._output_dir))
-        if chosen:
-            self._output_dir = Path(chosen)
-            self._output_dir_var.set(chosen)
-
-    def _on_open_output_folder(self) -> None:
-        import os
-        import sys
-
-        try:
-            if sys.platform == "win32":
-                os.startfile(str(self._output_dir))  # noqa: S606 - user-chosen local folder
-            else:
-                self._generation_status.configure(
-                    text=f"Output folder: {self._output_dir}", style="Muted.TLabel"
-                )
-        except OSError as exc:
-            self._generation_status.configure(text=f"Could not open folder: {exc}", style="Error.TLabel")
 
     def _on_generate_click(self) -> None:
         if self._busy:
@@ -394,11 +440,19 @@ class VoicePanel(ttk.Frame):
 
         speed = float(self._speed_var.get().rstrip("x"))
         voice = self._selected_voice
-        output_path = self._output_dir / safe_filename(voice.id, "mp3")
+
+        # Release any lock on the currently-loaded (about to be replaced)
+        # file BEFORE we start generating -- this is what makes it safe
+        # to delete the old temp file once the new one lands.
+        self._audio_player.stop()
+        self._set_player_controls_enabled(False)
+
+        output_path = self._config.generated_audio_dir / safe_filename(voice.id, "mp3")
 
         self._set_busy(True)
         self._progress.start(12)
         self._generation_status.configure(text="Generating speech...", style="Muted.TLabel")
+        self._playback_status.configure(text="Generating...", style="Muted.TLabel")
         self._on_status(f"Generating speech with {voice.name}...")
 
         self._bridge.run_coroutine(
@@ -410,20 +464,160 @@ class VoicePanel(ttk.Frame):
     def _on_generation_success(self, result: SynthResult) -> None:
         self._set_busy(False)
         self._progress.stop()
-        self._generation_status.configure(text=f"Done: {result.audio_path}", style="Success.TLabel")
+        new_path = Path(result.audio_path)
+
+        try:
+            duration = self._audio_player.load(new_path)
+        except AudioProcessingError as exc:
+            logger.warning("Generated audio saved but could not be loaded for playback: %s", exc)
+            self._session.adopt_new_generation(new_path)
+            self._generation_status.configure(
+                text="Audio generated, but in-app playback is unavailable on this system "
+                     f"({exc}). You can still use Save As.",
+                style="Error.TLabel",
+            )
+            self._set_player_controls_enabled(False)
+            self._save_as_btn.configure(state="normal")
+            self._on_status("Audio generated (playback unavailable).")
+            return
+
+        self._session.adopt_new_generation(new_path)
+        self._seek_scale.configure(to=max(duration, 0.1))
+        self._seek_scale.set(0)
+        self._set_player_controls_enabled(True)
+        self._generation_status.configure(text="Audio generated. Not yet saved.", style="Success.TLabel")
         self._on_status("Audio generated.")
-        logger.info("Generated audio: %s", result.audio_path)
+        logger.info("Generated audio: %s", new_path)
 
     def _on_generation_error(self, error: Exception) -> None:
         self._set_busy(False)
         self._progress.stop()
         message = str(error) if isinstance(error, TTSProviderError) else f"Unexpected error: {error}"
         self._generation_status.configure(text=f"Generation failed: {message}", style="Error.TLabel")
+        self._playback_status.configure(text="Ready", style="Muted.TLabel")
         self._on_status("Speech generation failed.")
         logger.error("Generation failed: %s", error)
 
     # ------------------------------------------------------------------
-    # Busy state
+    # Player transport
+    # ------------------------------------------------------------------
+
+    def _set_player_controls_enabled(self, enabled: bool) -> None:
+        self._player_controls_enabled = enabled
+        state = "normal" if enabled else "disabled"
+        self._play_pause_btn.configure(state=state)
+        self._stop_btn.configure(state=state)
+        self._save_as_btn.configure(state=state)
+        self._regenerate_btn.configure(state="normal" if self._selected_voice else "disabled")
+        if enabled:
+            self._seek_scale.state(["!disabled"])
+        else:
+            self._seek_scale.state(["disabled"])
+
+    def _on_play_pause_click(self) -> None:
+        if not self._player_controls_enabled:
+            return
+        status = self._audio_player.get_status()
+        try:
+            if status.state == PlaybackState.PLAYING:
+                self._audio_player.pause()
+            elif status.state == PlaybackState.PAUSED:
+                self._audio_player.resume()
+            else:
+                self._audio_player.play(start_seconds=0.0)
+        except AudioProcessingError as exc:
+            self._playback_status.configure(text=str(exc), style="Error.TLabel")
+            logger.error("Playback failed: %s", exc)
+
+    def _on_stop_click(self) -> None:
+        if not self._player_controls_enabled:
+            return
+        self._audio_player.stop()
+
+    def _on_seek_press(self, _event=None) -> None:
+        if self._player_controls_enabled:
+            self._seeking = True
+
+    def _on_seek_drag(self, _value) -> None:
+        if self._seeking:
+            self._time_label.configure(
+                text=f"{_format_time(float(_value))} / {_format_time(self._audio_player.get_status().duration_seconds)}"
+            )
+
+    def _on_seek_release(self, _event=None) -> None:
+        if not self._seeking:
+            return
+        self._seeking = False
+        if not self._player_controls_enabled:
+            return
+        try:
+            self._audio_player.seek(self._seek_scale.get())
+        except AudioProcessingError as exc:
+            self._playback_status.configure(text=str(exc), style="Error.TLabel")
+
+    def _on_volume_change(self, value: str) -> None:
+        try:
+            self._audio_player.set_volume(float(value) / 100.0)
+        except AudioProcessingError:
+            pass
+
+    def _on_save_as_click(self) -> None:
+        if self._session.current_path is None:
+            self._generation_status.configure(text="There is no generated audio to save yet.", style="Error.TLabel")
+            return
+
+        suggested_name = f"{self._selected_voice.id}.mp3" if self._selected_voice else "narration.mp3"
+        destination = filedialog.asksaveasfilename(
+            title="Save Generated Audio As",
+            defaultextension=".mp3",
+            filetypes=[("MP3 Audio", "*.mp3")],
+            initialdir=str(self._config.output_dir),
+            initialfile=suggested_name,
+        )
+        if not destination:
+            self._generation_status.configure(text="Save cancelled.", style="Muted.TLabel")
+            return
+
+        try:
+            saved_path = self._session.save_as(Path(destination))
+        except AudioProcessingError as exc:
+            self._generation_status.configure(text=f"Save failed: {exc}", style="Error.TLabel")
+            logger.error("Save As failed: %s", exc)
+            return
+
+        self._generation_status.configure(text=f"Saved to: {saved_path}", style="Success.TLabel")
+        self._on_status("Audio saved.")
+
+    # ------------------------------------------------------------------
+    # Periodic playback UI refresh
+    # ------------------------------------------------------------------
+
+    def _schedule_ui_update(self) -> None:
+        self._update_playback_ui()
+        self._ui_update_job = self.after(_UI_REFRESH_MS, self._schedule_ui_update)
+
+    def _update_playback_ui(self) -> None:
+        status = self._audio_player.get_status()
+
+        if not self._seeking:
+            self._seek_scale.set(status.position_seconds)
+            self._time_label.configure(
+                text=f"{_format_time(status.position_seconds)} / {_format_time(status.duration_seconds)}"
+            )
+
+        if status.state == PlaybackState.PLAYING:
+            self._play_pause_btn.configure(text="\u23f8 Pause")
+            self._playback_status.configure(text="Playing", style="Muted.TLabel")
+        elif status.state == PlaybackState.PAUSED:
+            self._play_pause_btn.configure(text="\u25b6 Play")
+            self._playback_status.configure(text="Paused", style="Muted.TLabel")
+        else:
+            self._play_pause_btn.configure(text="\u25b6 Play")
+            if self._player_controls_enabled:
+                self._playback_status.configure(text="Stopped", style="Muted.TLabel")
+
+    # ------------------------------------------------------------------
+    # Busy state (voice loading / generation in flight)
     # ------------------------------------------------------------------
 
     def _set_busy(self, busy: bool) -> None:
@@ -435,3 +629,27 @@ class VoicePanel(ttk.Frame):
             self._preview_btn.configure(state="normal")
         elif busy:
             self._preview_btn.configure(state="disabled")
+
+    # ------------------------------------------------------------------
+    # Lifecycle hooks called by MainWindow
+    # ------------------------------------------------------------------
+
+    def confirm_close(self) -> bool:
+        """Return False to veto closing the application."""
+        if self._session.current_path is not None and not self._session.is_saved:
+            return messagebox.askyesno(
+                "Unsaved Audio",
+                "You have generated audio that hasn't been saved with "
+                "Save As.\n\nClose AI YouTube Voice Studio anyway?",
+            )
+        return True
+
+    def shutdown(self) -> None:
+        if self._ui_update_job is not None:
+            try:
+                self.after_cancel(self._ui_update_job)
+            except Exception:
+                pass
+            self._ui_update_job = None
+        self._audio_player.shutdown()
+        self._session.cleanup()

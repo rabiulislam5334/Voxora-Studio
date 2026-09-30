@@ -123,5 +123,7 @@ def apply_theme(style: ttk.Style, theme: Theme) -> dict:
     # Progressbar
     style.configure("App.Horizontal.TProgressbar", background=palette["accent"],
                      troughcolor=palette["bg_alt"], borderwidth=0)
+    # Scale (seek bar, volume)
+    style.configure("Horizontal.TScale", background=palette["bg"], troughcolor=palette["bg_alt"])
 
     return palette
