@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Desktop AI voice production studio for YouTube narration (Bengali + English)."
 requires-python = ">=3.11"
 readme = "README.md"
-dependencies = []
+dependencies = [
+    "edge-tts>=6.1.9",
+    "playsound==1.2.2",
+]
 
 [project.optional-dependencies]
 dev = [

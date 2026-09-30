@@ -70,4 +70,18 @@ pytest
 
 ## Project Structure
 
-See `docs/development.md`.
+## Current Features
+
+- Everything from Phase 1 (shell, theming, navigation)
+- Microsoft Edge TTS integration: dynamic voice discovery, Bengali/English/gender filtering
+- Voice preview playback
+- Text-to-speech generation to MP3, with speed control and a chosen output folder
+- Background generation/voice-loading that never freezes the UI
+
+## Not Yet Implemented
+
+- ElevenLabs / OpenAI / Azure / Piper providers
+- Pitch/volume/style controls in the UI (provider supports them; UI exposes them in a later phase)
+- Scene-based script editor, long-form chunking, generation queue
+- Pronunciation dictionary, pause system, SRT, background music, video, timeline
+- Project save/load/autosave, packaging

@@ -1,3 +1,3 @@
-# Phase 1 has no third-party runtime dependencies.
-# tkinter/ttk ship with the standard python.org Windows installer.
-# Phase 2 will add: edge-tts
+# requirements.txt
+edge-tts>=6.1.9
+playsound==1.2.2

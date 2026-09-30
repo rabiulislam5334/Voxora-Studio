@@ -23,6 +23,7 @@ class AppConfig:
     output_dir: Path = field(init=False)
     cache_dir: Path = field(init=False)
     previews_dir: Path = field(init=False)
+    generated_audio_dir: Path = field(init=False)
     temp_dir: Path = field(init=False)
     logs_dir: Path = field(init=False)
     assets_dir: Path = field(init=False)
@@ -30,7 +31,6 @@ class AppConfig:
     default_language: str = "en"
     default_theme: str = constants.DEFAULT_THEME
 
-    # --- Phase 2: TTS defaults ---
     default_tts_provider: str = constants.DEFAULT_TTS_PROVIDER
     default_voice_id: Optional[str] = None
     default_speed: float = constants.DEFAULT_SPEED
@@ -41,6 +41,10 @@ class AppConfig:
         self.output_dir = self.root_dir / constants.DIR_OUTPUT
         self.cache_dir = self.root_dir / constants.DIR_CACHE
         self.previews_dir = self.cache_dir / "previews"
+        # Phase 2.1: every "Generate" writes here, and ONLY here -- see
+        # app/audio/session.py for why this single deterministic location
+        # is the fix for the old output-directory mismatch.
+        self.generated_audio_dir = self.cache_dir / "generated"
         self.temp_dir = self.root_dir / constants.DIR_TEMP
         self.logs_dir = self.root_dir / constants.DIR_LOGS
         self.assets_dir = self.root_dir / constants.DIR_ASSETS
@@ -51,6 +55,7 @@ class AppConfig:
             self.output_dir,
             self.cache_dir,
             self.previews_dir,
+            self.generated_audio_dir,
             self.temp_dir,
             self.logs_dir,
         ]
