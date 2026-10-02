@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from app.core.config import get_config
+from app.core.constants import APP_NAME
 from app.core.logger import get_logger, setup_logging
 from app.ui.main_window import MainWindow
 
@@ -35,7 +36,7 @@ def main() -> int:
         logger.exception("Unhandled error during application startup")
         _show_startup_error(
             "Startup Error",
-            "AI YouTube Voice Studio failed to start.\n"
+            f"{APP_NAME} failed to start.\n"
             "Check logs/app.log for details.",
         )
         return 1

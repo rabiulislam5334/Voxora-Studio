@@ -13,6 +13,7 @@ from app.tts.manager import TTSManager
 from app.ui.sidebar import Sidebar
 from app.ui.status_bar import StatusBar
 from app.ui.theme import apply_theme
+from app.ui.script_panel import ScriptPanel
 from app.ui.voice_panel import VoicePanel
 
 logger = get_logger("ui.main_window")
@@ -22,7 +23,6 @@ _POLL_INTERVAL_MS = 120
 _PAGE_DESCRIPTIONS: Dict[str, str] = {
     "Dashboard": "Overview of your projects and current TTS provider status.",
     "Projects": "The project browser will be implemented in a later phase.",
-    "Script": "The full scene-based script editor will be implemented in Phase 3.",
     "Audio": "Audio preview and processing tools will be implemented in Phase 6.",
     "Timeline": "The scene/audio timeline will be implemented in Phase 12.",
     "Subtitles": "SRT subtitle generation will be implemented in Phase 8.",
@@ -107,12 +107,23 @@ class MainWindow:
         for name, description in _PAGE_DESCRIPTIONS.items():
             self._pages[name] = self._build_placeholder_page(name, description)
         self._pages["Voice"] = self._build_voice_page()
+        self._pages["Script"] = self._build_script_page()
 
     def _build_voice_page(self) -> VoicePanel:
         panel = VoicePanel(
             self.content,
             tts_manager=self.tts_manager,
             async_bridge=self.async_bridge,
+            config=self.config,
+            palette=self.palette,
+            on_status=self.status_bar.set_text,
+        )
+        panel.grid(row=0, column=0, sticky="nsew")
+        return panel
+
+    def _build_script_page(self) -> ScriptPanel:
+        panel = ScriptPanel(
+            self.content,
             config=self.config,
             palette=self.palette,
             on_status=self.status_bar.set_text,

@@ -17,7 +17,7 @@ from app.ui.theme import style_combobox_dropdown
 from app.models.voice import Voice
 from app.tts.manager import TTSManager
 from app.tts.base import SynthResult
-
+from app.core.constants import APP_NAME
 logger = get_logger("ui.voice_panel")
 
 _LANGUAGE_LABELS = {
@@ -656,8 +656,8 @@ class VoicePanel(ttk.Frame):
         if self._session.current_path is not None and not self._session.is_saved:
             return messagebox.askyesno(
                 "Unsaved Audio",
-                "You have generated audio that hasn't been saved with "
-                "Save As.\n\nClose AI YouTube Voice Studio anyway?",
+                               "You have generated audio that hasn't been saved with "
+                f"Save As.\n\nClose {APP_NAME} anyway?",
             )
         return True
 

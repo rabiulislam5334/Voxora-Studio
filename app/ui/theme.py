@@ -113,28 +113,33 @@ def apply_theme(style: ttk.Style, theme: Theme) -> dict:
     )
 
     # Treeview (voice list)
-    style.configure(
-        "Voice.Treeview",
-        background=palette["field_bg"],
-        fieldbackground=palette["field_bg"],
-        foreground=palette["fg"],
-        borderwidth=1,
-        bordercolor=palette["border"],
-        relief="solid",
-        rowheight=28,
-        font=("Segoe UI", 9),
-    )
-    style.map("Voice.Treeview", background=[("selected", palette["accent"])],
-              foreground=[("selected", "#ffffff")])
-    style.configure(
-        "Voice.Treeview.Heading",
-        background=palette["bg_alt"],
-        foreground=palette["fg_muted"],
-        font=("Segoe UI", 9, "bold"),
-        borderwidth=1,
-        relief="flat",
-    )
-    style.map("Voice.Treeview.Heading", background=[("active", palette["bg_alt"])])
+        # Treeview (voice list, scene list -- same look, shared loop so the
+    # styling logic lives in exactly one place).
+    for prefix in ("Voice", "Scene"):
+        style.configure(
+            f"{prefix}.Treeview",
+            background=palette["field_bg"],
+            fieldbackground=palette["field_bg"],
+            foreground=palette["fg"],
+            borderwidth=1,
+            bordercolor=palette["border"],
+            relief="solid",
+            rowheight=28,
+            font=("Segoe UI", 9),
+        )
+        style.map(f"{prefix}.Treeview", background=[("selected", palette["accent"])],
+                  foreground=[("selected", "#ffffff")])
+        style.configure(
+            f"{prefix}.Treeview.Heading",
+            background=palette["bg_alt"],
+            foreground=palette["fg_muted"],
+            font=("Segoe UI", 9, "bold"),
+            borderwidth=1,
+            relief="flat",
+        )
+        style.map(f"{prefix}.Treeview.Heading", background=[("active", palette["bg_alt"])])
+
+
 
     # Combobox -- the readonly/disabled states in ttk's built-in "clam"
     # theme carry their OWN hardcoded field/foreground colors that silently

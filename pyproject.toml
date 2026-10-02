@@ -1,7 +1,7 @@
 [project]
-name = "ai-youtube-voice-studio"
+name = "voxora-studio"
 version = "0.1.0"
-description = "Desktop AI voice production studio for YouTube narration (Bengali + English)."
+description = "Voxora Studio -- a desktop AI voice and Video production studio for YouTube narration (Bengali + English)."
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
@@ -9,7 +9,6 @@ dependencies = [
     "pygame>=2.6.1",
     "mutagen>=1.47.0",
 ]
-
 
 [project.optional-dependencies]
 dev = [

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-APP_NAME = "AI YouTube Voice Studio"
+APP_NAME = "Voxora Studio"
 APP_VERSION = "0.1.0"
 
 SUPPORTED_LANGUAGES = ("bn", "en")
