@@ -1,4 +1,4 @@
-# AI YouTube Voice Studio
+# Voxora Studio
 
 A modular, provider-flexible desktop AI voice production studio for creating
 Bengali and English YouTube narration/voiceovers.

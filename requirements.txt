@@ -1,3 +1,4 @@
 # requirements.txt
 edge-tts>=6.1.9
-playsound==1.2.2
+pygame>=2.6.1
+mutagen>=1.47.0

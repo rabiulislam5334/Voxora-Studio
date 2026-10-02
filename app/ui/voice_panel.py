@@ -13,6 +13,7 @@ from app.core.constants import SPEED_PRESETS
 from app.core.exceptions import AudioProcessingError, TTSProviderError
 from app.core.filenames import safe_filename
 from app.core.logger import get_logger
+from app.ui.theme import style_combobox_dropdown
 from app.models.voice import Voice
 from app.tts.manager import TTSManager
 from app.tts.base import SynthResult
@@ -115,7 +116,7 @@ class VoicePanel(ttk.Frame):
         provider_row.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         ttk.Label(provider_row, text="Provider:", style="Muted.TLabel").pack(side="left")
         self._provider_var = tk.StringVar(value=self._tts_manager.get_provider_name())
-        provider_combo = ttk.Combobox(
+        self._provider_combo = ttk.Combobox(
             provider_row,
             textvariable=self._provider_var,
             values=[self._tts_manager.get_provider_name()],
@@ -123,7 +124,8 @@ class VoicePanel(ttk.Frame):
             style="App.TCombobox",
             width=24,
         )
-        provider_combo.pack(side="left", padx=(8, 0))
+        self._provider_combo.pack(side="left", padx=(8, 0))
+        style_combobox_dropdown(self._provider_combo, self._palette)
 
         filters_row = ttk.Frame(parent, style="App.TFrame")
         filters_row.grid(row=2, column=0, sticky="ew", pady=(0, 8))
@@ -136,15 +138,17 @@ class VoicePanel(ttk.Frame):
         )
         self._language_combo.grid(row=0, column=1, padx=(8, 16))
         self._language_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
+        style_combobox_dropdown(self._language_combo, self._palette)
 
         ttk.Label(filters_row, text="Gender:", style="Muted.TLabel").grid(row=0, column=2, sticky="w")
         self._gender_var = tk.StringVar(value=_ALL_GENDERS)
         self._gender_combo = ttk.Combobox(
             filters_row, textvariable=self._gender_var, state="readonly",
-            style="App.TCombobox", width=14, values=[_ALL_GENDERS],
+            style="App.TCombobox", width=18, values=[_ALL_GENDERS],
         )
         self._gender_combo.grid(row=0, column=3, padx=(8, 16))
         self._gender_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
+        style_combobox_dropdown(self._gender_combo, self._palette)
 
         self._refresh_btn = ttk.Button(
             filters_row, text="Refresh Voices", style="Secondary.TButton",
@@ -181,7 +185,7 @@ class VoicePanel(ttk.Frame):
         self._selected_label.pack(side="left")
 
         self._preview_btn = ttk.Button(
-            selection_row, text="\u25b6 Preview", style="Secondary.TButton",
+            selection_row, text="\u25b6 Preview", style="Primary.TButton",
             command=self._on_preview_click, state="disabled",
         )
         self._preview_btn.pack(side="right")
@@ -198,6 +202,8 @@ class VoicePanel(ttk.Frame):
             parent, height=9, wrap="word", font=("Segoe UI", 10),
             background=self._palette["field_bg"], foreground=self._palette["fg"],
             insertbackground=self._palette["fg"], relief="flat", padx=8, pady=8,
+            highlightthickness=1, highlightbackground=self._palette["border"],
+            highlightcolor=self._palette["accent"],
         )
         self._text_widget.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
         parent.rowconfigure(1, weight=1)
@@ -209,11 +215,12 @@ class VoicePanel(ttk.Frame):
         ttk.Label(controls_row, text="Speed:", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
         self._speed_var = tk.StringVar(value=f"{self._config.default_speed:.2f}x")
         speed_values = [f"{s:.2f}x" for s in SPEED_PRESETS]
-        speed_combo = ttk.Combobox(
+        self._speed_combo = ttk.Combobox(
             controls_row, textvariable=self._speed_var, values=speed_values,
             state="readonly", style="App.TCombobox", width=8,
         )
-        speed_combo.grid(row=0, column=1, padx=(8, 0))
+        self._speed_combo.grid(row=0, column=1, padx=(8, 0))
+        style_combobox_dropdown(self._speed_combo, self._palette)
 
         self._generate_btn = ttk.Button(
             controls_row, text="Generate", style="Primary.TButton", command=self._on_generate_click
@@ -298,13 +305,21 @@ class VoicePanel(ttk.Frame):
     # ------------------------------------------------------------------
 
     def apply_theme(self, palette: dict) -> None:
+        """Called by MainWindow on theme toggle. ttk widgets restyle
+        themselves automatically; raw tk.Text needs manual recoloring, and
+        each Combobox's popup listbox (outside the ttk style system -- see
+        style_combobox_dropdown) must be explicitly re-colored too, or it
+        keeps showing whatever theme was active when it was first opened."""
         self._palette = palette
         self._text_widget.configure(
-            background=palette["field_bg"], foreground=palette["fg"], insertbackground=palette["fg"]
+            background=palette["field_bg"], foreground=palette["fg"], insertbackground=palette["fg"],
+            highlightbackground=palette["border"], highlightcolor=palette["accent"],
         )
+        for combo in (self._provider_combo, self._language_combo, self._gender_combo, self._speed_combo):
+            style_combobox_dropdown(combo, palette)
 
     # ------------------------------------------------------------------
-    # Voice loading / filtering (unchanged from Phase 2)
+    # Voice loading / filtering  (unchanged from Phase 2)
     # ------------------------------------------------------------------
 
     def _load_voices(self, force_refresh: bool = False, initial: bool = False) -> None:
@@ -539,6 +554,8 @@ class VoicePanel(ttk.Frame):
             self._seeking = True
 
     def _on_seek_drag(self, _value) -> None:
+        # Live time-label feedback while dragging; the actual seek only
+        # happens on release so we don't spam pygame with play() calls.
         if self._seeking:
             self._time_label.configure(
                 text=f"{_format_time(float(_value))} / {_format_time(self._audio_player.get_status().duration_seconds)}"
@@ -559,7 +576,7 @@ class VoicePanel(ttk.Frame):
         try:
             self._audio_player.set_volume(float(value) / 100.0)
         except AudioProcessingError:
-            pass
+            pass  # backend unavailable -- silently ignored, already reported elsewhere
 
     def _on_save_as_click(self) -> None:
         if self._session.current_path is None:
@@ -607,7 +624,7 @@ class VoicePanel(ttk.Frame):
 
         if status.state == PlaybackState.PLAYING:
             self._play_pause_btn.configure(text="\u23f8 Pause")
-            self._playback_status.configure(text="Playing", style="Muted.TLabel")
+            self._playback_status.configure(text="Playing", style="PlaybackActive.TLabel")
         elif status.state == PlaybackState.PAUSED:
             self._play_pause_btn.configure(text="\u25b6 Play")
             self._playback_status.configure(text="Paused", style="Muted.TLabel")
