@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -28,6 +29,25 @@ def speed_to_rate_string(speed: float) -> str:
     percent = max(_MIN_PERCENT, min(_MAX_PERCENT, percent))
     sign = "+" if percent >= 0 else ""
     return f"{sign}{percent}%"
+
+
+def pitch_hz_to_string(pitch_hz: int) -> str:
+    """Convert an integer Hz offset into edge-tts's '+NHz'/'-NHz' pitch
+    string, e.g. 20 -> '+20Hz', -20 -> '-20Hz', 0 -> '+0Hz'."""
+    pitch_hz = int(round(pitch_hz))
+    sign = "+" if pitch_hz >= 0 else ""
+    return f"{sign}{pitch_hz}Hz"
+
+
+def volume_percent_to_string(volume_percent: int) -> str:
+    """Convert an integer percent offset into edge-tts's '+N%'/'-N%' volume
+    string, e.g. 20 -> '+20%', -20 -> '-20%', 0 -> '+0%'. This is a speech
+    SYNTHESIS parameter (baked into the generated audio) -- distinct from
+    the audio player's playback volume control, which is applied at
+    playback time and never touches the generated file."""
+    volume_percent = int(round(volume_percent))
+    sign = "+" if volume_percent >= 0 else ""
+    return f"{sign}{volume_percent}%"
 
 
 class EdgeTTSProvider(TTSProvider):
@@ -107,7 +127,11 @@ class EdgeTTSProvider(TTSProvider):
 
         output_path: Path = Path(settings["output_path"])
         speed: float = settings.get("speed", 1.0)
+        pitch_hz: int = settings.get("pitch_hz", 0)
+        volume_percent: int = settings.get("volume_percent", 0)
         rate = speed_to_rate_string(speed)
+        pitch = pitch_hz_to_string(pitch_hz)
+        volume = volume_percent_to_string(volume_percent)
 
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -117,7 +141,7 @@ class EdgeTTSProvider(TTSProvider):
             ) from exc
 
         try:
-            communicator = edge_tts.Communicate(text, voice_id, rate=rate)
+            communicator = edge_tts.Communicate(text, voice_id, rate=rate, pitch=pitch, volume=volume)
             await communicator.save(str(output_path))
         except Exception as exc:
             if NoAudioReceived is not None and isinstance(exc, NoAudioReceived):
@@ -138,9 +162,11 @@ class EdgeTTSProvider(TTSProvider):
         voice_id: str,
         output_path: Path,
         sample_text: Optional[str] = None,
+        **settings,
     ) -> SynthResult:
         text = sample_text or self._default_sample_text(voice_id)
-        return await self.generate(text, voice_id, output_path=output_path, speed=1.0)
+        settings.setdefault("speed", 1.0)
+        return await self.generate(text, voice_id, output_path=output_path, **settings)
 
     @staticmethod
     def _default_sample_text(voice_id: str) -> str:

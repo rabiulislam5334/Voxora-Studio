@@ -77,6 +77,9 @@ class TTSManager:
         output_path: Path,
         provider_id: Optional[str] = None,
         sample_text: Optional[str] = None,
+        **extra_settings,
     ) -> SynthResult:
         provider = self.get_provider(provider_id)
-        return await provider.preview_voice(voice_id, output_path, sample_text=sample_text)
+        return await provider.preview_voice(
+            voice_id, output_path, sample_text=sample_text, **extra_settings
+        )

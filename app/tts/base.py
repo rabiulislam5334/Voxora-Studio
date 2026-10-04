@@ -72,9 +72,16 @@ class TTSProvider(ABC):
         voice_id: str,
         output_path: Path,
         sample_text: Optional[str] = None,
+        **settings,
     ) -> SynthResult:
         """Default preview implementation: generate a short sample using
         the normal generate() path. Providers may override this if their
-        API offers a lighter-weight/dedicated preview mechanism."""
+        API offers a lighter-weight/dedicated preview mechanism.
+
+        Phase 4: forwards **settings (speed/pitch_hz/volume_percent) so a
+        preview reflects the currently selected voice settings/preset
+        rather than always using flat defaults; speed defaults to 1.0
+        only when the caller doesn't supply one."""
         text = sample_text or "This is a short voice preview."
-        return await self.generate(text, voice_id, output_path=output_path, speed=1.0)
+        settings.setdefault("speed", 1.0)
+        return await self.generate(text, voice_id, output_path=output_path, **settings)
