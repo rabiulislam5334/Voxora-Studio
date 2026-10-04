@@ -27,6 +27,7 @@ class AppConfig:
     temp_dir: Path = field(init=False)
     logs_dir: Path = field(init=False)
     assets_dir: Path = field(init=False)
+    presets_file: Path = field(init=False)
 
     default_language: str = "en"
     default_theme: str = constants.DEFAULT_THEME
@@ -48,6 +49,10 @@ class AppConfig:
         self.temp_dir = self.root_dir / constants.DIR_TEMP
         self.logs_dir = self.root_dir / constants.DIR_LOGS
         self.assets_dir = self.root_dir / constants.DIR_ASSETS
+        # Phase 4: user-defined custom voice presets (built-ins are code
+        # constants, never written here). A single small JSON file is
+        # sufficient -- no database.
+        self.presets_file = self.root_dir / "voice_presets.json"
 
     def required_directories(self) -> List[Path]:
         return [

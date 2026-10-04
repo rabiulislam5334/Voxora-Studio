@@ -36,6 +36,20 @@ class Scene:
     pause_ms: int = 0
     audio_path: Optional[Path] = None
 
+    # Phase 4: optional per-scene narration-settings overrides. All
+    # default to None, meaning "use the Voice page's current settings" --
+    # existing Phase 3 project files have none of these keys and load
+    # exactly as before (see app/projects/serializer.py). Not yet read by
+    # any UI; Phase 5's scene-by-scene long-form synthesis is the natural
+    # future consumer. pitch_hz/volume_percent are the Phase 4 int-based
+    # equivalents of the older unused `pitch` string field above, kept
+    # separate rather than repurposing that field.
+    pitch_hz: Optional[int] = None
+    volume_percent: Optional[int] = None
+    sentence_pause_ms: Optional[int] = None
+    paragraph_pause_ms: Optional[int] = None
+    scene_pause_ms: Optional[int] = None
+
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
 

@@ -172,11 +172,28 @@ def apply_theme(style: ttk.Style, theme: Theme) -> dict:
     style.configure("App.Horizontal.TProgressbar", background=palette["accent"],
                      troughcolor=palette["bg_alt"], borderwidth=0, thickness=8)
 
-    # Scale (seek bar, volume) -- trough uses field_bg (the darkest/most
+       # Scale (seek bar, volume) -- trough uses field_bg (the darkest/most
     # distinct surface in the palette) so the seek bar visibly stands out
     # from the page background behind it, per the "timeline should be
     # visually distinguishable" requirement.
     style.configure("Horizontal.TScale", background=palette["bg"], troughcolor=palette["field_bg"])
+
+    # Spinbox (pause ms controls) -- same readonly/field contrast fix as
+    # Combobox above; 'clam' has the identical stock-gray-field problem.
+    style.configure(
+        "TSpinbox",
+        fieldbackground=palette["field_bg"],
+        background=palette["field_bg"],
+        foreground=palette["fg"],
+        arrowcolor=palette["fg"],
+        bordercolor=palette["border"],
+        padding=(6, 2),
+    )
+    style.map(
+        "TSpinbox",
+        fieldbackground=[("readonly", palette["field_bg"]), ("disabled", palette["bg_alt"])],
+        foreground=[("readonly", palette["fg"]), ("disabled", palette["fg_muted"])],
+    )
 
     return palette
 
