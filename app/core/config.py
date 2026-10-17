@@ -28,7 +28,10 @@ class AppConfig:
     logs_dir: Path = field(init=False)
     assets_dir: Path = field(init=False)
     presets_file: Path = field(init=False)
-
+    # Phase 5: narration caches + persisted app settings (FFmpeg path).
+    chunk_cache_dir: Path = field(init=False)
+    scene_cache_dir: Path = field(init=False)
+    settings_file: Path = field(init=False)
     default_language: str = "en"
     default_theme: str = constants.DEFAULT_THEME
 
@@ -53,6 +56,11 @@ class AppConfig:
         # constants, never written here). A single small JSON file is
         # sufficient -- no database.
         self.presets_file = self.root_dir / "voice_presets.json"
+                # Phase 5: per-chunk MP3 cache and per-scene WAV cache (machine-local,
+        # never referenced from .voxora files), plus a tiny settings file.
+        self.chunk_cache_dir = self.cache_dir / "chunks"
+        self.scene_cache_dir = self.cache_dir / "scenes"
+        self.settings_file = self.root_dir / "voxora_settings.json"
 
     def required_directories(self) -> List[Path]:
         return [
@@ -61,6 +69,8 @@ class AppConfig:
             self.cache_dir,
             self.previews_dir,
             self.generated_audio_dir,
+            self.chunk_cache_dir,
+            self.scene_cache_dir,
             self.temp_dir,
             self.logs_dir,
         ]

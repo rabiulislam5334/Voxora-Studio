@@ -23,3 +23,18 @@ class AudioProcessingError(ApplicationError):
 
 class FFmpegError(ApplicationError):
     """Raised when FFmpeg is missing or a command fails."""
+
+
+
+class NarrationError(ApplicationError):
+    """Raised when long-form narration cannot be completed. `failed_chunk_ids`
+    lists chunks that exhausted their retries (completed chunks stay cached)."""
+
+    def __init__(self, message: str, failed_chunk_ids=None) -> None:
+        super().__init__(message)
+        self.failed_chunk_ids = list(failed_chunk_ids or [])
+
+
+class GenerationCancelled(ApplicationError):
+    """Raised when the user cancels a running generation. Not a failure:
+    completed chunks are kept so the job can be resumed."""    

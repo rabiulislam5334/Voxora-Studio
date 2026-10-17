@@ -106,10 +106,11 @@ class MainWindow:
     def _build_pages(self) -> None:
         for name, description in _PAGE_DESCRIPTIONS.items():
             self._pages[name] = self._build_placeholder_page(name, description)
-        self._pages["Voice"] = self._build_voice_page()
+       # Script first: the Voice page reads scenes from it (Phase 5).
         self._pages["Script"] = self._build_script_page()
+        self._pages["Voice"] = self._build_voice_page(script_source=self._pages["Script"])
 
-    def _build_voice_page(self) -> VoicePanel:
+    def _build_voice_page(self, script_source=None) -> VoicePanel:
         panel = VoicePanel(
             self.content,
             tts_manager=self.tts_manager,
@@ -117,6 +118,7 @@ class MainWindow:
             config=self.config,
             palette=self.palette,
             on_status=self.status_bar.set_text,
+            script_source=script_source,
         )
         panel.grid(row=0, column=0, sticky="nsew")
         return panel

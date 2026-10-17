@@ -66,6 +66,14 @@ class Project:
             pitch=original.pitch,
             style=original.style,
             pause_ms=original.pause_ms,
+            # Phase 4 per-scene overrides (None = "use Voice page settings").
+            # Phase 5 now reads these during narration, so a duplicate must
+            # sound the same as its original.
+            pitch_hz=original.pitch_hz,
+            volume_percent=original.volume_percent,
+            sentence_pause_ms=original.sentence_pause_ms,
+            paragraph_pause_ms=original.paragraph_pause_ms,
+            scene_pause_ms=original.scene_pause_ms,
         )
         index = self.scenes.index(original)
         self.scenes.insert(index + 1, copy)
