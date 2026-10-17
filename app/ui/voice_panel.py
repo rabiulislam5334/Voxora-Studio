@@ -1,19 +1,33 @@
 from __future__ import annotations
 
+import asyncio
+import re
+import shutil
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-from typing import List, Optional
+from typing import List, Optional, Protocol
 
+from app.audio.ffmpeg_tool import FFmpegStatus, FFmpegTool
 from app.audio.player import AudioPlayer, PlaybackState, VoicePreviewPlayer
 from app.audio.session import GeneratedAudioSession
+from app.cache.manager import NarrationCache
 from app.core.async_bridge import AsyncBridge
 from app.core.config import AppConfig
 from app.core.constants import APP_NAME
-from app.core.exceptions import AudioProcessingError, ConfigurationError, TTSProviderError
+from app.core.exceptions import (
+    AudioProcessingError,
+    ConfigurationError,
+    FFmpegError,
+    GenerationCancelled,
+    NarrationError,
+    TTSProviderError,
+)
 from app.core.filenames import safe_filename
 from app.core.logger import get_logger
+from app.core.settings_store import SettingsStore
 from app.ui.theme import style_combobox_dropdown
+from app.models.scene import Scene
 from app.models.voice import Voice
 from app.models.voice_preset import (
     PAUSE_MS_MAX,
@@ -30,6 +44,14 @@ from app.models.voice_preset import (
 from app.tts.manager import TTSManager
 from app.tts.base import SynthResult
 from app.tts.preset_store import PresetStore
+from app.workers.cancel import CancelToken
+from app.workers.narration import (
+    NarrationJob,
+    NarrationResult,
+    ProgressEvent,
+    SceneRequest,
+    build_scene_request,
+)
 
 logger = get_logger("ui.voice_panel")
 
@@ -43,6 +65,8 @@ _ALL_GENDERS = "All Genders"
 
 _UI_REFRESH_MS = 200
 
+_UNSAFE_NAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
 
 def _language_label(prefix: str) -> str:
     return _LANGUAGE_LABELS.get(prefix, prefix)
@@ -51,6 +75,17 @@ def _language_label(prefix: str) -> str:
 def _format_time(seconds: float) -> str:
     total = max(0, int(seconds))
     return f"{total // 60:02d}:{total % 60:02d}"
+
+
+class NarrationSource(Protocol):
+    """What the Voice page needs from the Script page (Phase 5). Read-only:
+    the Voice page never edits scenes."""
+
+    def get_project_name(self) -> str: ...
+
+    def get_scenes(self) -> List[Scene]: ...
+
+    def get_selected_scene(self) -> Optional[Scene]: ...
 
 
 class VoicePanel(ttk.Frame):
@@ -62,6 +97,10 @@ class VoicePanel(ttk.Frame):
     longer a separate, independently-editable "output folder" field for
     generation to silently disagree with; Save As is the only way audio
     leaves the app's own storage.
+
+    Phase 5 adds scene-by-scene narration (Generate Selected Scene /
+    Generate Full Narration) with real pause insertion, cancel/resume and
+    FFmpeg-based assembly; results flow into this same player and Save As.
     """
 
     def __init__(
@@ -72,6 +111,7 @@ class VoicePanel(ttk.Frame):
         config: AppConfig,
         palette: dict,
         on_status: Optional[callable] = None,
+        script_source: Optional[NarrationSource] = None,
     ) -> None:
         super().__init__(master, style="App.TFrame")
         self._tts_manager = tts_manager
@@ -84,6 +124,20 @@ class VoicePanel(ttk.Frame):
         self._audio_player = AudioPlayer()
         self._session = GeneratedAudioSession(config.generated_audio_dir)
         self._preset_store = PresetStore(config.presets_file)
+
+        # Phase 5: scene-by-scene narration (see app/workers/narration.py).
+        self._script_source = script_source
+        self._settings_store = SettingsStore(config.settings_file)
+        self._ffmpeg = FFmpegTool(self._settings_store)
+        self._narration_cache = NarrationCache(config.chunk_cache_dir, config.scene_cache_dir)
+        self._narration_job = NarrationJob(
+            tts_manager, self._ffmpeg, self._narration_cache, config.temp_dir
+        )
+        self._narration_running = False
+        self._cancel_token: Optional[CancelToken] = None
+        self._narration_mp3: Optional[Path] = None
+        self._narration_wav: Optional[Path] = None
+        self._save_name_hint: Optional[str] = None
 
         self._all_voices: List[Voice] = []
         self._filtered_voices: List[Voice] = []
@@ -101,6 +155,7 @@ class VoicePanel(ttk.Frame):
         self._build_layout()
         self._apply_settings_to_widgets()
         self._load_voices(initial=True)
+        self._detect_ffmpeg()
         self._schedule_ui_update()
 
     # ------------------------------------------------------------------
@@ -287,8 +342,8 @@ class VoicePanel(ttk.Frame):
 
         ttk.Label(
             parent,
-            text="Pause values are saved with presets now; actual silence insertion "
-                 "between sentences/paragraphs/scenes arrives in Phase 5 (long-form synthesis).",
+            text="Sentence/paragraph/scene pauses become real silence when you use the "
+                 "Narration buttons (right). The plain Generate button does not apply them.",
             style="Muted.TLabel", wraplength=320, justify="left",
         ).grid(row=7, column=0, sticky="w", pady=(8, 0))
 
@@ -446,17 +501,66 @@ class VoicePanel(ttk.Frame):
         self._generation_status = ttk.Label(parent, text="", style="Muted.TLabel", wraplength=480, justify="left")
         self._generation_status.grid(row=4, column=0, sticky="w", pady=(0, 12))
 
+        self._build_narration(parent)
         self._build_player(parent)
 
+    def _build_narration(self, parent: ttk.Frame) -> None:
+        """Phase 5 controls. They reuse the progress bar and status line
+        above (one generation at a time), so this adds only a compact block."""
+        block = ttk.Frame(parent, style="App.TFrame")
+        block.grid(row=5, column=0, sticky="ew", pady=(0, 8))
+
+        ttk.Label(block, text="Narration (scene by scene, real pauses)", style="SectionTitle.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, 6)
+        )
+
+        buttons = ttk.Frame(block, style="App.TFrame")
+        buttons.grid(row=1, column=0, sticky="w")
+        self._scene_narration_btn = ttk.Button(
+            buttons, text="Generate Selected Scene", style="Primary.TButton",
+            command=self._on_generate_scene_click, state="disabled",
+        )
+        self._scene_narration_btn.pack(side="left")
+        self._full_narration_btn = ttk.Button(
+            buttons, text="Generate Full Narration", style="Primary.TButton",
+            command=self._on_generate_full_click, state="disabled",
+        )
+        self._full_narration_btn.pack(side="left", padx=(8, 0))
+        self._cancel_btn = ttk.Button(
+            buttons, text="Cancel", style="Secondary.TButton",
+            command=self._on_cancel_click, state="disabled",
+        )
+        self._cancel_btn.pack(side="left", padx=(8, 0))
+        self._export_wav_btn = ttk.Button(
+            buttons, text="Export WAV...", style="Secondary.TButton",
+            command=self._on_export_wav_click, state="disabled",
+        )
+        self._export_wav_btn.pack(side="left", padx=(8, 0))
+
+        ffmpeg_row = ttk.Frame(block, style="App.TFrame")
+        ffmpeg_row.grid(row=2, column=0, sticky="ew", pady=(6, 0))
+        self._ffmpeg_check_btn = ttk.Button(
+            ffmpeg_row, text="Check FFmpeg", style="Secondary.TButton", command=self._detect_ffmpeg
+        )
+        self._ffmpeg_check_btn.pack(side="left")
+        self._ffmpeg_path_btn = ttk.Button(
+            ffmpeg_row, text="Set Path...", style="Secondary.TButton", command=self._on_set_ffmpeg_path
+        )
+        self._ffmpeg_path_btn.pack(side="left", padx=(6, 10))
+        self._ffmpeg_status_label = ttk.Label(
+            ffmpeg_row, text="FFmpeg: checking...", style="Muted.TLabel", wraplength=300, justify="left"
+        )
+        self._ffmpeg_status_label.pack(side="left", fill="x", expand=True)
+
     def _build_player(self, parent: ttk.Frame) -> None:
-        ttk.Separator(parent, orient="horizontal").grid(row=5, column=0, sticky="ew", pady=(0, 12))
+        ttk.Separator(parent, orient="horizontal").grid(row=6, column=0, sticky="ew", pady=(0, 12))
 
         ttk.Label(parent, text="Generated Audio Player", style="SectionTitle.TLabel").grid(
-            row=6, column=0, sticky="w", pady=(0, 8)
+            row=7, column=0, sticky="w", pady=(0, 8)
         )
 
         transport_row = ttk.Frame(parent, style="App.TFrame")
-        transport_row.grid(row=7, column=0, sticky="ew", pady=(0, 8))
+        transport_row.grid(row=8, column=0, sticky="ew", pady=(0, 8))
 
         self._play_pause_btn = ttk.Button(
             transport_row, text="\u25b6 Play", style="Primary.TButton",
@@ -483,7 +587,7 @@ class VoicePanel(ttk.Frame):
         self._regenerate_btn.pack(side="left", padx=(8, 0))
 
         seek_row = ttk.Frame(parent, style="App.TFrame")
-        seek_row.grid(row=8, column=0, sticky="ew", pady=(0, 4))
+        seek_row.grid(row=9, column=0, sticky="ew", pady=(0, 4))
         seek_row.columnconfigure(0, weight=1)
 
         self._seek_scale = ttk.Scale(
@@ -495,7 +599,7 @@ class VoicePanel(ttk.Frame):
         self._seek_scale.bind("<ButtonRelease-1>", self._on_seek_release)
 
         time_volume_row = ttk.Frame(parent, style="App.TFrame")
-        time_volume_row.grid(row=9, column=0, sticky="ew", pady=(0, 8))
+        time_volume_row.grid(row=10, column=0, sticky="ew", pady=(0, 8))
 
         self._time_label = ttk.Label(time_volume_row, text="00:00 / 00:00", style="Muted.TLabel")
         self._time_label.pack(side="left")
@@ -509,7 +613,7 @@ class VoicePanel(ttk.Frame):
         self._volume_scale.pack(side="left")
 
         self._playback_status = ttk.Label(parent, text="Ready", style="Muted.TLabel")
-        self._playback_status.grid(row=10, column=0, sticky="w")
+        self._playback_status.grid(row=11, column=0, sticky="w")
 
     # ------------------------------------------------------------------
     # Theme
@@ -654,7 +758,7 @@ class VoicePanel(ttk.Frame):
         logger.error("Preview playback failed: %s", error)
 
     # ------------------------------------------------------------------
-    # Generation
+    # Generation (plain, single text box -- unchanged behavior)
     # ------------------------------------------------------------------
 
     def _on_generate_click(self) -> None:
@@ -686,6 +790,7 @@ class VoicePanel(ttk.Frame):
         output_path = self._config.generated_audio_dir / safe_filename(voice.id, "mp3")
 
         self._set_busy(True)
+        self._progress.configure(mode="indeterminate", value=0)
         self._progress.start(12)
         self._generation_status.configure(text="Generating speech...", style="Muted.TLabel")
         self._playback_status.configure(text="Generating...", style="Muted.TLabel")
@@ -722,6 +827,7 @@ class VoicePanel(ttk.Frame):
             self._on_status("Audio generated (playback unavailable).")
             return
 
+        self._save_name_hint = None
         self._session.adopt_new_generation(new_path)
         self._seek_scale.configure(to=max(duration, 0.1))
         self._seek_scale.set(0)
@@ -738,6 +844,280 @@ class VoicePanel(ttk.Frame):
         self._playback_status.configure(text="Ready", style="Muted.TLabel")
         self._on_status("Speech generation failed.")
         logger.error("Generation failed: %s", error)
+
+    # ------------------------------------------------------------------
+    # Phase 5: FFmpeg detection
+    # ------------------------------------------------------------------
+
+    def _detect_ffmpeg(self) -> None:
+        if self._narration_running:
+            return
+        self._ffmpeg_status_label.configure(text="FFmpeg: checking...", style="Muted.TLabel")
+        self._bridge.run_coroutine(
+            self._ffmpeg.detect_async(),
+            on_success=self._on_ffmpeg_detected,
+            on_error=self._on_ffmpeg_detect_error,
+        )
+
+    def _on_ffmpeg_detected(self, status: FFmpegStatus) -> None:
+        if status.available:
+            self._ffmpeg_status_label.configure(text=f"FFmpeg: {status.message}", style="Success.TLabel")
+        else:
+            self._ffmpeg_status_label.configure(text=f"FFmpeg: {status.message}", style="Error.TLabel")
+        self._refresh_narration_buttons()
+
+    def _on_ffmpeg_detect_error(self, error: Exception) -> None:
+        self._ffmpeg_status_label.configure(text=f"FFmpeg check failed: {error}", style="Error.TLabel")
+        logger.error("FFmpeg detection failed: %s", error)
+        self._refresh_narration_buttons()
+
+    def _on_set_ffmpeg_path(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Select ffmpeg.exe",
+            filetypes=[("FFmpeg executable", "ffmpeg.exe ffmpeg"), ("All Files", "*.*")],
+        )
+        if not path:
+            return
+        self._ffmpeg.set_configured_path(path)
+        self._detect_ffmpeg()
+
+    def _ffmpeg_ready(self) -> bool:
+        status = self._ffmpeg.status
+        return status is not None and status.available
+
+    # ------------------------------------------------------------------
+    # Phase 5: narration (selected scene / full narration)
+    # ------------------------------------------------------------------
+
+    def _set_generation_message(self, text: str, style: str = "Muted.TLabel") -> None:
+        self._generation_status.configure(text=text, style=style)
+
+    def _on_generate_scene_click(self) -> None:
+        if self._script_source is None:
+            self._set_generation_message("The Script page is not connected.", "Error.TLabel")
+            return
+        scene = self._script_source.get_selected_scene()
+        if scene is None:
+            self._set_generation_message("Select a scene on the Script page first.", "Error.TLabel")
+            return
+        if not scene.text.strip():
+            self._set_generation_message(f"'{scene.title}' has no text to narrate.", "Error.TLabel")
+            return
+        self._start_narration([scene], label=scene.title)
+
+    def _on_generate_full_click(self) -> None:
+        if self._script_source is None:
+            self._set_generation_message("The Script page is not connected.", "Error.TLabel")
+            return
+        scenes = [s for s in self._script_source.get_scenes() if s.text.strip()]
+        if not scenes:
+            self._set_generation_message("The project has no scene text to narrate.", "Error.TLabel")
+            return
+        self._start_narration(scenes, label="Full narration")
+
+    def _start_narration(self, scenes: List[Scene], label: str) -> None:
+        if self._busy or self._narration_running:
+            return
+        if not self._ffmpeg_ready():
+            message = self._ffmpeg.status.message if self._ffmpeg.status else "FFmpeg has not been checked yet."
+            self._set_generation_message(message, "Error.TLabel")
+            return
+
+        default_voice_id = self._selected_voice.id if self._selected_voice else None
+        try:
+            requests: List[SceneRequest] = [
+                build_scene_request(
+                    scene, scene_index=scene.order + 1,
+                    default_voice_id=default_voice_id, settings=self._current_settings,
+                )
+                for scene in scenes
+            ]
+        except ConfigurationError as exc:
+            self._set_generation_message(str(exc), "Error.TLabel")
+            return
+
+        project_name = self._script_source.get_project_name() if self._script_source else "narration"
+        base = f"{project_name} - {label}" if len(scenes) == 1 else f"{project_name} - narration"
+        self._save_name_hint = _UNSAFE_NAME_CHARS.sub("", base).strip(" .") + ".mp3"
+
+        # Release the old file BEFORE generating, as plain Generate does, so
+        # it can be replaced/deleted safely afterwards.
+        self._audio_player.stop()
+        self._set_player_controls_enabled(False)
+
+        self._cancel_token = CancelToken()
+        self._narration_running = True
+        self._set_busy(True)
+        self._progress.stop()
+        self._progress.configure(mode="determinate", maximum=100, value=0)
+        self._set_generation_message(f"Preparing {label}...")
+        self._playback_status.configure(text="Generating...", style="Muted.TLabel")
+        self._on_status(f"Generating narration: {label}")
+
+        self._bridge.run_coroutine(
+            self._narration_job.run(
+                requests,
+                output_dir=self._config.generated_audio_dir,
+                basename=base,
+                cancel=self._cancel_token,
+                on_progress=self._progress_from_worker,
+            ),
+            on_success=self._on_narration_success,
+            on_error=self._on_narration_error,
+        )
+
+    def _progress_from_worker(self, event: ProgressEvent) -> None:
+        # Called from background threads: only queue; never touch Tk here.
+        self._bridge.dispatch(self._apply_progress, event)
+
+    def _apply_progress(self, event: ProgressEvent) -> None:
+        if not self._narration_running:
+            return
+        self._progress.configure(value=event.fraction * 100)
+        self._set_generation_message(f"{event.message}  ({int(event.fraction * 100)}%)")
+
+    def _on_cancel_click(self) -> None:
+        if self._cancel_token is None or self._cancel_token.cancelled:
+            return
+        self._cancel_token.cancel()
+        self._cancel_btn.configure(state="disabled")
+        self._set_generation_message("Cancelling... finished chunks are kept.")
+
+    def _finish_narration(self) -> None:
+        self._narration_running = False
+        self._cancel_token = None
+        self._progress.configure(mode="determinate", value=0)
+        self._set_busy(False)
+
+    def _on_narration_success(self, result: NarrationResult) -> None:
+        self._finish_narration()
+        self._discard_narration_wav(keep=result.wav_path)
+
+        try:
+            duration = self._audio_player.load(result.mp3_path)
+        except AudioProcessingError as exc:
+            logger.warning("Narration saved but could not be loaded for playback: %s", exc)
+            self._session.adopt_new_generation(result.mp3_path)
+            self._narration_mp3, self._narration_wav = result.mp3_path, result.wav_path
+            self._set_generation_message(
+                f"Narration generated, but in-app playback is unavailable ({exc}). You can still use Save As.",
+                "Error.TLabel",
+            )
+            self._set_player_controls_enabled(False)
+            self._save_as_btn.configure(state="normal")
+            return
+
+        self._session.adopt_new_generation(result.mp3_path)
+        self._narration_mp3, self._narration_wav = result.mp3_path, result.wav_path
+        self._seek_scale.configure(to=max(duration, 0.1))
+        self._seek_scale.set(0)
+        self._set_player_controls_enabled(True)
+
+        summary = (
+            f"Narration ready: {_format_time(result.duration_seconds)}, {result.chunk_count} chunks "
+            f"({result.cached_chunks} cached, {result.synthesized_chunks} generated). Not yet saved."
+        )
+        if result.warnings:
+            summary += "\nNote: " + " ".join(result.warnings)
+        self._set_generation_message(summary, "Success.TLabel")
+        self._refresh_export_wav_state()
+        self._on_status("Narration generated.")
+        logger.info("Narration generated: %s (%.1fs)", result.mp3_path, result.duration_seconds)
+
+    def _on_narration_error(self, error: Exception) -> None:
+        self._finish_narration()
+        # The previously loaded audio (if any) is still valid: re-enable it.
+        current = self._session.current_path
+        self._set_player_controls_enabled(current is not None and current.exists())
+        self._playback_status.configure(text="Ready", style="Muted.TLabel")
+
+        if isinstance(error, GenerationCancelled):
+            self._set_generation_message(str(error), "Muted.TLabel")
+            self._on_status("Narration cancelled.")
+            return
+
+        if isinstance(error, (NarrationError, FFmpegError, TTSProviderError, ConfigurationError, AudioProcessingError)):
+            message = str(error)
+        else:
+            message = f"Unexpected error: {error}"
+        self._set_generation_message(f"Narration failed: {message}", "Error.TLabel")
+        self._on_status("Narration failed.")
+        logger.error("Narration failed: %s", error)
+        if isinstance(error, FFmpegError):
+            self._detect_ffmpeg()
+
+    def _refresh_narration_buttons(self) -> None:
+        can_start = self._ffmpeg_ready() and not self._busy and not self._narration_running
+        state = "normal" if can_start else "disabled"
+        self._scene_narration_btn.configure(state=state)
+        self._full_narration_btn.configure(state=state)
+        cancelable = (
+            self._narration_running
+            and self._cancel_token is not None
+            and not self._cancel_token.cancelled
+        )
+        self._cancel_btn.configure(state="normal" if cancelable else "disabled")
+        tools_state = "disabled" if self._narration_running else "normal"
+        self._ffmpeg_check_btn.configure(state=tools_state)
+        self._ffmpeg_path_btn.configure(state=tools_state)
+        self._refresh_export_wav_state()
+
+    def _refresh_export_wav_state(self) -> None:
+        """Export WAV is only offered while the loaded audio IS the narration
+        the WAV belongs to (plain Generate replaces the current audio)."""
+        wav = self._narration_wav
+        available = (
+            wav is not None
+            and wav.exists()
+            and self._narration_mp3 is not None
+            and self._session.current_path == self._narration_mp3
+            and not self._narration_running
+        )
+        self._export_wav_btn.configure(state="normal" if available else "disabled")
+
+    def _discard_narration_wav(self, keep: Optional[Path] = None) -> None:
+        wav = self._narration_wav
+        if wav is not None and wav != keep:
+            try:
+                wav.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.warning("Could not remove old narration WAV %s: %s", wav, exc)
+        if keep is None:
+            self._narration_wav = None
+
+    def _on_export_wav_click(self) -> None:
+        wav = self._narration_wav
+        if wav is None or not wav.exists():
+            self._set_generation_message("There is no narration WAV to export.", "Error.TLabel")
+            return
+        suggested = (Path(self._save_name_hint).stem if self._save_name_hint else "narration") + ".wav"
+        destination = filedialog.asksaveasfilename(
+            title="Export Narration WAV",
+            defaultextension=".wav",
+            filetypes=[("WAV Audio", "*.wav")],
+            initialdir=str(self._config.output_dir),
+            initialfile=suggested,
+        )
+        if not destination:
+            self._set_generation_message("Export cancelled.")
+            return
+
+        self._export_wav_btn.configure(state="disabled")
+        self._set_generation_message("Exporting WAV...")
+        target = Path(destination)
+
+        def copy_file() -> Path:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(wav, target)
+            if not target.exists() or target.stat().st_size != wav.stat().st_size:
+                raise OSError("the exported file could not be verified after copying")
+            return target
+
+        self._bridge.run_coroutine(
+            asyncio.to_thread(copy_file),
+            on_success=lambda path: self._set_generation_message(f"WAV saved to: {path}", "Success.TLabel"),
+            on_error=lambda exc: self._set_generation_message(f"WAV export failed: {exc}", "Error.TLabel"),
+        )
 
     # ------------------------------------------------------------------
     # Player transport
@@ -809,7 +1189,9 @@ class VoicePanel(ttk.Frame):
             self._generation_status.configure(text="There is no generated audio to save yet.", style="Error.TLabel")
             return
 
-        suggested_name = f"{self._selected_voice.id}.mp3" if self._selected_voice else "narration.mp3"
+        suggested_name = self._save_name_hint or (
+            f"{self._selected_voice.id}.mp3" if self._selected_voice else "narration.mp3"
+        )
         destination = filedialog.asksaveasfilename(
             title="Save Generated Audio As",
             defaultextension=".mp3",
@@ -840,6 +1222,7 @@ class VoicePanel(ttk.Frame):
         self._ui_update_job = self.after(_UI_REFRESH_MS, self._schedule_ui_update)
 
     def _update_playback_ui(self) -> None:
+        self._refresh_export_wav_state()
         status = self._audio_player.get_status()
 
         if not self._seeking:
@@ -872,6 +1255,7 @@ class VoicePanel(ttk.Frame):
             self._preview_btn.configure(state="normal")
         elif busy:
             self._preview_btn.configure(state="disabled")
+        self._refresh_narration_buttons()
 
     # ------------------------------------------------------------------
     # Lifecycle hooks called by MainWindow
@@ -879,6 +1263,13 @@ class VoicePanel(ttk.Frame):
 
     def confirm_close(self) -> bool:
         """Return False to veto closing the application."""
+        if self._narration_running:
+            if not messagebox.askyesno(
+                "Narration In Progress",
+                "A narration is still being generated. Finished chunks are saved and "
+                f"can be resumed later.\n\nClose {APP_NAME} anyway?",
+            ):
+                return False
         if self._session.current_path is not None and not self._session.is_saved:
             return messagebox.askyesno(
                 "Unsaved Audio",
@@ -894,16 +1285,8 @@ class VoicePanel(ttk.Frame):
             except Exception:
                 pass
             self._ui_update_job = None
+        if self._cancel_token is not None:
+            self._cancel_token.cancel()
         self._audio_player.shutdown()
         self._session.cleanup()
-
-
-
-
-
-
-
-
-
-
-        
+        self._discard_narration_wav()
