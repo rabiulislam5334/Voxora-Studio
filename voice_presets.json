@@ -1,0 +1,12 @@
+[
+  {
+    "name": "My Preset",
+    "voice_id": null,
+    "rate": 0.97,
+    "pitch_hz": 0,
+    "volume_percent": 0,
+    "sentence_pause_ms": 250,
+    "paragraph_pause_ms": 600,
+    "scene_pause_ms": 1000
+  }
+]

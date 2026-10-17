@@ -9,15 +9,28 @@ from app.audio.player import AudioPlayer, PlaybackState, VoicePreviewPlayer
 from app.audio.session import GeneratedAudioSession
 from app.core.async_bridge import AsyncBridge
 from app.core.config import AppConfig
-from app.core.constants import SPEED_PRESETS
-from app.core.exceptions import AudioProcessingError, TTSProviderError
+from app.core.constants import APP_NAME
+from app.core.exceptions import AudioProcessingError, ConfigurationError, TTSProviderError
 from app.core.filenames import safe_filename
 from app.core.logger import get_logger
 from app.ui.theme import style_combobox_dropdown
 from app.models.voice import Voice
+from app.models.voice_preset import (
+    PAUSE_MS_MAX,
+    PAUSE_MS_MIN,
+    PITCH_HZ_MAX,
+    PITCH_HZ_MIN,
+    RATE_MAX,
+    RATE_MIN,
+    VOLUME_PERCENT_MAX,
+    VOLUME_PERCENT_MIN,
+    VoicePreset,
+    validate_preset,
+)
 from app.tts.manager import TTSManager
 from app.tts.base import SynthResult
-from app.core.constants import APP_NAME
+from app.tts.preset_store import PresetStore
+
 logger = get_logger("ui.voice_panel")
 
 _LANGUAGE_LABELS = {
@@ -70,6 +83,7 @@ class VoicePanel(ttk.Frame):
         self._preview_player = VoicePreviewPlayer()
         self._audio_player = AudioPlayer()
         self._session = GeneratedAudioSession(config.generated_audio_dir)
+        self._preset_store = PresetStore(config.presets_file)
 
         self._all_voices: List[Voice] = []
         self._filtered_voices: List[Voice] = []
@@ -79,7 +93,13 @@ class VoicePanel(ttk.Frame):
         self._ui_update_job: Optional[str] = None
         self._player_controls_enabled = False
 
+        # Phase 4: the live, currently-edited narration settings -- a
+        # fresh COPY of the default preset, so selecting/adjusting never
+        # mutates the built-in preset objects themselves.
+        self._current_settings: VoicePreset = self._preset_store.list_builtin()[0].copy_with()
+
         self._build_layout()
+        self._apply_settings_to_widgets()
         self._load_voices(initial=True)
         self._schedule_ui_update()
 
@@ -97,13 +117,18 @@ class VoicePanel(ttk.Frame):
         )
 
         library = ttk.Frame(self, style="App.TFrame")
-        library.grid(row=1, column=0, sticky="nsew", padx=(24, 12), pady=(0, 16))
+        library.grid(row=1, column=0, sticky="nsew", padx=(24, 12), pady=(0, 8))
         library.rowconfigure(3, weight=1)
         library.columnconfigure(0, weight=1)
         self._build_library(library)
 
+        settings_frame = ttk.Frame(self, style="App.TFrame")
+        settings_frame.grid(row=2, column=0, sticky="new", padx=(24, 12), pady=(0, 16))
+        settings_frame.columnconfigure(0, weight=1)
+        self._build_voice_settings(settings_frame)
+
         generation = ttk.Frame(self, style="App.TFrame")
-        generation.grid(row=1, column=1, sticky="nsew", padx=(12, 24), pady=(0, 16))
+        generation.grid(row=1, column=1, rowspan=2, sticky="nsew", padx=(12, 24), pady=(0, 16))
         generation.columnconfigure(0, weight=1)
         self._build_generation(generation)
 
@@ -193,6 +218,197 @@ class VoicePanel(ttk.Frame):
         self._library_status = ttk.Label(parent, text="Loading voices...", style="Muted.TLabel")
         self._library_status.grid(row=5, column=0, sticky="w", pady=(8, 0))
 
+    def _build_voice_settings(self, parent: ttk.Frame) -> None:
+        ttk.Label(parent, text="Voice Settings", style="SectionTitle.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, 8)
+        )
+
+        preset_label_row = ttk.Frame(parent, style="App.TFrame")
+        preset_label_row.grid(row=1, column=0, sticky="ew", pady=(0, 4))
+        ttk.Label(preset_label_row, text="Preset:", style="Muted.TLabel").pack(side="left")
+        self._preset_var = tk.StringVar(value=self._current_settings.name)
+        self._preset_combo = ttk.Combobox(
+            preset_label_row, textvariable=self._preset_var, state="readonly",
+            style="App.TCombobox", width=28,
+            values=[p.name for p in self._preset_store.list_all()],
+        )
+        self._preset_combo.pack(side="left", padx=(8, 0), fill="x", expand=True)
+        self._preset_combo.bind("<<ComboboxSelected>>", self._on_preset_selected)
+        style_combobox_dropdown(self._preset_combo, self._palette)
+
+        preset_button_row = ttk.Frame(parent, style="App.TFrame")
+        preset_button_row.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        ttk.Button(
+            preset_button_row, text="Save As...", style="Secondary.TButton", command=self._on_save_preset_click
+        ).pack(side="left", padx=(0, 6))
+        self._delete_preset_btn = ttk.Button(
+            preset_button_row, text="Delete Preset", style="Secondary.TButton",
+            command=self._on_delete_preset_click, state="disabled",
+        )
+        self._delete_preset_btn.pack(side="left")
+
+        self._rate_value_label, self._rate_scale = self._build_slider_row(
+            parent, row=3, label="Rate:", from_=RATE_MIN, to=RATE_MAX, command=self._on_rate_change,
+        )
+        self._pitch_value_label, self._pitch_scale = self._build_slider_row(
+            parent, row=4, label="Pitch:", from_=PITCH_HZ_MIN, to=PITCH_HZ_MAX, command=self._on_pitch_change,
+        )
+        # Named distinctly from the Generated Audio Player's _volume_scale
+        # further down -- THIS slider is a SYNTHESIS parameter, baked into
+        # the generated file by Edge TTS itself. The player's volume is a
+        # PLAYBACK parameter applied live at listening time and never
+        # touches the generated file. Kept deliberately separate per the
+        # Phase 4 spec ("do not confuse the two").
+        self._tts_volume_value_label, self._tts_volume_scale = self._build_slider_row(
+            parent, row=5, label="Synth Volume:", from_=VOLUME_PERCENT_MIN, to=VOLUME_PERCENT_MAX,
+            command=self._on_tts_volume_change,
+        )
+
+        pause_row = ttk.Frame(parent, style="App.TFrame")
+        pause_row.grid(row=6, column=0, sticky="ew", pady=(4, 0))
+
+        self._sentence_pause_var = tk.StringVar(value=str(self._current_settings.sentence_pause_ms))
+        self._paragraph_pause_var = tk.StringVar(value=str(self._current_settings.paragraph_pause_ms))
+        self._scene_pause_var = tk.StringVar(value=str(self._current_settings.scene_pause_ms))
+
+        pause_fields = [
+            ("Sentence pause (ms):", self._sentence_pause_var, self._on_sentence_pause_change),
+            ("Paragraph pause (ms):", self._paragraph_pause_var, self._on_paragraph_pause_change),
+            ("Scene pause (ms):", self._scene_pause_var, self._on_scene_pause_change),
+        ]
+        for i, (label, var, cmd) in enumerate(pause_fields):
+            ttk.Label(pause_row, text=label, style="Muted.TLabel").grid(row=i, column=0, sticky="w", pady=2)
+            spin = ttk.Spinbox(
+                pause_row, from_=PAUSE_MS_MIN, to=PAUSE_MS_MAX, increment=50,
+                textvariable=var, width=8, command=cmd,
+            )
+            spin.grid(row=i, column=1, sticky="w", padx=(8, 0), pady=2)
+            spin.bind("<KeyRelease>", lambda _e, c=cmd: c())
+
+        ttk.Label(
+            parent,
+            text="Pause values are saved with presets now; actual silence insertion "
+                 "between sentences/paragraphs/scenes arrives in Phase 5 (long-form synthesis).",
+            style="Muted.TLabel", wraplength=320, justify="left",
+        ).grid(row=7, column=0, sticky="w", pady=(8, 0))
+
+    def _build_slider_row(self, parent: ttk.Frame, row: int, label: str, from_: float, to: float, command):
+        row_frame = ttk.Frame(parent, style="App.TFrame")
+        row_frame.grid(row=row, column=0, sticky="ew", pady=4)
+        row_frame.columnconfigure(1, weight=1)
+        ttk.Label(row_frame, text=label, style="Muted.TLabel", width=13).grid(row=0, column=0, sticky="w")
+        scale = ttk.Scale(row_frame, from_=from_, to=to, orient="horizontal", command=command)
+        scale.grid(row=0, column=1, sticky="ew", padx=(8, 8))
+        value_label = ttk.Label(row_frame, text="", style="Muted.TLabel", width=8)
+        value_label.grid(row=0, column=2, sticky="e")
+        return value_label, scale
+
+    def _apply_settings_to_widgets(self) -> None:
+        """Push self._current_settings into every control -- called on
+        init and whenever a preset is selected."""
+        s = self._current_settings
+        self._rate_scale.set(s.rate)
+        self._rate_value_label.configure(text=f"{s.rate:.2f}x")
+        self._pitch_scale.set(s.pitch_hz)
+        self._pitch_value_label.configure(text=f"{s.pitch_hz:+d}Hz")
+        self._tts_volume_scale.set(s.volume_percent)
+        self._tts_volume_value_label.configure(text=f"{s.volume_percent:+d}%")
+        self._sentence_pause_var.set(str(s.sentence_pause_ms))
+        self._paragraph_pause_var.set(str(s.paragraph_pause_ms))
+        self._scene_pause_var.set(str(s.scene_pause_ms))
+
+    def _refresh_preset_list(self, select_name: Optional[str] = None) -> None:
+        names = [p.name for p in self._preset_store.list_all()]
+        self._preset_combo.configure(values=names)
+        style_combobox_dropdown(self._preset_combo, self._palette)
+        target = select_name if select_name in names else (names[0] if names else None)
+        if target:
+            self._preset_var.set(target)
+            self._on_preset_selected()
+
+    def _on_preset_selected(self, _event=None) -> None:
+        name = self._preset_var.get()
+        try:
+            preset = self._preset_store.get(name)
+        except ConfigurationError:
+            return
+        self._current_settings = preset.copy_with()
+        self._apply_settings_to_widgets()
+        self._delete_preset_btn.configure(state="disabled" if preset.is_builtin else "normal")
+        self._on_status(f"Preset '{preset.name}' applied.")
+
+    def _on_rate_change(self, value: str) -> None:
+        rate = round(float(value), 2)
+        self._current_settings.rate = rate
+        self._rate_value_label.configure(text=f"{rate:.2f}x")
+
+    def _on_pitch_change(self, value: str) -> None:
+        pitch = int(round(float(value)))
+        self._current_settings.pitch_hz = pitch
+        self._pitch_value_label.configure(text=f"{pitch:+d}Hz")
+
+    def _on_tts_volume_change(self, value: str) -> None:
+        volume = int(round(float(value)))
+        self._current_settings.volume_percent = volume
+        self._tts_volume_value_label.configure(text=f"{volume:+d}%")
+
+    def _on_sentence_pause_change(self) -> None:
+        self._current_settings.sentence_pause_ms = self._safe_int(
+            self._sentence_pause_var.get(), self._current_settings.sentence_pause_ms
+        )
+
+    def _on_paragraph_pause_change(self) -> None:
+        self._current_settings.paragraph_pause_ms = self._safe_int(
+            self._paragraph_pause_var.get(), self._current_settings.paragraph_pause_ms
+        )
+
+    def _on_scene_pause_change(self) -> None:
+        self._current_settings.scene_pause_ms = self._safe_int(
+            self._scene_pause_var.get(), self._current_settings.scene_pause_ms
+        )
+
+    @staticmethod
+    def _safe_int(value: str, fallback: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    def _on_save_preset_click(self) -> None:
+        from tkinter import simpledialog
+
+        default_name = self._current_settings.name if not self._current_settings.is_builtin else "My Preset"
+        name = simpledialog.askstring("Save Preset", "Preset name:", initialvalue=default_name, parent=self)
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        preset = self._current_settings.copy_with(name=name, is_builtin=False)
+        try:
+            self._preset_store.save_custom(preset)
+        except ConfigurationError as exc:
+            messagebox.showerror("Save Preset Failed", str(exc))
+            return
+        self._refresh_preset_list(select_name=name)
+        self._on_status(f"Saved preset '{name}'.")
+
+    def _on_delete_preset_click(self) -> None:
+        name = self._preset_var.get()
+        try:
+            preset = self._preset_store.get(name)
+        except ConfigurationError:
+            return
+        if preset.is_builtin:
+            return
+        if not messagebox.askyesno("Delete Preset", f"Delete custom preset '{name}'?"):
+            return
+        try:
+            self._preset_store.delete_custom(name)
+        except ConfigurationError as exc:
+            messagebox.showerror("Delete Failed", str(exc))
+            return
+        self._refresh_preset_list(select_name="Normal Narrator")
+        self._on_status(f"Deleted preset '{name}'.")
+
     def _build_generation(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Generate Speech", style="SectionTitle.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 8)
@@ -212,20 +428,15 @@ class VoicePanel(ttk.Frame):
         controls_row = ttk.Frame(parent, style="App.TFrame")
         controls_row.grid(row=2, column=0, sticky="ew", pady=(0, 8))
 
-        ttk.Label(controls_row, text="Speed:", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
-        self._speed_var = tk.StringVar(value=f"{self._config.default_speed:.2f}x")
-        speed_values = [f"{s:.2f}x" for s in SPEED_PRESETS]
-        self._speed_combo = ttk.Combobox(
-            controls_row, textvariable=self._speed_var, values=speed_values,
-            state="readonly", style="App.TCombobox", width=8,
-        )
-        self._speed_combo.grid(row=0, column=1, padx=(8, 0))
-        style_combobox_dropdown(self._speed_combo, self._palette)
+        ttk.Label(
+            controls_row, text="Rate/Pitch/Volume now live in the Voice Settings panel on the left.",
+            style="Muted.TLabel", wraplength=320, justify="left",
+        ).grid(row=0, column=0, sticky="w")
 
         self._generate_btn = ttk.Button(
             controls_row, text="Generate", style="Primary.TButton", command=self._on_generate_click
         )
-        self._generate_btn.grid(row=0, column=2, padx=(16, 0))
+        self._generate_btn.grid(row=0, column=1, padx=(16, 0))
 
         self._progress = ttk.Progressbar(
             parent, mode="indeterminate", style="App.Horizontal.TProgressbar"
@@ -315,7 +526,7 @@ class VoicePanel(ttk.Frame):
             background=palette["field_bg"], foreground=palette["fg"], insertbackground=palette["fg"],
             highlightbackground=palette["border"], highlightcolor=palette["accent"],
         )
-        for combo in (self._provider_combo, self._language_combo, self._gender_combo, self._speed_combo):
+        for combo in (self._provider_combo, self._language_combo, self._gender_combo, self._preset_combo):
             style_combobox_dropdown(combo, palette)
 
     # ------------------------------------------------------------------
@@ -412,7 +623,12 @@ class VoicePanel(ttk.Frame):
 
         preview_path = self._config.previews_dir / safe_filename(f"preview_{voice.id}", "mp3")
         self._bridge.run_coroutine(
-            self._tts_manager.preview_voice(voice.id, preview_path),
+            self._tts_manager.preview_voice(
+                voice.id, preview_path,
+                speed=self._current_settings.rate,
+                pitch_hz=self._current_settings.pitch_hz,
+                volume_percent=self._current_settings.volume_percent,
+            ),
             on_success=self._on_preview_ready,
             on_error=self._on_preview_error,
         )
@@ -453,7 +669,12 @@ class VoicePanel(ttk.Frame):
             self._generation_status.configure(text="Please enter some text to generate speech.", style="Error.TLabel")
             return
 
-        speed = float(self._speed_var.get().rstrip("x"))
+        try:
+            validate_preset(self._current_settings)
+        except ConfigurationError as exc:
+            self._generation_status.configure(text=str(exc), style="Error.TLabel")
+            return
+
         voice = self._selected_voice
 
         # Release any lock on the currently-loaded (about to be replaced)
@@ -471,7 +692,12 @@ class VoicePanel(ttk.Frame):
         self._on_status(f"Generating speech with {voice.name}...")
 
         self._bridge.run_coroutine(
-            self._tts_manager.generate(text, voice.id, output_path, speed=speed),
+            self._tts_manager.generate(
+                text, voice.id, output_path,
+                speed=self._current_settings.rate,
+                pitch_hz=self._current_settings.pitch_hz,
+                volume_percent=self._current_settings.volume_percent,
+            ),
             on_success=self._on_generation_success,
             on_error=self._on_generation_error,
         )
@@ -656,7 +882,7 @@ class VoicePanel(ttk.Frame):
         if self._session.current_path is not None and not self._session.is_saved:
             return messagebox.askyesno(
                 "Unsaved Audio",
-                               "You have generated audio that hasn't been saved with "
+                "You have generated audio that hasn't been saved with "
                 f"Save As.\n\nClose {APP_NAME} anyway?",
             )
         return True
@@ -670,3 +896,14 @@ class VoicePanel(ttk.Frame):
             self._ui_update_job = None
         self._audio_player.shutdown()
         self._session.cleanup()
+
+
+
+
+
+
+
+
+
+
+        
