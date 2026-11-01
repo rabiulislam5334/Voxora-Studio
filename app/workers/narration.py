@@ -75,6 +75,17 @@ class SceneTiming:
     end_seconds: float
 
 
+@dataclass(frozen=True)
+class SceneAudio:
+    """One narrated scene's audio (24 kHz mono WAV, cached) and the pause that
+    follows it. Used by the video pipeline to align audio with scenes."""
+
+    scene_id: str
+    wav_path: Path
+    duration_s: float
+    pause_ms: int
+
+
 @dataclass
 class NarrationResult:
     mp3_path: Path
@@ -85,6 +96,7 @@ class NarrationResult:
     cached_chunks: int
     synthesized_chunks: int
     warnings: List[str] = field(default_factory=list)
+    scene_audio: List[SceneAudio] = field(default_factory=list)
 
 
 def build_scene_request(
@@ -296,6 +308,10 @@ class NarrationJob:
                     cached_chunks=cached_count,
                     synthesized_chunks=len(pending),
                     warnings=warnings,
+                    scene_audio=[
+                        SceneAudio(req.scene_id, wav, wav_duration_seconds(wav), req.scene_pause_ms)
+                        for req, wav in zip(scene_requests, scene_wavs)
+                    ],
                 )
 
             try:
@@ -307,7 +323,8 @@ class NarrationJob:
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
 
-        self._cache.prune_scene_wavs()
+        # Keep every scene WAV of this run alive: the video pipeline reads them.
+        self._cache.prune_scene_wavs(max(24, len(plans) * 2))
         return result
 
     # ------------------------------------------------------------------

@@ -30,7 +30,6 @@ DEFAULT_SPEED = 1.0
 DEFAULT_OUTPUT_FORMAT = "mp3"
 SPEED_PRESETS = (0.75, 0.85, 0.90, 1.00, 1.10, 1.25, 1.50)
 
-
 # --- Phase 5: long-form narration ---
 NARRATION_SAMPLE_RATE = 24000          # Edge TTS native rate; all intermediates are 24 kHz mono 16-bit
 NARRATION_MAX_CHUNK_CHARS = 1000       # upper bound for one provider request (resume granularity)
@@ -51,3 +50,18 @@ RECOGNIZED_STYLE_TAGS = (
     "whisper", "excited", "calm", "serious", "cheerful",
     "sad", "angry", "friendly", "narration",
 )
+
+
+# --- Phases 6-8: studio, video, production ---
+VIDEO_PIPELINE_VERSION = 1             # bump to invalidate every cached video segment
+VIDEO_CRF = 20
+VIDEO_PRESET = "veryfast"
+VIDEO_AUDIO_BITRATE = "192k"
+VIDEO_AUDIO_SAMPLE_RATE = 48000
+EXPORT_AUDIO_SAMPLE_RATE = 44100
+EXPORT_MP3_BITRATE = "192k"
+VIDEO_CACHE_MAX_BYTES = 3 * 1024 ** 3  # prune cached segments beyond ~3 GB
+
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff")
+VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
+AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus")

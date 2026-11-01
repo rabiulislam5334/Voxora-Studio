@@ -4,6 +4,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
+
 from app.core.config import AppConfig
 from app.core.constants import APP_NAME
 from app.core.exceptions import ProjectError
@@ -669,12 +670,22 @@ class ScriptPanel(ttk.Frame):
             self._status_unsaved_label.configure(text="\u25cf Unsaved changes", style="Error.TLabel")
         else:
             self._status_unsaved_label.configure(text="\u2713 Saved", style="Success.TLabel")
+
     # ------------------------------------------------------------------
     # Read-only access for the Voice page's narration (Phase 5)
     # ------------------------------------------------------------------
 
     def get_project_name(self) -> str:
         return self._project.name
+
+    def get_project(self) -> Project:
+        """The open Project (the Studio workspace stores its settings in
+        project.settings, which the .voxora file already round-trips)."""
+        self._flush_editor_to_scene()
+        return self._project
+
+    def mark_project_dirty(self) -> None:
+        self._mark_dirty()
 
     def get_scenes(self) -> List[Scene]:
         """All scenes in order, with the editor's latest text flushed in."""
@@ -686,6 +697,7 @@ class ScriptPanel(ttk.Frame):
         if self._selected_scene_id is None:
             return None
         return self._project.get_scene(self._selected_scene_id)
+
     # ------------------------------------------------------------------
     # Lifecycle hooks called by MainWindow
     # ------------------------------------------------------------------

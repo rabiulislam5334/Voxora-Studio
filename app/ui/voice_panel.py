@@ -138,6 +138,7 @@ class VoicePanel(ttk.Frame):
         self._narration_mp3: Optional[Path] = None
         self._narration_wav: Optional[Path] = None
         self._save_name_hint: Optional[str] = None
+        self._external_busy = False  # set by the Studio workspace while it produces audio/video
 
         self._all_voices: List[Voice] = []
         self._filtered_voices: List[Voice] = []
@@ -762,7 +763,7 @@ class VoicePanel(ttk.Frame):
     # ------------------------------------------------------------------
 
     def _on_generate_click(self) -> None:
-        if self._busy:
+        if self._busy or self._external_busy:
             return
         if not self._selected_voice:
             self._generation_status.configure(text="Please select a voice from the library first.", style="Error.TLabel")
@@ -846,6 +847,55 @@ class VoicePanel(ttk.Frame):
         logger.error("Generation failed: %s", error)
 
     # ------------------------------------------------------------------
+    # Phases 6-8: hooks used by the Studio workspace (read-only except busy)
+    # ------------------------------------------------------------------
+
+    @property
+    def narration_job(self) -> NarrationJob:
+        return self._narration_job
+
+    @property
+    def ffmpeg(self) -> FFmpegTool:
+        return self._ffmpeg
+
+    def ffmpeg_ready(self) -> bool:
+        return self._ffmpeg_ready()
+
+    def selected_voice_id(self) -> Optional[str]:
+        return self._selected_voice.id if self._selected_voice else None
+
+    def current_narration_wav(self) -> Optional[Path]:
+        """WAV of the narration currently loaded in the player, if it is one."""
+        wav = self._narration_wav
+        if wav is not None and wav.exists() and self._session.current_path == self._narration_mp3:
+            return wav
+        return None
+
+    def build_scene_requests(self, scenes: List[Scene]) -> List[SceneRequest]:
+        """Resolve scenes against the current voice + Voice Settings (raises
+        ConfigurationError with a user-friendly message)."""
+        return [
+            build_scene_request(
+                scene, scene_index=scene.order + 1,
+                default_voice_id=self.selected_voice_id(), settings=self._current_settings,
+            )
+            for scene in scenes
+        ]
+
+    def stop_playback(self) -> None:
+        """Both audio players share one pygame channel; the Studio calls this
+        before it starts its own playback."""
+        self._audio_player.stop()
+
+    def is_busy(self) -> bool:
+        return self._busy or self._narration_running or self._external_busy
+
+    def set_external_busy(self, busy: bool) -> None:
+        self._external_busy = busy
+        self._generate_btn.configure(state="disabled" if (busy or self._busy) else "normal")
+        self._refresh_narration_buttons()
+
+    # ------------------------------------------------------------------
     # Phase 5: FFmpeg detection
     # ------------------------------------------------------------------
 
@@ -916,7 +966,7 @@ class VoicePanel(ttk.Frame):
         self._start_narration(scenes, label="Full narration")
 
     def _start_narration(self, scenes: List[Scene], label: str) -> None:
-        if self._busy or self._narration_running:
+        if self._busy or self._narration_running or self._external_busy:
             return
         if not self._ffmpeg_ready():
             message = self._ffmpeg.status.message if self._ffmpeg.status else "FFmpeg has not been checked yet."
@@ -1047,7 +1097,10 @@ class VoicePanel(ttk.Frame):
             self._detect_ffmpeg()
 
     def _refresh_narration_buttons(self) -> None:
-        can_start = self._ffmpeg_ready() and not self._busy and not self._narration_running
+        can_start = (
+            self._ffmpeg_ready() and not self._busy and not self._narration_running
+            and not self._external_busy
+        )
         state = "normal" if can_start else "disabled"
         self._scene_narration_btn.configure(state=state)
         self._full_narration_btn.configure(state=state)
@@ -1250,7 +1303,7 @@ class VoicePanel(ttk.Frame):
         self._busy = busy
         state = "disabled" if busy else "normal"
         self._refresh_btn.configure(state=state)
-        self._generate_btn.configure(state=state)
+        self._generate_btn.configure(state="disabled" if (busy or self._external_busy) else "normal")
         if not busy and self._selected_voice:
             self._preview_btn.configure(state="normal")
         elif busy:

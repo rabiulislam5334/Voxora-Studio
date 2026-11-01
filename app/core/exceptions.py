@@ -25,7 +25,6 @@ class FFmpegError(ApplicationError):
     """Raised when FFmpeg is missing or a command fails."""
 
 
-
 class NarrationError(ApplicationError):
     """Raised when long-form narration cannot be completed. `failed_chunk_ids`
     lists chunks that exhausted their retries (completed chunks stay cached)."""
@@ -37,4 +36,13 @@ class NarrationError(ApplicationError):
 
 class GenerationCancelled(ApplicationError):
     """Raised when the user cancels a running generation. Not a failure:
-    completed chunks are kept so the job can be resumed."""    
+    completed chunks are kept so the job can be resumed."""
+
+
+class MediaError(ApplicationError):
+    """A media file is missing, unreadable, or not a supported image/video/audio file."""
+
+
+class ProductionError(ApplicationError):
+    """Raised when audio mixing, video rendering or the end-to-end production
+    pipeline cannot be completed. The message is written for end users."""

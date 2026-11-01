@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import queue
 import shutil
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
-from app.core.exceptions import FFmpegError, GenerationCancelled
+from app.audio.probe import MediaInfo, parse_probe_output
+from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError
 from app.core.logger import get_logger
 from app.core.settings_store import SettingsStore
 from app.workers.cancel import CancelToken
@@ -158,6 +161,93 @@ class FFmpegTool:
         ]
         self._run(args, cancel=cancel, timeout=1800.0)
         self._require_output(dest, "MP3 encode")
+
+    def run_args(self, args: List[str], cancel: Optional[CancelToken] = None, timeout: float = 600.0) -> str:
+        """Public wrapper: run a prepared ffmpeg argument list (no shell)."""
+        return self._run(args, cancel=cancel, timeout=timeout)
+
+    # ------------------------------------------------------------------
+    # Phases 6-8: probing and long-running commands with progress
+    # ------------------------------------------------------------------
+
+    def probe(self, path: Path) -> MediaInfo:
+        """Describe a media file (duration, streams, size) using only ffmpeg,
+        so it works even when ffprobe is not installed. Raises MediaError."""
+        exe = self.require()
+        path = Path(path)
+        if not path.is_file():
+            raise MediaError(f"File not found: {path}")
+        try:
+            proc = subprocess.run(
+                [str(exe), "-hide_banner", "-nostdin", "-i", str(path)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                creationflags=_NO_WINDOW, timeout=60,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise MediaError(f"Could not inspect '{path.name}': {exc}") from exc
+        return parse_probe_output(proc.stderr.decode("utf-8", errors="replace"))
+
+    def run_with_progress(
+        self,
+        args: List[str],
+        total_seconds: float,
+        on_progress: Optional[Callable[[float], None]] = None,
+        cancel: Optional[CancelToken] = None,
+        timeout: float = 6 * 3600.0,
+    ) -> None:
+        """Run `args` (args[0] must be the ffmpeg path) and report progress as
+        a 0..1 fraction of `total_seconds` of output. Cancel terminates the
+        process. Never uses a shell."""
+        command = [args[0], "-progress", "pipe:1", "-nostats", *args[1:]]
+        try:
+            proc = subprocess.Popen(
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, creationflags=_NO_WINDOW,
+            )
+        except OSError as exc:
+            raise FFmpegError(f"Could not start FFmpeg: {exc}") from exc
+
+        lines: "queue.Queue[Optional[str]]" = queue.Queue()
+
+        def reader() -> None:
+            assert proc.stdout is not None
+            for raw in iter(proc.stdout.readline, b""):
+                lines.put(raw.decode("utf-8", errors="replace").strip())
+            lines.put(None)
+
+        threading.Thread(target=reader, daemon=True).start()
+        started = time.monotonic()
+        tail: List[str] = []
+        finished = False
+        while not finished:
+            try:
+                line = lines.get(timeout=0.2)
+            except queue.Empty:
+                line = ""
+            if line is None:
+                finished = True
+            elif line:
+                key, _, value = line.partition("=")
+                if key in ("out_time_us", "out_time_ms") and value.isdigit() and total_seconds > 0:
+                    if on_progress:
+                        on_progress(min(1.0, int(value) / 1e6 / total_seconds))
+                elif key not in ("progress", "frame", "fps", "stream_0_0_q", "bitrate", "total_size",
+                                 "out_time", "dup_frames", "drop_frames", "speed"):
+                    tail.append(line)
+                    tail = tail[-6:]
+            if cancel is not None and cancel.cancelled:
+                self._kill(proc)
+                raise GenerationCancelled("Generation cancelled.")
+            if time.monotonic() - started > timeout:
+                self._kill(proc)
+                raise FFmpegError("FFmpeg timed out.")
+        proc.wait()
+        if proc.returncode != 0:
+            detail = tail[-1] if tail else "no error output"
+            logger.error("FFmpeg failed (exit %s): %s", proc.returncode, " | ".join(tail))
+            raise FFmpegError(f"FFmpeg failed (exit code {proc.returncode}): {detail}")
+        if on_progress:
+            on_progress(1.0)
 
     @staticmethod
     def _require_output(dest: Path, what: str) -> None:

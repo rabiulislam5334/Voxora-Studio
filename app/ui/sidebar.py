@@ -13,6 +13,8 @@ class Sidebar(ttk.Frame):
         "Voice",
         "Audio",
         "Timeline",
+        "Video",
+        "Produce",
         "Subtitles",
         "Settings",
     ]

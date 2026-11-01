@@ -14,7 +14,7 @@ from app.ui.sidebar import Sidebar
 from app.ui.status_bar import StatusBar
 from app.ui.theme import apply_theme
 from app.ui.script_panel import ScriptPanel
-from app.ui.voice_panel import VoicePanel
+from app.ui.studio_panel import StudioPanel
 
 logger = get_logger("ui.main_window")
 
@@ -23,8 +23,6 @@ _POLL_INTERVAL_MS = 120
 _PAGE_DESCRIPTIONS: Dict[str, str] = {
     "Dashboard": "Overview of your projects and current TTS provider status.",
     "Projects": "The project browser will be implemented in a later phase.",
-    "Audio": "Audio preview and processing tools will be implemented in Phase 6.",
-    "Timeline": "The scene/audio timeline will be implemented in Phase 12.",
     "Subtitles": "SRT subtitle generation will be implemented in Phase 8.",
     "Settings": "Application and provider settings will be implemented incrementally.",
 }
@@ -106,19 +104,23 @@ class MainWindow:
     def _build_pages(self) -> None:
         for name, description in _PAGE_DESCRIPTIONS.items():
             self._pages[name] = self._build_placeholder_page(name, description)
-       # Script first: the Voice page reads scenes from it (Phase 5).
+        # Script first: the studio workspace reads scenes from it.
         self._pages["Script"] = self._build_script_page()
-        self._pages["Voice"] = self._build_voice_page(script_source=self._pages["Script"])
+        # One workspace (tabs) behind five sidebar entries: Voice, Audio,
+        # Timeline, Video, Produce. The same panel object serves all of them.
+        studio = self._build_studio_page(script_source=self._pages["Script"])
+        for name in StudioPanel.SECTION_NAMES:
+            self._pages[name] = studio
 
-    def _build_voice_page(self, script_source=None) -> VoicePanel:
-        panel = VoicePanel(
+    def _build_studio_page(self, script_source=None) -> StudioPanel:
+        panel = StudioPanel(
             self.content,
             tts_manager=self.tts_manager,
             async_bridge=self.async_bridge,
             config=self.config,
             palette=self.palette,
-            on_status=self.status_bar.set_text,
             script_source=script_source,
+            on_status=self.status_bar.set_text,
         )
         panel.grid(row=0, column=0, sticky="nsew")
         return panel
@@ -176,13 +178,25 @@ class MainWindow:
             ttk.Label(card, text=title, style="Muted.TLabel").pack(anchor="w")
             ttk.Label(card, text=value, style="App.TLabel").pack(anchor="w", pady=(4, 0))
 
+    def _unique_pages(self):
+        """Pages without duplicates (several sidebar entries share the studio panel)."""
+        seen, pages = set(), []
+        for page in self._pages.values():
+            if id(page) not in seen:
+                seen.add(id(page))
+                pages.append(page)
+        return pages
+
     # ---------- navigation ----------
 
     def _show_page(self, name: str) -> None:
         if name not in self._pages:
             logger.warning("Unknown page requested: %s", name)
             return
-        self._pages[name].tkraise()
+        page = self._pages[name]
+        page.tkraise()
+        if hasattr(page, "show_section"):
+            page.show_section(name)
         self._current_page = name
         self.status_bar.set_text(name)
         logger.debug("Navigated to page: %s", name)
@@ -213,14 +227,14 @@ class MainWindow:
         # they were created with. Only pages holding raw tk widgets (e.g.
         # VoicePanel's tk.Text) need an explicit recolor -- rebuilding
         # every page from scratch would wipe in-progress script text.
-        for page in self._pages.values():
+        for page in self._unique_pages():
             if hasattr(page, "apply_theme"):
                 page.apply_theme(self.palette)
 
         logger.info("Theme switched to %s", self.theme_name)
 
     def _on_close(self) -> None:
-        for page in self._pages.values():
+        for page in self._unique_pages():
             if hasattr(page, "confirm_close") and not page.confirm_close():
                 logger.info("Close cancelled by page veto (e.g. unsaved audio)")
                 return
@@ -228,7 +242,7 @@ class MainWindow:
         if self._unsaved_changes:
             logger.info("Closing with unsaved changes (autosave/prompt lands in a later phase)")
 
-        for page in self._pages.values():
+        for page in self._unique_pages():
             if hasattr(page, "shutdown"):
                 page.shutdown()
 
