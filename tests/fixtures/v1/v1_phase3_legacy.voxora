@@ -1,0 +1,25 @@
+{
+  "id": "leg000000001",
+  "name": "Legacy Phase 3 Project",
+  "language": "en",
+  "created_at": "2026-08-01T10:00:00+00:00",
+  "updated_at": "2026-08-02T10:00:00+00:00",
+  "scenes": [
+    {
+      "id": "legscene0001",
+      "title": "One",
+      "text": "Hello there.",
+      "order": 0
+    },
+    {
+      "id": "legscene0002",
+      "title": "Two",
+      "text": "Second scene.",
+      "order": 1,
+      "voice_id": "en-US-GuyNeural",
+      "provider": "edge_tts",
+      "speed": 1.1,
+      "pause_ms": 250
+    }
+  ]
+}

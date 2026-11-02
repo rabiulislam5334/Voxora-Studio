@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "id": "full00000001",
+  "name": "Deep Ocean ও গভীর সাগর",
+  "language": "bn",
+  "settings": {
+    "theme": "dark",
+    "studio": {
+      "version": 1,
+      "audio": {
+        "narration_volume_percent": 95,
+        "limiter": true,
+        "tracks": [
+          {
+            "id": "trk00001",
+            "path": "C:\\Users\\Rabiul Islam\\Music\\সাগর সুর.mp3",
+            "volume_percent": 12,
+            "fade_in_s": 1.5,
+            "fade_out_s": 4.0,
+            "offset_s": 0.0,
+            "trim_start_s": 2.0,
+            "trim_end_s": 120.0,
+            "loop": true,
+            "enabled": true
+          }
+        ]
+      },
+      "video": {
+        "aspect": "16:9",
+        "resolution": "1080p",
+        "fps": 30,
+        "transition": "crossfade",
+        "transition_s": 0.5,
+        "default_duration_s": 5.0,
+        "default_motion": "zoom_in",
+        "default_fit": "fill",
+        "scenes": {
+          "scene0000000": {
+            "media_path": "C:\\Users\\Rabiul Islam\\Pictures\\ocean 01.jpg",
+            "duration_s": 6.0,
+            "motion": "zoom_out",
+            "fit": "fit"
+          },
+          "scene0000002": {
+            "media_path": "D:\\footage\\trench.mp4",
+            "duration_s": null,
+            "motion": null,
+            "fit": null
+          }
+        }
+      }
+    }
+  },
+  "created_at": "2026-09-01T08:00:00+00:00",
+  "updated_at": "2026-10-02T09:30:00+00:00",
+  "scenes": [
+    {
+      "id": "scene0000000",
+      "title": "Intro",
+      "text": "Welcome to the channel. Today we explore the deep ocean.\n\n[pause 1s]\n\nLet's dive in.",
+      "notes": "Hook first",
+      "visual_prompt": "dark blue ocean, bioluminescence",
+      "order": 0,
+      "voice_id": "en-US-AriaNeural",
+      "provider": "edge_tts",
+      "speed": 1.0,
+      "pitch": null,
+      "style": null,
+      "pause_ms": 0,
+      "audio_path": null,
+      "pitch_hz": null,
+      "volume_percent": null,
+      "sentence_pause_ms": null,
+      "paragraph_pause_ms": null,
+      "scene_pause_ms": null,
+      "created_at": "2026-09-01T08:00:00+00:00",
+      "updated_at": "2026-10-02T09:30:00+00:00"
+    },
+    {
+      "id": "scene0000001",
+      "title": "বাংলা অংশ",
+      "text": "আজকের ভিডিওতে আমরা মহাসাগরের গভীরতা নিয়ে কথা বলব। এটি একটি দীর্ঘ যাত্রা।\n\nধন্যবাদ।",
+      "notes": "",
+      "visual_prompt": "",
+      "order": 1,
+      "voice_id": "bn-BD-NabanitaNeural",
+      "provider": "edge_tts",
+      "speed": 1.0,
+      "pitch": null,
+      "style": null,
+      "pause_ms": 300,
+      "audio_path": null,
+      "pitch_hz": null,
+      "volume_percent": null,
+      "sentence_pause_ms": null,
+      "paragraph_pause_ms": null,
+      "scene_pause_ms": null,
+      "created_at": "2026-09-01T08:00:00+00:00",
+      "updated_at": "2026-10-02T09:30:00+00:00"
+    },
+    {
+      "id": "scene0000002",
+      "title": "Mixed ভাষা",
+      "text": "[whisper] The Mariana Trench, মারিয়ানা খাত, is 10,994 m deep. Dr. Smith measured it in 3.5 hours.",
+      "notes": "",
+      "visual_prompt": "",
+      "order": 2,
+      "voice_id": null,
+      "provider": null,
+      "speed": 1.0,
+      "pitch": null,
+      "style": null,
+      "pause_ms": 0,
+      "audio_path": null,
+      "pitch_hz": -4,
+      "volume_percent": 90,
+      "sentence_pause_ms": 350,
+      "paragraph_pause_ms": 700,
+      "scene_pause_ms": 900,
+      "created_at": "2026-09-01T08:00:00+00:00",
+      "updated_at": "2026-10-02T09:30:00+00:00"
+    },
+    {
+      "id": "scene0000003",
+      "title": "Outro",
+      "text": "Thanks for watching. [pause] See you next time!",
+      "notes": "",
+      "visual_prompt": "",
+      "order": 3,
+      "voice_id": null,
+      "provider": null,
+      "speed": 1.0,
+      "pitch": null,
+      "style": null,
+      "pause_ms": 0,
+      "audio_path": null,
+      "pitch_hz": null,
+      "volume_percent": null,
+      "sentence_pause_ms": null,
+      "paragraph_pause_ms": null,
+      "scene_pause_ms": null,
+      "created_at": "2026-09-01T08:00:00+00:00",
+      "updated_at": "2026-10-02T09:30:00+00:00"
+    }
+  ]
+}
