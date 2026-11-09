@@ -161,17 +161,14 @@ def test_legacy_phase3_file_without_schema_version_or_settings_opens_with_defaul
     assert saved["scenes"][0]["pitch_hz"] is None
 
 
-def test_current_unknown_keys_are_dropped_on_load():
-    # Today the serializer rebuilds the dict from known fields only, so unknown
-    # top-level and scene keys are silently lost. Step 3 preserves unknown
-    # top-level keys on purpose; update this test then.
+def test_unknown_keys_are_preserved_on_load_and_save():
+    # Step 2 correction: unknown top-level and scene keys survive a load/save
+    # round trip (they used to be silently dropped by the serializer).
     raw = _load_raw("v1_unknown_keys.voxora")
     assert raw["future_top_level_key"] == {"hello": "world"}
     assert raw["scenes"][0]["future_scene_key"] == 42
 
-    out = project_to_dict(project_from_dict(raw))
-    assert "future_top_level_key" not in out
-    assert "future_scene_key" not in out["scenes"][0]
+    assert project_to_dict(project_from_dict(raw)) == raw
 
 
 # ----------------------------------------------------------------------
@@ -272,7 +269,6 @@ def test_scenes_are_sorted_by_order_on_load_and_on_save():
 # ----------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT: invalid UTF-8 raises UnicodeDecodeError instead of ProjectError (manager.py open())")
 def test_defect_invalid_utf8_file_should_raise_project_error(tmp_path):
     path = tmp_path / "latin1.voxora"
     path.write_bytes(b'{"name": "\xff\xfe"}')
@@ -363,7 +359,13 @@ def test_failed_replace_keeps_original_file_and_manager_state(tmp_path, monkeypa
     manager.current_project.name = "Changed"
     manager.mark_dirty()
 
-    def boom(self, *args, **kwargs):
+    original_replace = Path.replace
+
+    def boom(self, destination):
+        # Fail only the replace of the project file itself; the rolling backup
+        # (written to the default backups dir) must still succeed.
+        if Path(destination) != target:
+            return original_replace(self, destination)
         raise OSError("simulated disk failure")
 
     monkeypatch.setattr(Path, "replace", boom)

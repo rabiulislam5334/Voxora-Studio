@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.models.scene import Scene
 
@@ -26,6 +26,9 @@ class Project:
     scenes: List[Scene] = field(default_factory=list)
     settings: dict = field(default_factory=dict)
     schema_version: int = 1
+    # Unknown top-level keys from the project file, preserved verbatim and
+    # written back on save (see serializer.py).
+    extra: Dict[str, Any] = field(default_factory=dict)
 
     def touch(self) -> None:
         self.updated_at = _utcnow()

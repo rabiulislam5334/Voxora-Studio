@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,8 +26,17 @@ def _parse_datetime(value: Any) -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _with_extra(known: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    """Append preserved unknown keys after the known ones. A known key is
+    never overridden by an ``extra`` entry."""
+    for key, value in extra.items():
+        if key not in known:
+            known[key] = copy.deepcopy(value)
+    return known
+
+
 def scene_to_dict(scene: Scene) -> Dict[str, Any]:
-    return {
+    return _with_extra({
         "id": scene.id,
         "title": scene.title,
         "text": scene.text,
@@ -49,7 +59,7 @@ def scene_to_dict(scene: Scene) -> Dict[str, Any]:
         "scene_pause_ms": scene.scene_pause_ms,
         "created_at": scene.created_at.isoformat(),
         "updated_at": scene.updated_at.isoformat(),
-    }
+    }, scene.extra)
 
 
 def scene_from_dict(data: Dict[str, Any]) -> Scene:
@@ -87,12 +97,13 @@ def scene_from_dict(data: Dict[str, Any]) -> Scene:
         scene_pause_ms=data.get("scene_pause_ms"),
         created_at=_parse_datetime(data.get("created_at")),
         updated_at=_parse_datetime(data.get("updated_at")),
+        extra={k: copy.deepcopy(v) for k, v in data.items() if k not in _SCENE_KEYS},
     )
 
 
 def project_to_dict(project: Project) -> Dict[str, Any]:
     ordered_scenes = sorted(project.scenes, key=lambda s: s.order)
-    return {
+    return _with_extra({
         "schema_version": project.schema_version,
         "id": project.id,
         "name": project.name,
@@ -101,7 +112,7 @@ def project_to_dict(project: Project) -> Dict[str, Any]:
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
         "scenes": [scene_to_dict(s) for s in ordered_scenes],
-    }
+    }, project.extra)
 
 
 def project_from_dict(data: Dict[str, Any]) -> Project:
@@ -145,4 +156,11 @@ def project_from_dict(data: Dict[str, Any]) -> Project:
         updated_at=_parse_datetime(data.get("updated_at")),
         scenes=scenes,
         schema_version=schema_version,
+        extra={k: copy.deepcopy(v) for k, v in data.items() if k not in _PROJECT_KEYS},
     )
+
+
+# The keys this version writes, derived from the writers above so the two can
+# never drift apart. Anything else found in a file is preserved as ``extra``.
+_SCENE_KEYS = frozenset(scene_to_dict(Scene()))
+_PROJECT_KEYS = frozenset(project_to_dict(Project()))

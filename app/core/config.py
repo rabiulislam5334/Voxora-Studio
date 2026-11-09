@@ -34,6 +34,9 @@ class AppConfig:
     settings_file: Path = field(init=False)
     # Phases 6-8: cached video segments, thumbnails and waveform images.
     video_cache_dir: Path = field(init=False)
+    # Phase 1: machine-local user data (git-ignored). Not created at startup yet.
+    userdata_dir: Path = field(init=False)
+    backups_dir: Path = field(init=False)
 
     default_language: str = "en"
     default_theme: str = constants.DEFAULT_THEME
@@ -65,6 +68,8 @@ class AppConfig:
         self.scene_cache_dir = self.cache_dir / "scenes"
         self.settings_file = self.root_dir / "voxora_settings.json"
         self.video_cache_dir = self.cache_dir / "video"
+        self.userdata_dir = self.root_dir / "userdata"
+        self.backups_dir = self.userdata_dir / "backups"
 
     def required_directories(self) -> List[Path]:
         return [

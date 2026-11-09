@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 def _new_id() -> str:
@@ -52,6 +52,11 @@ class Scene:
 
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
+
+    # Keys found in a project file that this version does not know. Kept
+    # verbatim and written back on save so opening and saving a file made by
+    # a newer build does not silently delete its data (see serializer.py).
+    extra: Dict[str, Any] = field(default_factory=dict)
 
     def touch(self) -> None:
         self.updated_at = _utcnow()

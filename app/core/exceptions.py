@@ -13,6 +13,16 @@ class ProjectError(ApplicationError):
     """Raised for project load/save/validation failures."""
 
 
+class ProjectConflictError(ProjectError):
+    """The project file on disk was changed (by another window or program)
+    after this session last read or wrote it. Nothing was overwritten."""
+
+
+class ProjectBackupError(ProjectError):
+    """A rolling backup of the existing project file could not be created, so
+    the save was not performed. The original file is untouched."""
+
+
 class TTSProviderError(ApplicationError):
     """Raised when a TTS provider fails or is misconfigured."""
 

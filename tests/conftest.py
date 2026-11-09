@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
+import app.core.config as config_module
 from app.audio.ffmpeg_tool import FFmpegTool
+from app.core.config import AppConfig
 from app.core.settings_store import SettingsStore
 
 
@@ -32,3 +34,13 @@ def tone_mp3(real_ffmpeg, tmp_path_factory) -> Path:
         check=True,
     )
     return path
+
+
+@pytest.fixture(autouse=True)
+def isolated_app_config(tmp_path_factory, monkeypatch):
+    """ProjectManager() now keeps rolling backups under AppConfig.backups_dir.
+    Point the config singleton at a per-test temp root (a sibling of the
+    test's own tmp_path, so folder-listing assertions never see it) so no test ever writes
+    into the developer's real ``userdata/`` folder. Nothing is created until a
+    backup is actually written."""
+    monkeypatch.setattr(config_module, "_config", AppConfig(root_dir=tmp_path_factory.mktemp("app_root")))

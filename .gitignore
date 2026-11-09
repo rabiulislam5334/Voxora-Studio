@@ -1,13 +1,37 @@
+
+# Python virtual environment
 .venv/
+venv/
 __pycache__/
+*.py[cod]
 .pytest_cache/
-*.pyc
+.mypy_cache/
+.ruff_cache/
+
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Application logs and temporary files
 logs/
 temp/
+*.log
+*.tmp
+
+# Root-level generated data (keep app source packages tracked)
 /cache/
-output/
+/output/
 /projects/
+/userdata/
+
+# Build and distribution
 dist/
 build/
 *.spec
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
