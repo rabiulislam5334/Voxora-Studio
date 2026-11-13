@@ -153,7 +153,12 @@ class SnapshotStore:
             pointer = json.loads((self.session_dir / CURRENT_NAME).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             return None
-        if not isinstance(pointer, dict) or type(pointer.get("seq")) is not int:
+        if (
+            not isinstance(pointer, dict)
+            or type(pointer.get("seq")) is not int
+            or type(pointer.get("epoch")) is not int
+            or type(pointer.get("revision")) is not int
+        ):
             return None
         for generation in generations:
             if (
@@ -270,7 +275,13 @@ class SnapshotStore:
             )
             pointer_path = self.session_dir / CURRENT_NAME
             pointer = self._read_pointer()
-            if pointer and pointer.get("epoch") == record.epoch and pointer.get("revision", -1) <= barrier:
+            if (
+                pointer
+                and type(pointer.get("epoch")) is int
+                and pointer.get("epoch") == record.epoch
+                and type(pointer.get("revision")) is int
+                and pointer["revision"] <= barrier
+            ):
                 if replacement is None:
                     if not self._unlink(pointer_path):
                         return False
@@ -295,7 +306,7 @@ class SnapshotStore:
             raise ProjectError("Could not acquire the snapshot commit lock.")
         try:
             pointer = self._read_pointer()
-            if pointer and pointer.get("epoch") == epoch:
+            if pointer and type(pointer.get("epoch")) is int and pointer.get("epoch") == epoch:
                 if not self._unlink(self.session_dir / CURRENT_NAME):
                     return 0
             removed = 0
@@ -355,7 +366,12 @@ class SnapshotStore:
         )
         pointer = self._read_pointer()
         keep = {item.seq for item in generations[: self.retention]}
-        if pointer and pointer.get("epoch") == epoch and type(pointer.get("seq")) is int:
+        if (
+            pointer
+            and type(pointer.get("epoch")) is int
+            and pointer.get("epoch") == epoch
+            and type(pointer.get("seq")) is int
+        ):
             keep.add(pointer["seq"])
         for item in generations:
             if item.seq not in keep:
@@ -384,7 +400,7 @@ class SnapshotStore:
         pointer = self._read_pointer()
         if not pointer:
             return
-        if pointer.get("epoch") != self.control.epoch:
+        if type(pointer.get("epoch")) is not int or pointer.get("epoch") != self.control.epoch:
             return
         revision = pointer.get("revision")
         if type(revision) is int and revision <= self.control.barrier_revision:
