@@ -20,7 +20,7 @@ def test_v1_load_is_in_memory_only_and_first_save_creates_exact_backup(tmp_path)
 
     manager = ProjectManager()
     manager.open(source)
-    assert manager.current_project.schema_version == 2
+    assert manager.current_project.schema_version == 3
     assert source.read_bytes() == original
 
     manager.current_project.name = "Migrated"
@@ -30,7 +30,8 @@ def test_v1_load_is_in_memory_only_and_first_save_creates_exact_backup(tmp_path)
     backup = tmp_path / "episode.v1-backup"
     assert backup.read_bytes() == original
     saved = json.loads(source.read_text(encoding="utf-8"))
-    assert saved["schema_version"] == 2
+    assert saved["schema_version"] == 3
+    assert saved["subtitles"] == {"format_version": 1, "tracks": []}
     assert saved["settings"]["studio"] == json.loads(original)["settings"]["studio"]
 
 
@@ -97,7 +98,8 @@ def test_schema_v2_containers_and_studio_settings_roundtrip():
         "scenes": [{"id": "scene-1", "order": 0, "text": "Hello"}],
     }
     out = project_to_dict(project_from_dict(raw))
-    assert out["schema_version"] == 2
+    assert out["schema_version"] == 3
+    assert out["subtitles"] == {"format_version": 1, "tracks": []}
     assert out["profile"] == raw["profile"]
     assert out["assets"] == raw["assets"]
     assert out["director"] == raw["director"]
