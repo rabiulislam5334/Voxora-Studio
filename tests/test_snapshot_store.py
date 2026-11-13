@@ -299,3 +299,39 @@ def test_cleanup_does_not_delete_generation_when_pointer_unlink_fails(tmp_path, 
     monkeypatch.setattr(Path, "unlink", fail_pointer)
     assert store.cleanup_after_save(record) is False
     assert store.load_generation(job.seq).payload == b"snapshot"
+
+
+def test_save_pending_record_is_visible_before_worker_can_reacquire_write_mutex(tmp_path, monkeypatch):
+    """A worker winning the lock hand-off must observe the pending Save barrier."""
+    control = SnapshotControl(seal_timeout_s=0.01)
+    job = _queued(control, 5, b"captured before save")
+    project_file = tmp_path / "project.voxora"
+    project_file.write_bytes(b"saved project")
+    record = SaveRecord(
+        control.epoch, "project", 5, project_file, stamp_from_bytes(b"saved project")
+    )
+
+    # Model a worker finishing just as the Save's timed lock wait expires.
+    # The next worker gets write_mutex in the tiny hand-off window.
+    assert control.acquire_write()
+    original_acquire = control.acquire_write
+    observed = []
+
+    def release_then_run_next_worker(timeout=None):
+        if timeout == control._seal_timeout:
+            control.release_write()
+            assert original_acquire(0)
+            try:
+                observed.append(control.decide_commit(job))
+            finally:
+                control.release_write()
+            return False
+        return original_acquire(timeout)
+
+    monkeypatch.setattr(control, "acquire_write", release_then_run_next_worker)
+    outcome = control.on_save_success(record)
+
+    assert observed == [CommitDecision.DROP_REVISION]
+    assert outcome is SealOutcome.SEALED
+    assert control.barrier_revision == 5
+    assert control.pending_record is None
