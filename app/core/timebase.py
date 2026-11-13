@@ -8,7 +8,7 @@ counts as decimal strings when crossing JSON/JavaScript boundaries.
 
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, ROUND_DOWN
+from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from typing import TypeAlias
 
@@ -75,17 +75,20 @@ def _as_fraction(value: TimeValue, name: str) -> Fraction:
 
 def _round_fraction(value: Fraction, rounding: RoundingMode) -> int:
     """Round a non-negative fraction to an integer using a named policy."""
-    if rounding not in _ROUNDING_MODES:
-        choices = ", ".join(sorted(_ROUNDING_MODES))
-        raise TimebaseError(f"rounding must be one of: {choices}")
     numerator, denominator = value.numerator, value.denominator
+    quotient, remainder = divmod(numerator, denominator)
     if rounding == "exact":
-        quotient, remainder = divmod(numerator, denominator)
         if remainder:
             raise TimebaseError("conversion is not exact with the selected timebase")
         return quotient
-    decimal_value = Decimal(numerator) / Decimal(denominator)
-    return int(decimal_value.to_integral_value(rounding=_ROUNDING_MODES[rounding]))
+    if rounding == "floor" or rounding == "trunc":
+        return quotient
+    if rounding == "ceil":
+        return quotient + (1 if remainder else 0)
+    if rounding == "half_up":
+        return quotient + (1 if remainder * 2 >= denominator else 0)
+    choices = ", ".join(sorted((*_ROUNDING_MODES.keys(), "exact")))
+    raise TimebaseError(f"rounding must be one of: {choices}")
 
 
 def seconds_to_ticks(seconds: TimeValue, *, rounding: RoundingMode = "half_up") -> int:
