@@ -126,15 +126,15 @@ def test_metadata_write_failure_removes_only_unvalidated_payload(tmp_path, monke
     store = SnapshotStore(tmp_path / "session", control, enabled=True)
     job = _queued(control, 1)
     calls = 0
+    original = module.atomic_write_bytes
 
     def fail_metadata(path, data, **kwargs):
         nonlocal calls
         calls += 1
         if calls == 2:
             raise OSError("metadata disk failure")
-        return module.atomic_write_bytes_original(path, data, **kwargs)
+        return original(path, data, **kwargs)
 
-    module.atomic_write_bytes_original = module.atomic_write_bytes
     monkeypatch.setattr(module, "atomic_write_bytes", fail_metadata)
     with pytest.raises(ProjectError):
         store.commit(job)
