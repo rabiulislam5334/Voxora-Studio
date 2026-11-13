@@ -209,7 +209,12 @@ class JsonProjectRepository:
 
         backup_path = target.with_suffix(".v1-backup")
         if backup_path.exists():
-            return backup_path
+            if backup_path.is_file():
+                return backup_path
+            raise ProjectBackupError(
+                f"The one-time v1 backup path '{backup_path}' already exists but is not a file. "
+                "The original project was not changed."
+            )
         fd, temp_name = tempfile.mkstemp(
             dir=str(target.parent), prefix=".voxora_v1_backup_", suffix=".tmp"
         )
@@ -222,7 +227,11 @@ class JsonProjectRepository:
             try:
                 os.link(temp_path, backup_path)
             except FileExistsError:
-                pass
+                if not backup_path.is_file():
+                    raise ProjectBackupError(
+                        f"The one-time v1 backup path '{backup_path}' exists but is not a file. "
+                        "The original project was not changed."
+                    )
             return backup_path
         except OSError as exc:
             raise ProjectBackupError(
