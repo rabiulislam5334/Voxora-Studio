@@ -260,11 +260,11 @@ class SnapshotControl:
         with self._alloc:
             if job.epoch != self._epoch:
                 return CommitDecision.DROP_EPOCH
+            if job.seq <= self._last_committed:
+                return CommitDecision.DROP_SEQUENCE
             pending = self._pending.revision if self._current_pending() else -1
             if job.revision <= max(self._barrier, pending, self._last_committed_revision):
                 return CommitDecision.DROP_REVISION
-            if job.seq <= self._last_committed:
-                return CommitDecision.DROP_SEQUENCE
             return CommitDecision.COMMIT
 
     def note_committed(self, job: Job) -> None:
