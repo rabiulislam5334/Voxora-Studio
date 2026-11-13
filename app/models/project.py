@@ -36,6 +36,10 @@ class Project:
     extras: Dict[str, Any] = field(default_factory=dict)
     extra: InitVar[Optional[Dict[str, Any]]] = None
 
+    def __post_init__(self, extra: Optional[Dict[str, Any]]) -> None:
+        if extra is not None:
+            self.extras = extra
+
     def touch(self) -> None:
         self.updated_at = _utcnow()
 
