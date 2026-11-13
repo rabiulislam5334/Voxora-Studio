@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -147,6 +148,7 @@ class JsonProjectRepository:
                 else:
                     old_bytes, old_stamp = existing
                     self._check_unchanged(target, expected_stamp, old_stamp)  # verification 1
+                    self._backup_v1_before_migration(target, old_bytes)
                     backup_path = self._backup(project, target, old_bytes, allow_without_backup)
                     if expected_stamp is not None:
                         again = self._read_existing(target)
@@ -188,6 +190,50 @@ class JsonProjectRepository:
             f"it was opened or last saved here ({expected.describe()} -> {current.describe()}). "
             "Nothing was overwritten. Use Save As to keep your changes under a new name."
         )
+
+    @staticmethod
+    def _backup_v1_before_migration(target: Path, old_bytes: bytes) -> Optional[Path]:
+        """Preserve a v1 source exactly once before replacing it with schema v2.
+
+        The hard-link publication is atomic and exclusive: it cannot overwrite
+        an existing backup, even if two application instances race.
+        """
+        try:
+            raw = json.loads(old_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return None
+        if not isinstance(raw, dict) or type(raw.get("schema_version", 1)) is not int:
+            return None
+        if raw.get("schema_version", 1) != 1:
+            return None
+
+        backup_path = target.with_suffix(".v1-backup")
+        if backup_path.exists():
+            return backup_path
+        fd, temp_name = tempfile.mkstemp(
+            dir=str(target.parent), prefix=".voxora_v1_backup_", suffix=".tmp"
+        )
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(old_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(temp_path, backup_path)
+            except FileExistsError:
+                pass
+            return backup_path
+        except OSError as exc:
+            raise ProjectBackupError(
+                f"Could not create the one-time v1 backup '{backup_path.name}' "
+                f"before migrating '{target.name}': {exc}. The original project was not changed."
+            ) from exc
+        finally:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _backup(
         self, project: Project, target: Path, old_bytes: bytes, allow_without_backup: bool
