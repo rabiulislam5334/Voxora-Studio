@@ -276,24 +276,29 @@ class SnapshotControl:
     # ------------------------------------------------------------------ save
 
     def on_save_success(self, record: SaveRecord) -> SealOutcome:
-        """Called after a *verified* successful Save (UI thread). Never holds a
-        lock while waiting longer than ``seal_timeout_s``."""
-        if self.acquire_write(self._seal_timeout):
-            try:
-                return self._seal_locked(record)
-            finally:
-                self.release_write()
+        """Record a verified Save before waiting for the commit mutex.
+
+        Publishing the pending record first closes the hand-off race: a worker
+        that acquires write_mutex immediately after another worker releases it
+        must already see this Save's revision in decide_commit().
+        """
         with self._alloc:
             if record.epoch != self._epoch:
                 return SealOutcome.DISCARDED
-            if self._pending is None or record.revision > self._pending.revision:
-                self._pending = record  # replaced as one object
-        if self.acquire_write(0):  # the worker may have just finished
+            if self._pending is None or self._pending.epoch != self._epoch or record.revision > self._pending.revision:
+                self._pending = record  # revision, path and stamp move together
+
+        if self.acquire_write(self._seal_timeout):
             try:
                 self.apply_pending()
             finally:
                 self.release_write()
+
+        # A worker may have applied the pending record while we were waiting,
+        # or may apply it later at the end of its current commit.
         with self._alloc:
+            if record.epoch != self._epoch:
+                return SealOutcome.DISCARDED
             sealed = self._barrier >= record.revision
         return SealOutcome.SEALED if sealed else SealOutcome.DEFERRED
 
