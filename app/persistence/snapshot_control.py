@@ -148,7 +148,8 @@ class SnapshotControl:
         self._pending: Optional[SaveRecord] = None
         self._state = SnapshotState.NORMAL
         self._prev_state = SnapshotState.NORMAL
-        self._last_committed = 0
+        self._last_committed = 0  # highest committed sequence
+        self._last_committed_revision = -1
 
     # ----------------------------------------------------------- read access
 
@@ -260,7 +261,7 @@ class SnapshotControl:
             if job.epoch != self._epoch:
                 return CommitDecision.DROP_EPOCH
             pending = self._pending.revision if self._current_pending() else -1
-            if job.revision <= max(self._barrier, pending):
+            if job.revision <= max(self._barrier, pending, self._last_committed_revision):
                 return CommitDecision.DROP_REVISION
             if job.seq <= self._last_committed:
                 return CommitDecision.DROP_SEQUENCE
@@ -272,6 +273,8 @@ class SnapshotControl:
         with self._alloc:
             if job.seq > self._last_committed:
                 self._last_committed = job.seq
+            if job.revision > self._last_committed_revision:
+                self._last_committed_revision = job.revision
 
     # ------------------------------------------------------------------ save
 
