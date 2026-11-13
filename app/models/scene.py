@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -41,17 +41,20 @@ class Scene:
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
 
-    # Kept under the historical field name for source compatibility.
-    # The schema/API name is "extras"; the property below exposes that name.
-    extra: Dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def extras(self) -> Dict[str, Any]:
-        return self.extra
-
-    @extras.setter
-    def extras(self, value: Dict[str, Any]) -> None:
-        self.extra = value
+    # Canonical v2 name; InitVar accepts the historical constructor keyword.
+    extras: Dict[str, Any] = field(default_factory=dict)
+    extra: InitVar[Optional[Dict[str, Any]]] = None
 
     def touch(self) -> None:
         self.updated_at = _utcnow()
+
+
+# Backwards-compatible attribute alias; the dataclass field is now "extras".
+def _get_extra(self):
+    return self.extras
+
+def _set_extra(self, value):
+    if value is not None:
+        self.extras = value
+
+Scene.extra = property(_get_extra, _set_extra)
