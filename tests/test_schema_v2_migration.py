@@ -156,3 +156,21 @@ def test_extras_is_the_canonical_model_field_with_legacy_extra_alias():
     legacy_scene = Scene(extra={"legacy_scene": True})
     assert legacy_project.extras == {"legacy": True}
     assert legacy_scene.extras == {"legacy_scene": True}
+
+
+
+def test_v1_backup_path_that_is_a_directory_aborts_without_touching_project(tmp_path):
+    source = tmp_path / "episode.voxora"
+    original = (FIXTURES / "v1_minimal.voxora").read_bytes()
+    source.write_bytes(original)
+    (tmp_path / "episode.v1-backup").mkdir()
+
+    manager = ProjectManager()
+    manager.open(source)
+    manager.current_project.name = "Edited"
+    manager.mark_dirty()
+
+    with pytest.raises(ProjectBackupError, match="not a file"):
+        manager.save()
+    assert source.read_bytes() == original
+    assert manager.dirty is True
