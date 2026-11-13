@@ -288,7 +288,13 @@ class SnapshotControl:
             if self._pending is None or self._pending.epoch != self._epoch or record.revision > self._pending.revision:
                 self._pending = record  # revision, path and stamp move together
 
-        if self.acquire_write(self._seal_timeout):
+        acquired = self.acquire_write(self._seal_timeout)
+        if not acquired:
+            # The worker may have released the mutex just as the timed wait
+            # expired. Since the pending record is already visible, retry once
+            # without waiting to seal it here if the mutex is now free.
+            acquired = self.acquire_write(0)
+        if acquired:
             try:
                 self.apply_pending()
             finally:
