@@ -24,10 +24,6 @@ class Scene:
     visual_prompt: str = ""
     order: int = 0
 
-    # Per-scene TTS settings -- already here since Phase 1/2; Phase 3 just
-    # adds the script/scene-management fields around them. Keeping these
-    # unused-for-now fields is what lets a future phase associate generated
-    # audio with a specific scene without another model migration.
     voice_id: Optional[str] = None
     provider: Optional[str] = None
     speed: float = 1.0
@@ -36,14 +32,6 @@ class Scene:
     pause_ms: int = 0
     audio_path: Optional[Path] = None
 
-    # Phase 4: optional per-scene narration-settings overrides. All
-    # default to None, meaning "use the Voice page's current settings" --
-    # existing Phase 3 project files have none of these keys and load
-    # exactly as before (see app/projects/serializer.py). Not yet read by
-    # any UI; Phase 5's scene-by-scene long-form synthesis is the natural
-    # future consumer. pitch_hz/volume_percent are the Phase 4 int-based
-    # equivalents of the older unused `pitch` string field above, kept
-    # separate rather than repurposing that field.
     pitch_hz: Optional[int] = None
     volume_percent: Optional[int] = None
     sentence_pause_ms: Optional[int] = None
@@ -53,10 +41,17 @@ class Scene:
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
 
-    # Keys found in a project file that this version does not know. Kept
-    # verbatim and written back on save so opening and saving a file made by
-    # a newer build does not silently delete its data (see serializer.py).
+    # Kept under the historical field name for source compatibility.
+    # The schema/API name is "extras"; the property below exposes that name.
     extra: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def extras(self) -> Dict[str, Any]:
+        return self.extra
+
+    @extras.setter
+    def extras(self, value: Dict[str, Any]) -> None:
+        self.extra = value
 
     def touch(self) -> None:
         self.updated_at = _utcnow()
