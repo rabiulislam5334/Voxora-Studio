@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import queue
 import threading
 from typing import Any, Callable, Coroutine, Optional
@@ -62,7 +63,7 @@ class AsyncBridge:
         def _on_done(fut: "asyncio.Future") -> None:
             try:
                 result = fut.result()
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, concurrent.futures.CancelledError):
                 return
             except Exception as exc:  # noqa: BLE001 - forwarded to UI
                 logger.debug("Background task failed: %s", exc)
