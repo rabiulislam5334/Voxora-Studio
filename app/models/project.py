@@ -25,19 +25,26 @@ class Project:
     language: str = "en"
     scenes: List[Scene] = field(default_factory=list)
     settings: dict = field(default_factory=dict)
-    schema_version: int = 1
-    # Unknown top-level keys from the project file, preserved verbatim and
-    # written back on save (see serializer.py).
+    schema_version: int = 2
+    # Additive v2 containers. Their inner schemas remain intentionally
+    # unopinionated until the owning engines define them.
+    profile: Dict[str, Any] = field(default_factory=dict)
+    assets: Dict[str, Any] = field(default_factory=dict)
+    director: Dict[str, Any] = field(default_factory=dict)
+    migration: Dict[str, Any] = field(default_factory=dict)
+    # Historical constructor/storage name retained as a compatibility alias.
     extra: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def extras(self) -> Dict[str, Any]:
+        return self.extra
+
+    @extras.setter
+    def extras(self, value: Dict[str, Any]) -> None:
+        self.extra = value
 
     def touch(self) -> None:
         self.updated_at = _utcnow()
-
-    # ------------------------------------------------------------------
-    # Scene management -- kept here (not in the UI layer) so Script
-    # Editor UI code, tests, and any future caller all go through the
-    # same validated operations instead of poking project.scenes directly.
-    # ------------------------------------------------------------------
 
     def add_scene(self, scene: Optional[Scene] = None) -> Scene:
         if scene is None:
@@ -58,7 +65,7 @@ class Project:
 
     def duplicate_scene(self, scene_id: str) -> Scene:
         original = self._require_scene(scene_id)
-        copy = Scene(
+        copy_scene = Scene(
             title=f"{original.title} (Copy)",
             text=original.text,
             notes=original.notes,
@@ -69,9 +76,6 @@ class Project:
             pitch=original.pitch,
             style=original.style,
             pause_ms=original.pause_ms,
-            # Phase 4 per-scene overrides (None = "use Voice page settings").
-            # Phase 5 now reads these during narration, so a duplicate must
-            # sound the same as its original.
             pitch_hz=original.pitch_hz,
             volume_percent=original.volume_percent,
             sentence_pause_ms=original.sentence_pause_ms,
@@ -79,10 +83,10 @@ class Project:
             scene_pause_ms=original.scene_pause_ms,
         )
         index = self.scenes.index(original)
-        self.scenes.insert(index + 1, copy)
+        self.scenes.insert(index + 1, copy_scene)
         self._renumber()
         self.touch()
-        return copy
+        return copy_scene
 
     def delete_scene(self, scene_id: str) -> None:
         scene = self._require_scene(scene_id)
@@ -106,7 +110,6 @@ class Project:
 
     def total_word_count(self) -> int:
         from app.text.wordcount import count_words
-
         return sum(count_words(s.text) for s in self.scenes)
 
     def _require_scene(self, scene_id: str) -> Scene:
@@ -116,11 +119,11 @@ class Project:
         return scene
 
     def _index_of(self, scene_id: str) -> int:
-        for i, s in enumerate(self.scenes):
-            if s.id == scene_id:
+        for i, scene in enumerate(self.scenes):
+            if scene.id == scene_id:
                 return i
         return -1
 
     def _renumber(self) -> None:
-        for i, s in enumerate(self.scenes):
-            s.order = i
+        for i, scene in enumerate(self.scenes):
+            scene.order = i
