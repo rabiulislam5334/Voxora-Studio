@@ -10,8 +10,9 @@ from app.core.exceptions import ProjectError
 from app.models.project import Project
 from app.models.scene import Scene
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 V1_SCHEMA_VERSION = 1
+SUBTITLES_FORMAT_VERSION = 1
 
 
 def _parse_datetime(value: Any) -> datetime:
@@ -45,21 +46,51 @@ def _schema_version(data: Dict[str, Any]) -> int:
     return version
 
 
+def _empty_subtitles_data() -> Dict[str, Any]:
+    return {"format_version": SUBTITLES_FORMAT_VERSION, "tracks": []}
+
+
 def _migrate_project_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Return an additive v2 copy. Never mutate the caller's parsed JSON."""
+    """Return an additive v3 copy. Never mutate the caller's parsed JSON."""
     version = _schema_version(data)
     migrated = copy.deepcopy(data)
+
     if version == 1:
         migrated.setdefault("profile", {})
         migrated.setdefault("assets", {})
         migrated.setdefault("director", {})
         migrated["migration"] = {"from_schema_version": 1}
         migrated["schema_version"] = 2
+        version = 2
+
     for key in ("profile", "assets", "director", "migration"):
         if key not in migrated:
             migrated[key] = {}
         if not isinstance(migrated[key], dict):
             raise ProjectError(f"Project file's '{key}' field must be an object.")
+
+    if version == 2:
+        # v3 adds a separate project-level namespace. Existing settings.studio
+        # is intentionally left untouched.
+        migrated.setdefault("subtitles", _empty_subtitles_data())
+        migrated["schema_version"] = 3
+
+    subtitles = migrated.get("subtitles", _empty_subtitles_data())
+    if not isinstance(subtitles, dict):
+        raise ProjectError("Project file's 'subtitles' field must be an object.")
+    format_version = subtitles.get("format_version", SUBTITLES_FORMAT_VERSION)
+    if type(format_version) is not int or format_version < 1:
+        raise ProjectError("Project file's 'subtitles.format_version' must be a positive integer.")
+    if format_version > SUBTITLES_FORMAT_VERSION:
+        raise ProjectError(
+            "This project uses a newer subtitle data format. Please update Voxora Studio."
+        )
+    tracks = subtitles.get("tracks", [])
+    if not isinstance(tracks, list):
+        raise ProjectError("Project file's 'subtitles.tracks' field must be a list.")
+    subtitles.setdefault("format_version", SUBTITLES_FORMAT_VERSION)
+    subtitles.setdefault("tracks", [])
+    migrated["subtitles"] = subtitles
     return migrated
 
 
@@ -143,6 +174,7 @@ def project_to_dict(project: Project) -> Dict[str, Any]:
         "assets": copy.deepcopy(project.assets),
         "director": copy.deepcopy(project.director),
         "migration": copy.deepcopy(project.migration),
+        "subtitles": copy.deepcopy(project.subtitles),
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
         "scenes": [scene_to_dict(s) for s in ordered_scenes],
@@ -183,6 +215,7 @@ def project_from_dict(data: Dict[str, Any]) -> Project:
         assets=copy.deepcopy(migrated["assets"]),
         director=copy.deepcopy(migrated["director"]),
         migration=copy.deepcopy(migrated["migration"]),
+        subtitles=copy.deepcopy(migrated["subtitles"]),
         extras={k: copy.deepcopy(v) for k, v in migrated.items() if k not in _PROJECT_KEYS},
     )
 
