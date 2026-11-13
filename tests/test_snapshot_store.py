@@ -200,7 +200,7 @@ def test_cleanup_removes_pointer_before_generation_files(tmp_path, monkeypatch):
     project_file.write_bytes(b"saved")
     _, stamp = read_stamped(project_file)
     record = SaveRecord(control.epoch, "project", 2, project_file, stamp)
-    store.seal_save(record)
+    control.on_save_success(record)  # leave pointer for the cleanup phase to invalidate
 
     removed = []
     original = Path.unlink
