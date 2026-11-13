@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -32,16 +32,9 @@ class Project:
     assets: Dict[str, Any] = field(default_factory=dict)
     director: Dict[str, Any] = field(default_factory=dict)
     migration: Dict[str, Any] = field(default_factory=dict)
-    # Historical constructor/storage name retained as a compatibility alias.
-    extra: Dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def extras(self) -> Dict[str, Any]:
-        return self.extra
-
-    @extras.setter
-    def extras(self, value: Dict[str, Any]) -> None:
-        self.extra = value
+    # Canonical v2 name; InitVar accepts the historical constructor keyword.
+    extras: Dict[str, Any] = field(default_factory=dict)
+    extra: InitVar[Optional[Dict[str, Any]]] = None
 
     def touch(self) -> None:
         self.updated_at = _utcnow()
@@ -127,3 +120,14 @@ class Project:
     def _renumber(self) -> None:
         for i, scene in enumerate(self.scenes):
             scene.order = i
+
+
+# Backwards-compatible attribute alias; the dataclass field is now "extras".
+def _get_extra(self):
+    return self.extras
+
+def _set_extra(self, value):
+    if value is not None:
+        self.extras = value
+
+Project.extra = property(_get_extra, _set_extra)
