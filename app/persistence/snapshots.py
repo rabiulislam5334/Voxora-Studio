@@ -245,15 +245,16 @@ class SnapshotStore:
         """Perform deferred cleanup only if the saved file still has its stamp."""
         if not self.enabled:
             return False
-        try:
-            _, current_stamp = read_stamped(record.path)
-        except OSError:
-            return False
-        if not current_stamp.same_content(record.stamp):
-            return False
         if not self.control.acquire_write():
             return False
         try:
+            # Re-verify under the commit mutex immediately before any deletion.
+            try:
+                _, current_stamp = read_stamped(record.path)
+            except OSError:
+                return False
+            if not current_stamp.same_content(record.stamp):
+                return False
             if record.epoch != self.control.epoch:
                 return False
             barrier = self.control.barrier_revision
@@ -271,16 +272,17 @@ class SnapshotStore:
             pointer = self._read_pointer()
             if pointer and pointer.get("epoch") == record.epoch and pointer.get("revision", -1) <= barrier:
                 if replacement is None:
-                    self._unlink(pointer_path)
+                    if not self._unlink(pointer_path):
+                        return False
                 else:
                     self._write_pointer(replacement)
 
             removed = False
             for item in generations:
                 if item.epoch == record.epoch and item.revision <= barrier:
-                    self._unlink(self._meta_path(item.seq))
-                    self._unlink(self._payload_path(item.seq))
-                    removed = True
+                    if self._unlink(self._meta_path(item.seq)):
+                        self._unlink(self._payload_path(item.seq))
+                        removed = True
             return removed
         finally:
             self.control.release_write()
@@ -294,13 +296,14 @@ class SnapshotStore:
         try:
             pointer = self._read_pointer()
             if pointer and pointer.get("epoch") == epoch:
-                self._unlink(self.session_dir / CURRENT_NAME)
+                if not self._unlink(self.session_dir / CURRENT_NAME):
+                    return 0
             removed = 0
             for item in self._valid_generations():
                 if item.epoch == epoch:
-                    self._unlink(self._meta_path(item.seq))
-                    self._unlink(self._payload_path(item.seq))
-                    removed += 1
+                    if self._unlink(self._meta_path(item.seq)):
+                        self._unlink(self._payload_path(item.seq))
+                        removed += 1
             return removed
         finally:
             self.control.release_write()
@@ -356,8 +359,8 @@ class SnapshotStore:
             keep.add(pointer["seq"])
         for item in generations:
             if item.seq not in keep:
-                self._unlink(self._meta_path(item.seq))
-                self._unlink(self._payload_path(item.seq))
+                if self._unlink(self._meta_path(item.seq)):
+                    self._unlink(self._payload_path(item.seq))
 
     def _read_pointer(self) -> Optional[Dict[str, Any]]:
         try:
@@ -388,9 +391,10 @@ class SnapshotStore:
             self._unlink(self.session_dir / CURRENT_NAME)
 
     @staticmethod
-    def _unlink(path: Path) -> None:
+    def _unlink(path: Path) -> bool:
         try:
             path.unlink(missing_ok=True)
+            return True
         except OSError:
-            # Cleanup is best effort. A later scan can still validate files.
-            pass
+            # Never delete a payload if its metadata/pointer could not be removed.
+            return False
