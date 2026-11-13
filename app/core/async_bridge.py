@@ -11,18 +11,18 @@ logger = get_logger("core.async_bridge")
 
 
 class AsyncBridge:
-    """Runs an asyncio event loop on a dedicated background thread and
-    provides a thread-safe way to get results back onto the Tk main thread.
+    """Run asyncio work on a dedicated thread and dispatch results to Tk.
 
-    Tkinter widgets must only be touched from the main thread. Any
-    background work (TTS calls, voice discovery, audio playback) reports
-    back through `dispatch()`; the main window drains the queue on a
-    `root.after()` timer by calling `poll()`.
+    Shutdown cancels and drains loop tasks before closing the loop. Blocking
+    functions already running in asyncio's default executor cannot be forcibly
+    stopped; their worker threads are allowed to finish independently.
     """
 
     def __init__(self) -> None:
         self._loop = asyncio.new_event_loop()
         self._queue: "queue.Queue[tuple[Callable, tuple, dict]]" = queue.Queue()
+        self._state_lock = threading.Lock()
+        self._closing = False
         self._thread = threading.Thread(
             target=self._run_loop, name="AsyncBridge", daemon=True
         )
@@ -30,7 +30,21 @@ class AsyncBridge:
 
     def _run_loop(self) -> None:
         asyncio.set_event_loop(self._loop)
-        self._loop.run_forever()
+        try:
+            self._loop.run_forever()
+        finally:
+            # Tasks must be cancelled and awaited while the loop is still
+            # running; otherwise Python reports "Task was destroyed but it
+            # is pending" when the loop is closed.
+            pending = asyncio.all_tasks(self._loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                self._loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+            self._loop.run_until_complete(self._loop.shutdown_asyncgens())
+            self._loop.close()
 
     def run_coroutine(
         self,
@@ -38,14 +52,19 @@ class AsyncBridge:
         on_success: Optional[Callable[[Any], None]] = None,
         on_error: Optional[Callable[[Exception], None]] = None,
     ) -> "asyncio.Future":
-        """Schedule a coroutine on the background loop. `on_success`/`on_error`
-        are invoked on the Tk main thread (via dispatch + poll), never here."""
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        """Schedule work. Completion callbacks are queued for Tk's main thread."""
+        with self._state_lock:
+            if self._closing:
+                coro.close()
+                raise RuntimeError("AsyncBridge is shutting down")
+            future = asyncio.run_coroutine_threadsafe(coro, self._loop)
 
         def _on_done(fut: "asyncio.Future") -> None:
             try:
                 result = fut.result()
-            except Exception as exc:  # noqa: BLE001 - forwarded to UI, not swallowed
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:  # noqa: BLE001 - forwarded to UI
                 logger.debug("Background task failed: %s", exc)
                 self.dispatch(on_error, exc)
                 return
@@ -73,8 +92,17 @@ class AsyncBridge:
                 logger.exception("Unhandled error in dispatched UI callback")
 
     def shutdown(self, timeout: float = 2.0) -> None:
-        self._loop.call_soon_threadsafe(self._loop.stop)
-        self._thread.join(timeout=timeout)
+        """Stop accepting work, cancel loop tasks, and wait for loop cleanup."""
+        with self._state_lock:
+            if not self._closing:
+                self._closing = True
+                self._loop.call_soon_threadsafe(self._loop.stop)
+
+        if threading.current_thread() is self._thread:
+            logger.warning("AsyncBridge.shutdown() called from its own loop thread")
+            return
+
+        self._thread.join(timeout=max(0.0, timeout))
         if self._thread.is_alive():
             logger.warning(
                 "AsyncBridge thread did not shut down within %.1fs", timeout
