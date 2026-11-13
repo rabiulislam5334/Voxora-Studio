@@ -16,6 +16,12 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _empty_subtitles() -> Dict[str, Any]:
+    # The caption/track payload remains deliberately unopinionated until the
+    # project timebase decision (TS-01) is resolved.
+    return {"format_version": 1, "tracks": []}
+
+
 @dataclass
 class Project:
     id: str = field(default_factory=_new_id)
@@ -25,13 +31,16 @@ class Project:
     language: str = "en"
     scenes: List[Scene] = field(default_factory=list)
     settings: dict = field(default_factory=dict)
-    schema_version: int = 2
+    schema_version: int = 3
     # Additive v2 containers. Their inner schemas remain intentionally
     # unopinionated until the owning engines define them.
     profile: Dict[str, Any] = field(default_factory=dict)
     assets: Dict[str, Any] = field(default_factory=dict)
     director: Dict[str, Any] = field(default_factory=dict)
     migration: Dict[str, Any] = field(default_factory=dict)
+    # v3 project-level subtitle namespace. Timing/caption fields are deferred
+    # until TS-01 selects the authoritative project timebase.
+    subtitles: Dict[str, Any] = field(default_factory=_empty_subtitles)
     # Canonical v2 name; InitVar accepts the historical constructor keyword.
     extras: Dict[str, Any] = field(default_factory=dict)
     extra: InitVar[Optional[Dict[str, Any]]] = None
@@ -130,8 +139,10 @@ class Project:
 def _get_extra(self):
     return self.extras
 
+
 def _set_extra(self, value):
     if value is not None:
         self.extras = value
+
 
 Project.extra = property(_get_extra, _set_extra)
