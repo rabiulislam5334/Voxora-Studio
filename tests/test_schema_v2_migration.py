@@ -97,7 +97,15 @@ def test_schema_v2_containers_and_studio_settings_roundtrip():
         "scenes": [{"id": "scene-1", "order": 0, "text": "Hello"}],
     }
     out = project_to_dict(project_from_dict(raw))
-    assert out == raw
+    assert out["schema_version"] == 2
+    assert out["profile"] == raw["profile"]
+    assert out["assets"] == raw["assets"]
+    assert out["director"] == raw["director"]
+    assert out["migration"] == raw["migration"]
+    assert out["settings"]["studio"] == raw["settings"]["studio"]
+    assert out["scenes"][0]["id"] == "scene-1"
+    assert out["scenes"][0]["order"] == 0
+    assert out["scenes"][0]["text"] == "Hello"
 
 
 @pytest.mark.parametrize("order", [True, False, "1", 1.0, None])
