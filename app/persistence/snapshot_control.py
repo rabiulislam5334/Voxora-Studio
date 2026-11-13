@@ -232,17 +232,24 @@ class SnapshotControl:
         """Restore the next sequence floor from an on-disk scan.
 
         Corrupt/orphan identifiers still count as seen so their numbers are
-        never reused. Call before accepting captures for this store.
+        never reused. Safe both during startup and while replacement already
+        owns write_mutex.
         """
         values = (highest_valid, highest_seen, restored_seq)
         if any(type(value) is not int or value < 0 for value in values):
             raise ValueError("Snapshot sequence values must be non-negative integers.")
-        with self._write:
+
+        def apply() -> int:
             with self._alloc:
                 maximum = max(values)
                 self._counter = max(self._counter, maximum + 1)
                 self._last_committed = max(self._last_committed, highest_valid)
                 return self._counter
+
+        if self._write.owned():
+            return apply()
+        with self._write:
+            return apply()
 
     # ---------------------------------------------------------------- commit
 
