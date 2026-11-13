@@ -18,12 +18,7 @@ MAX_SAFE_JSON_INTEGER = 9_007_199_254_740_991
 RoundingMode: TypeAlias = str
 TimeValue: TypeAlias = int | float | str | Decimal | Fraction
 
-_ROUNDING_MODES = {
-    "half_up": ROUND_HALF_UP,
-    "floor": ROUND_FLOOR,
-    "ceil": ROUND_CEILING,
-    "trunc": ROUND_DOWN,
-}
+_ROUNDING_MODES = ("half_up", "floor", "ceil", "trunc", "exact")
 
 
 class TimebaseError(ValueError):
@@ -87,7 +82,7 @@ def _round_fraction(value: Fraction, rounding: RoundingMode) -> int:
         return quotient + (1 if remainder else 0)
     if rounding == "half_up":
         return quotient + (1 if remainder * 2 >= denominator else 0)
-    choices = ", ".join(sorted((*_ROUNDING_MODES.keys(), "exact")))
+    choices = ", ".join(_ROUNDING_MODES)
     raise TimebaseError(f"rounding must be one of: {choices}")
 
 
