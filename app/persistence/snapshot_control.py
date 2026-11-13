@@ -10,8 +10,8 @@ A payload is captured (serialized) and only later enqueued; a Save can happen
 in between. A sequence number allocated at enqueue time says nothing about
 which project *state* the payload holds. Every payload therefore carries the
 project **revision** read in the same call that serialized it, and freshness is
-decided by revision: a job is stale if ``job.revision <= barrier`` where the
-barrier is the revision a successful Save wrote to disk.
+decided by revision: a job is stale if its revision is at or below the
+successful-Save barrier or the newest revision already committed.
 
 Locks and invariants
 --------------------
