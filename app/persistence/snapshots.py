@@ -132,6 +132,9 @@ class SnapshotStore:
             if generation is not None:
                 generations.append(generation)
         current = self._read_current(generations)
+        pointer_hint = self._read_pointer()
+        if pointer_hint and type(pointer_hint.get("seq")) is int and 0 <= pointer_hint["seq"] <= MAX_SEQUENCE:
+            seen.add(pointer_hint["seq"])
         highest_valid = max((item.seq for item in generations), default=0)
         highest_seen = max(seen, default=0)
         self.control.restore_sequence_state(
@@ -266,13 +269,11 @@ class SnapshotStore:
             if barrier < record.revision:
                 return False
             generations = self._valid_generations()
-            replacement = next(
-                (
-                    item for item in generations
-                    if item.epoch == record.epoch and item.revision > barrier
-                ),
-                None,
-            )
+            candidates = [
+                item for item in generations
+                if item.epoch == record.epoch and item.revision > barrier
+            ]
+            replacement = max(candidates, key=lambda item: item.seq, default=None)
             pointer_path = self.session_dir / CURRENT_NAME
             pointer = self._read_pointer()
             if (
