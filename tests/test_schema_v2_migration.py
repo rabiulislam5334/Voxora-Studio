@@ -131,3 +131,20 @@ def test_v2_project_preserves_unrecognized_top_level_and_scene_data():
     assert project.extras == {"future_project_data": {"a": [1, 2]}}
     assert project.scenes[0].extras == {"future_scene_data": {"keep": "yes"}}
     assert project_to_dict(project)["future_project_data"] == {"a": [1, 2]}
+
+
+
+def test_extras_is_the_canonical_model_field_with_legacy_extra_alias():
+    from app.models.scene import Scene
+
+    project = Project(extras={"future": 1})
+    scene = Scene(extras={"future_scene": 2})
+    assert project.extras == {"future": 1}
+    assert project.extra == project.extras
+    assert scene.extras == {"future_scene": 2}
+    assert scene.extra == scene.extras
+
+    legacy_project = Project(extra={"legacy": True})
+    legacy_scene = Scene(extra={"legacy_scene": True})
+    assert legacy_project.extras == {"legacy": True}
+    assert legacy_scene.extras == {"legacy_scene": True}
