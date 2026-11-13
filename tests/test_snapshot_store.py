@@ -260,3 +260,42 @@ def test_stale_revision_is_rejected_even_when_sequence_is_newer(tmp_path):
 
     stale = _queued(control, 5)
     assert store.commit(stale) is CommitDecision.DROP_REVISION
+
+
+
+def test_current_pointer_sequence_is_counted_as_seen_but_not_as_a_valid_generation(tmp_path):
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "current.json").write_text(
+        json.dumps({"seq": 15, "epoch": 1, "revision": 3}), encoding="utf-8"
+    )
+    control = SnapshotControl()
+    store = SnapshotStore(session, control, enabled=True)
+    scan = store.scan()
+    assert scan.generations == ()
+    assert scan.current is None
+    assert scan.highest_valid == 0
+    assert scan.highest_seen == 15
+    assert _queued(control, 1).seq == 16
+
+
+def test_cleanup_does_not_delete_generation_when_pointer_unlink_fails(tmp_path, monkeypatch):
+    control = SnapshotControl()
+    store = SnapshotStore(tmp_path / "session", control, enabled=True)
+    job = _commit(store, control, 2)
+    project_file = tmp_path / "project.voxora"
+    project_file.write_bytes(b"saved")
+    _, stamp = read_stamped(project_file)
+    record = SaveRecord(control.epoch, "project", 2, project_file, stamp)
+    control.on_save_success(record)
+
+    original = Path.unlink
+
+    def fail_pointer(path, *args, **kwargs):
+        if path.name == "current.json":
+            raise PermissionError("pointer is busy")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_pointer)
+    assert store.cleanup_after_save(record) is False
+    assert store.load_generation(job.seq).payload == b"snapshot"
