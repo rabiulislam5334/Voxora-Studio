@@ -12,6 +12,7 @@ from app.core.timebase import (
     frames_to_ticks,
     is_json_safe_integer,
     samples_to_ticks,
+    rescale_ticks,
     seconds_to_ticks,
     serialize_ticks,
     ticks_to_frames,
@@ -78,7 +79,7 @@ def test_seconds_round_trip_as_decimal():
 
 def test_24_hour_timeline_has_no_frame_or_sample_drift():
     day_ticks = seconds_to_ticks("86400")
-    assert day_ticks == 12_193_920_000_000
+    assert day_ticks == 12_192_768_000_000
     assert ticks_to_samples(day_ticks, 48_000, rounding="exact") == 4_147_200_000
     assert ticks_to_frames(day_ticks, 30, rounding="exact") == 2_592_000
 
@@ -158,6 +159,17 @@ def test_tick_deserialization_rejects_non_canonical_decimal_strings(bad_serializ
     with pytest.raises(TimebaseError):
         deserialize_ticks(bad_serialized)
 
+
+
+def test_rescale_ticks_between_timebases():
+    assert rescale_ticks(10, 10, 20) == 20
+    assert rescale_ticks(1, 3, 2, rounding="floor") == 0
+    assert rescale_ticks(1, 3, 2, rounding="ceil") == 1
+
+
+def test_rescale_rejects_zero_timebase():
+    with pytest.raises(TimebaseRangeError):
+        rescale_ticks(1, 0, 20)
 
 def test_javascript_safe_integer_boundary():
     assert is_json_safe_integer(MAX_SAFE_JSON_INTEGER)
