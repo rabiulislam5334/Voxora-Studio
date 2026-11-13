@@ -40,7 +40,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+from app.core.exceptions import SnapshotSequenceExhausted
 from app.persistence.stamps import FileStamp
+
+MAX_SNAPSHOT_SEQUENCE = 999_999_999_999
 
 
 class SnapshotState(enum.Enum):
@@ -213,11 +216,33 @@ class SnapshotControl:
                 return EnqueueOutcome.DEFERRED, None
             if ticket.epoch != self._epoch:
                 return EnqueueOutcome.STALE, None
+            if self._counter > MAX_SNAPSHOT_SEQUENCE:
+                raise SnapshotSequenceExhausted(
+                    "Snapshot sequence limit reached (12 digits). No new snapshot was created."
+                )
             job = Job(epoch=ticket.epoch, seq=self._counter, revision=revision, payload=payload)
             self._counter += 1
             if sink is not None:
                 sink(job)
             return EnqueueOutcome.QUEUED, job
+
+    def restore_sequence_state(
+        self, *, highest_valid: int = 0, highest_seen: int = 0, restored_seq: int = 0
+    ) -> int:
+        """Restore the next sequence floor from an on-disk scan.
+
+        Corrupt/orphan identifiers still count as seen so their numbers are
+        never reused. Call before accepting captures for this store.
+        """
+        values = (highest_valid, highest_seen, restored_seq)
+        if any(type(value) is not int or value < 0 for value in values):
+            raise ValueError("Snapshot sequence values must be non-negative integers.")
+        with self._write:
+            with self._alloc:
+                maximum = max(values)
+                self._counter = max(self._counter, maximum + 1)
+                self._last_committed = max(self._last_committed, highest_valid)
+                return self._counter
 
     # ---------------------------------------------------------------- commit
 
