@@ -10,6 +10,7 @@ from app.core.async_bridge import AsyncBridge
 from app.core.config import AppConfig
 from app.models.scene import Scene
 from app.studio.models import StudioState
+from app.core.timebase import TICKS_PER_SECOND
 
 
 class StudioContext:
@@ -89,6 +90,21 @@ def fmt_seconds(seconds: Optional[float]) -> str:
         return "--:--"
     total = max(0, int(round(seconds)))
     return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def fmt_ticks(ticks: int) -> str:
+    """Format canonical ticks for a compact UI duration label."""
+    total = max(0, (int(ticks) + TICKS_PER_SECOND // 2) // TICKS_PER_SECOND)
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def timeline_bounds(start_ticks: int, slot_ticks: int, total_ticks: int, width: int):
+    """Map integer timeline boundaries to canvas coordinates at the UI boundary."""
+    if total_ticks <= 0:
+        return 0.0, 0.0
+    x0 = float(start_ticks * width / total_ticks)
+    x1 = float((start_ticks + slot_ticks) * width / total_ticks)
+    return x0, x1
 
 
 def short_name(path: Optional[str]) -> str:
