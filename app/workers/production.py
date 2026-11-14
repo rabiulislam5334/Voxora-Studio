@@ -18,6 +18,7 @@ from app.core.logger import get_logger
 from app.studio.models import StudioState
 from app.studio.previews import probe_track_durations
 from app.studio.timing import SceneTimingInput, VideoTimeline, compute_timeline
+from app.core.timebase import frames_to_ticks, ticks_to_frames, ticks_to_samples, ticks_to_seconds
 from app.video.render import (
     FILTER_SCRIPT_OPTIONS,
     SegmentSpec,
@@ -27,6 +28,7 @@ from app.video.render import (
     build_segment_args,
     build_xfade_join_args,
     build_xfade_script,
+    build_xfade_script_ticks,
     is_unknown_option_error,
 )
 from app.workers.cancel import CancelToken
@@ -173,12 +175,24 @@ class ProductionJob:
                 for slot in timeline.slots:
                     cancel.raise_if_cancelled()
                     audio = audio_by_id.get(slot.scene_id)
-                    used = 0.0
+                    start_frame = ticks_to_frames(slot.start_ticks, video.fps, rounding="half_up")
+                    end_frame = ticks_to_frames(slot.start_ticks + slot.slot_ticks, video.fps, rounding="half_up")
+                    start_ticks = frames_to_ticks(start_frame, video.fps, rounding="half_up")
+                    end_ticks = frames_to_ticks(end_frame, video.fps, rounding="half_up")
+                    start_sample = ticks_to_samples(start_ticks, constants.NARRATION_SAMPLE_RATE, rounding="half_up")
+                    end_sample = ticks_to_samples(end_ticks, constants.NARRATION_SAMPLE_RATE, rounding="half_up")
+                    target_samples = max(0, end_sample - start_sample)
+                    before_samples = builder.frames
                     if audio:
                         builder.add_wav(audio.wav_path)
-                        used = audio.duration_s
-                    builder.add_silence(int(round(max(0.0, slot.slot_s - used) * 1000)))
-            total_s = timeline.total_s
+                    used_samples = builder.frames - before_samples
+                    builder.add_silence_samples(max(0, target_samples - used_samples))
+            # Quantize the complete timeline once to the output frame grid.
+            # All downstream video and mux durations derive from this frame count.
+            fps = video.fps
+            total_frames = max(1, ticks_to_frames(timeline.total_ticks, fps, rounding="half_up"))
+            video_duration_ticks = frames_to_ticks(total_frames, fps, rounding="half_up")
+            total_s = float(ticks_to_seconds(video_duration_ticks))
         else:
             narration_track = narration.wav_path
             total_s = narration.duration_seconds
@@ -221,7 +235,17 @@ class ProductionJob:
         self._cache.remove_stale_parts()
         for scene, slot in zip(scenes, timeline.slots):
             cancel.raise_if_cancelled()
-            spec = self._segment_spec(scene, slot.segment_s, studio, width, height)
+            start_frame = ticks_to_frames(slot.start_ticks, video.fps, rounding="half_up")
+            end_frame = ticks_to_frames(
+                slot.start_ticks + slot.segment_ticks, video.fps, rounding="half_up"
+            )
+            segment_frames = max(1, end_frame - start_frame)
+            segment_ticks = frames_to_ticks(segment_frames, video.fps, rounding="half_up")
+            segment_s = float(ticks_to_seconds(segment_ticks))
+            spec = self._segment_spec(
+                scene, segment_s, studio, width, height,
+                length_ticks=segment_ticks, frame_count=segment_frames,
+            )
             key = self._cache.segment_key(spec)
             label = f"Scene '{scene.title}'"
             lo = seg_lo + (seg_hi - seg_lo) * done_time / total_seg_time
@@ -243,7 +267,7 @@ class ProductionJob:
                     raise
                 rendered += 1
             segments.append(self._cache.segment_path(key))
-            done_time += slot.segment_s
+            done_time += segment_s
 
         joined = work / "joined.mp4"
         join_report = stage("Joining scenes", 0.85, 0.93)
@@ -253,14 +277,20 @@ class ProductionJob:
             join_report(1.0)
         elif timeline.transition_s > 0:
             script = work / "xfade.txt"
-            script.write_text(build_xfade_script([s.start_s for s in timeline.slots], timeline.transition_s), encoding="utf-8")
-            self._run_xfade_join(exe, segments, script, video.fps, joined, timeline.total_s,
+            start_frames = [ticks_to_frames(slot.start_ticks, video.fps, rounding="half_up")
+                            for slot in timeline.slots]
+            starts_ticks = [frames_to_ticks(frame, video.fps, rounding="half_up")
+                            for frame in start_frames]
+            transition_frames = ticks_to_frames(timeline.transition_ticks, video.fps, rounding="half_up")
+            transition_ticks = frames_to_ticks(transition_frames, video.fps, rounding="half_up")
+            script.write_text(build_xfade_script_ticks(starts_ticks, transition_ticks), encoding="utf-8")
+            self._run_xfade_join(exe, segments, script, video.fps, joined, total_s,
                                  lambda f: join_report(f, "Crossfading scenes"), cancel)
         else:
             listing = work / "segments.txt"
             listing.write_text(build_concat_list(segments), encoding="utf-8")
             self._ffmpeg.run_with_progress(
-                build_cut_join_args(exe, listing, joined), timeline.total_s,
+                build_cut_join_args(exe, listing, joined), total_s,
                 lambda f: join_report(f, "Joining scenes"), cancel,
             )
 
@@ -270,11 +300,21 @@ class ProductionJob:
         mux_report = stage("Final video", 0.93, 1.0)
         try:
             self._ffmpeg.run_with_progress(
-                build_mux_args(exe, joined, video_audio, timeline.total_s, part_video), timeline.total_s,
+                build_mux_args(
+                    exe, joined, video_audio, total_s, part_video,
+                    frame_count=total_frames, duration_ticks=video_duration_ticks,
+                ), total_s,
                 lambda f: mux_report(f, "Writing final MP4"), cancel,
             )
             if not part_video.is_file() or part_video.stat().st_size == 0:
                 raise ProductionError("The video file was not created.")
+            rendered_info = self._ffmpeg.probe(part_video)
+            duration_tolerance = (1.0 / video.fps) + 0.03  # one frame plus AAC packet tolerance
+            if rendered_info.kind != "video" or abs(rendered_info.duration_s - total_s) > duration_tolerance:
+                raise ProductionError(
+                    "The rendered MP4 duration does not match the frame-aligned project timeline "
+                    f"(expected {total_s:.6f}s, got {rendered_info.duration_s:.6f}s)."
+                )
             os.replace(part_video, video_path)
         except BaseException:
             part_video.unlink(missing_ok=True)
@@ -282,7 +322,7 @@ class ProductionJob:
         self._cache.prune()
         emit(ProductionProgress(1.0, "Done", "Video rendered."))
         return ProductionResult(
-            video_path, audio_path, timeline.total_s, narration, timeline,
+            video_path, audio_path, total_s, narration, timeline,
             segments_rendered=rendered, segments_cached=reused, warnings=warnings,
         )
 
@@ -336,19 +376,23 @@ class ProductionJob:
             "Update FFmpeg or switch the transition to 'cut' on the Video Settings tab."
         ) from last_error
 
-    def _segment_spec(self, scene: SceneInfo, length_s: float, studio: StudioState, width: int, height: int) -> SegmentSpec:
+    def _segment_spec(
+        self, scene: SceneInfo, length_s: float, studio: StudioState, width: int, height: int,
+        *, length_ticks: Optional[int] = None, frame_count: Optional[int] = None,
+    ) -> SegmentSpec:
         video = studio.video
         setting = video.scene(scene.scene_id)
         motion = setting.motion or video.default_motion
         fit = setting.fit or video.default_fit
+        timing = {"length_ticks": length_ticks, "frame_count": frame_count}
         if not setting.media_path:
-            return SegmentSpec("blank", None, length_s, width, height, video.fps)
+            return SegmentSpec("blank", None, length_s, width, height, video.fps, **timing)
         try:
             info = self._ffmpeg.probe(Path(setting.media_path))
         except MediaError as exc:
             raise ProductionError(f"Scene '{scene.title}': {exc}") from exc
         if info.kind == "image":
-            return SegmentSpec("image", setting.media_path, length_s, width, height, video.fps, motion, fit)
+            return SegmentSpec("image", setting.media_path, length_s, width, height, video.fps, motion, fit, **timing)
         if info.kind == "video":
-            return SegmentSpec("video", setting.media_path, length_s, width, height, video.fps, "none", fit)
+            return SegmentSpec("video", setting.media_path, length_s, width, height, video.fps, "none", fit, **timing)
         raise ProductionError(f"Scene '{scene.title}': '{Path(setting.media_path).name}' is not an image or video file.")
