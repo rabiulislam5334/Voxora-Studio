@@ -12,7 +12,7 @@ from app.studio.previews import make_thumbnail
 from app.studio.timing import SceneTimingInput, compute_timeline
 from app.studio.validation import media_kind_from_extension
 from app.text.wordcount import count_words, estimate_duration_seconds
-from app.ui.studio_context import StudioContext, fmt_seconds, fmt_ticks, short_name, timeline_bounds
+from app.ui.studio_context import StudioContext, fmt_ticks, short_name, timeline_bounds
 
 logger = get_logger("ui.studio.scenes")
 
