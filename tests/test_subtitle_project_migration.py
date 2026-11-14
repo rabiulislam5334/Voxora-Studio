@@ -24,16 +24,17 @@ def _project_data(schema_version: int) -> dict:
     }
 
 
-def test_new_project_serializes_with_v3_empty_subtitle_namespace():
+def test_new_project_serializes_with_v4_subtitle_and_timebase_namespaces():
     data = project_to_dict(Project())
 
-    assert CURRENT_SCHEMA_VERSION == 3
-    assert data["schema_version"] == 3
+    assert CURRENT_SCHEMA_VERSION == 4
+    assert data["schema_version"] == 4
     assert data["subtitles"] == {"format_version": 1, "tracks": []}
+    assert data["timebase"] == {"format_version": 1, "ticks_per_second": 141120000}
 
 
-@pytest.mark.parametrize("source_version", [1, 2])
-def test_v1_and_v2_projects_migrate_additively_to_v3(source_version: int):
+@pytest.mark.parametrize("source_version", [1, 2, 3])
+def test_v1_v2_and_v3_projects_migrate_additively_to_v4(source_version: int):
     original = _project_data(source_version)
     original_copy = copy.deepcopy(original)
 
@@ -41,9 +42,10 @@ def test_v1_and_v2_projects_migrate_additively_to_v3(source_version: int):
     serialized = project_to_dict(project)
 
     assert original == original_copy  # migration never mutates parsed source data
-    assert project.schema_version == 3
-    assert serialized["schema_version"] == 3
+    assert project.schema_version == 4
+    assert serialized["schema_version"] == 4
     assert serialized["subtitles"] == {"format_version": 1, "tracks": []}
+    assert serialized["timebase"] == {"format_version": 1, "ticks_per_second": 141120000}
     assert project.settings == original["settings"]
     if source_version == 1:
         assert project.migration == {"from_schema_version": 1}
