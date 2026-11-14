@@ -12,7 +12,7 @@ from app.studio.previews import make_thumbnail
 from app.studio.timing import SceneTimingInput, compute_timeline
 from app.studio.validation import media_kind_from_extension
 from app.text.wordcount import count_words, estimate_duration_seconds
-from app.ui.studio_context import StudioContext, fmt_seconds, short_name
+from app.ui.studio_context import StudioContext, fmt_ticks, short_name, timeline_bounds
 
 logger = get_logger("ui.studio.scenes")
 
@@ -122,7 +122,7 @@ class ScenesTab(ttk.Frame):
                 status = "MISSING"
             known = scene.id in self._ctx.known_durations
             slot = slots.get(scene.id)
-            length = "" if slot is None else f"{fmt_seconds(slot.slot_s)}{'' if known or not scene.text.strip() else ' est.'}"
+            length = "" if slot is None else f"{fmt_ticks(slot.slot_ticks)}{'' if known or not scene.text.strip() else ' est.'}"
             self._tree.insert("", "end", iid=scene.id, values=(
                 scene.order + 1, scene.title, short_name(setting.media_path) or "-", status, length,
                 setting.motion or _DEFAULT))
@@ -147,16 +147,17 @@ class ScenesTab(ttk.Frame):
     def _draw_timeline(self, scenes, timings) -> None:
         canvas = self._timeline
         canvas.delete("all")
-        total = timings.total_s
+        total_ticks = timings.total_ticks
         palette = self._ctx.palette
-        if total <= 0:
+        if total_ticks <= 0:
             canvas.create_text(_TL_W // 2, _TL_H // 2, text="No scenes yet", fill=palette["fg_muted"])
             self._summary.configure(text="")
             return
         video = self._ctx.state.video
         for scene, slot in zip(scenes, timings.slots):
-            x0 = slot.start_s / total * (_TL_W - 2) + 1
-            x1 = (slot.start_s + slot.slot_s) / total * (_TL_W - 2) + 1
+            x0, x1 = timeline_bounds(slot.start_ticks, slot.slot_ticks, total_ticks, _TL_W - 2)
+            x0 += 1
+            x1 += 1
             path = video.scene(scene.id).media_path
             color = palette["fg_muted"] if not path else (palette["success"] if Path(path).is_file() else palette["error"])
             canvas.create_rectangle(x0, 6, max(x0 + 2, x1 - 1), _TL_H - 6, fill=color, outline=palette["border"])
@@ -164,7 +165,7 @@ class ScenesTab(ttk.Frame):
                 canvas.create_text((x0 + x1) / 2, _TL_H / 2, text=str(scene.order + 1), fill=palette["bg"])
         all_known = all(s.id in self._ctx.known_durations for s in scenes if s.text.strip())
         self._summary.configure(
-            text=f"Total {fmt_seconds(total)}{'' if all_known else ' (estimate until narration is generated)'} - "
+            text=f"Total {fmt_ticks(total_ticks)}{'' if all_known else ' (estimate until narration is generated)'} - "
                  f"green = media ready, red = missing file, gray = none (black screen)")
 
     # ------------------------------------------------------------------ selection / editing

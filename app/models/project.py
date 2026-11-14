@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.models.scene import Scene
+from app.core.timebase import TICKS_PER_SECOND
 
 
 def _new_id() -> str:
@@ -14,6 +15,14 @@ def _new_id() -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _empty_subtitles() -> Dict[str, Any]:
+    return {"format_version": 1, "tracks": []}
+
+
+def _empty_timebase() -> Dict[str, Any]:
+    return {"format_version": 1, "ticks_per_second": TICKS_PER_SECOND}
 
 
 @dataclass
@@ -25,19 +34,27 @@ class Project:
     language: str = "en"
     scenes: List[Scene] = field(default_factory=list)
     settings: dict = field(default_factory=dict)
-    schema_version: int = 1
-    # Unknown top-level keys from the project file, preserved verbatim and
-    # written back on save (see serializer.py).
-    extra: Dict[str, Any] = field(default_factory=dict)
+    schema_version: int = 4
+    # Additive v2 containers. Their inner schemas remain intentionally
+    # unopinionated until the owning engines define them.
+    profile: Dict[str, Any] = field(default_factory=dict)
+    assets: Dict[str, Any] = field(default_factory=dict)
+    director: Dict[str, Any] = field(default_factory=dict)
+    migration: Dict[str, Any] = field(default_factory=dict)
+    # v3 project-level subtitle namespace; its payload remains independently versioned.
+    subtitles: Dict[str, Any] = field(default_factory=_empty_subtitles)
+    # v4 canonical project clock. Tick counts are serialized as decimal strings.
+    timebase: Dict[str, Any] = field(default_factory=_empty_timebase)
+    # Canonical v2 name; InitVar accepts the historical constructor keyword.
+    extras: Dict[str, Any] = field(default_factory=dict)
+    extra: InitVar[Optional[Dict[str, Any]]] = None
+
+    def __post_init__(self, extra: Optional[Dict[str, Any]]) -> None:
+        if extra is not None:
+            self.extras = extra
 
     def touch(self) -> None:
         self.updated_at = _utcnow()
-
-    # ------------------------------------------------------------------
-    # Scene management -- kept here (not in the UI layer) so Script
-    # Editor UI code, tests, and any future caller all go through the
-    # same validated operations instead of poking project.scenes directly.
-    # ------------------------------------------------------------------
 
     def add_scene(self, scene: Optional[Scene] = None) -> Scene:
         if scene is None:
@@ -58,7 +75,7 @@ class Project:
 
     def duplicate_scene(self, scene_id: str) -> Scene:
         original = self._require_scene(scene_id)
-        copy = Scene(
+        copy_scene = Scene(
             title=f"{original.title} (Copy)",
             text=original.text,
             notes=original.notes,
@@ -69,9 +86,6 @@ class Project:
             pitch=original.pitch,
             style=original.style,
             pause_ms=original.pause_ms,
-            # Phase 4 per-scene overrides (None = "use Voice page settings").
-            # Phase 5 now reads these during narration, so a duplicate must
-            # sound the same as its original.
             pitch_hz=original.pitch_hz,
             volume_percent=original.volume_percent,
             sentence_pause_ms=original.sentence_pause_ms,
@@ -79,10 +93,10 @@ class Project:
             scene_pause_ms=original.scene_pause_ms,
         )
         index = self.scenes.index(original)
-        self.scenes.insert(index + 1, copy)
+        self.scenes.insert(index + 1, copy_scene)
         self._renumber()
         self.touch()
-        return copy
+        return copy_scene
 
     def delete_scene(self, scene_id: str) -> None:
         scene = self._require_scene(scene_id)
@@ -106,7 +120,6 @@ class Project:
 
     def total_word_count(self) -> int:
         from app.text.wordcount import count_words
-
         return sum(count_words(s.text) for s in self.scenes)
 
     def _require_scene(self, scene_id: str) -> Scene:
@@ -116,11 +129,24 @@ class Project:
         return scene
 
     def _index_of(self, scene_id: str) -> int:
-        for i, s in enumerate(self.scenes):
-            if s.id == scene_id:
+        for i, scene in enumerate(self.scenes):
+            if scene.id == scene_id:
                 return i
         return -1
 
     def _renumber(self) -> None:
-        for i, s in enumerate(self.scenes):
-            s.order = i
+        for i, scene in enumerate(self.scenes):
+            scene.order = i
+
+
+# Backwards-compatible attribute alias; the dataclass field is now "extras".
+def _get_extra(self):
+    return self.extras
+
+
+def _set_extra(self, value):
+    if value is not None:
+        self.extras = value
+
+
+Project.extra = property(_get_extra, _set_extra)

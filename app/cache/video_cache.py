@@ -47,7 +47,7 @@ class VideoCache:
     def segment_key(self, spec) -> str:
         identity = media_identity(Path(spec.media)) if spec.media else None
         return self._hash([
-            VIDEO_PIPELINE_VERSION, spec.kind, identity, round(spec.length_s, 3),
+            VIDEO_PIPELINE_VERSION, spec.kind, identity, spec.frames, spec.length_ticks,
             spec.width, spec.height, spec.fps, spec.motion, spec.fit,
         ])
 

@@ -6,18 +6,25 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.exceptions import AudioProcessingError
+from app.core.timebase import samples_to_ticks, ticks_to_samples, ticks_to_seconds
 
 _SAMPLE_WIDTH = 2  # 16-bit PCM
 _CHANNELS = 1
 _BLOCK_FRAMES = 65536
 
 
-def wav_duration_seconds(path: Path) -> float:
+def wav_duration_ticks(path: Path) -> int:
+    """Return the exact duration represented by the WAV sample count."""
     try:
         with wave.open(str(path), "rb") as reader:
-            return reader.getnframes() / float(reader.getframerate())
-    except (wave.Error, EOFError, OSError) as exc:
+            return samples_to_ticks(reader.getnframes(), reader.getframerate(), rounding="exact")
+    except (wave.Error, EOFError, OSError, ValueError, TypeError) as exc:
         raise AudioProcessingError(f"Could not read WAV file '{Path(path).name}': {exc}") from exc
+
+
+def wav_duration_seconds(path: Path) -> float:
+    """Compatibility seconds view; WAV sample count remains authoritative."""
+    return float(ticks_to_seconds(wav_duration_ticks(path)))
 
 
 class WavBuilder:
@@ -37,8 +44,14 @@ class WavBuilder:
         self.frames = 0
 
     @property
+    def duration_ticks(self) -> int:
+        """Exact timeline duration derived from the number of written samples."""
+        return samples_to_ticks(self.frames, self.sample_rate, rounding="exact")
+
+    @property
     def duration_seconds(self) -> float:
-        return self.frames / float(self.sample_rate)
+        """Compatibility view derived from the authoritative sample count."""
+        return float(ticks_to_seconds(self.duration_ticks))
 
     def __enter__(self) -> "WavBuilder":
         self.dest.parent.mkdir(parents=True, exist_ok=True)
@@ -65,9 +78,25 @@ class WavBuilder:
         return False
 
     def add_silence(self, milliseconds: int) -> None:
+        """Legacy millisecond API; retains its historical sample rounding."""
         if milliseconds <= 0:
             return
-        remaining = round(milliseconds * self.sample_rate / 1000.0)
+        self.add_silence_samples(round(milliseconds * self.sample_rate / 1000.0))
+
+    def add_silence_ticks(self, ticks: int) -> None:
+        """Append silence for an exact canonical duration.
+
+        The requested tick duration must map to a whole sample at this WAV's
+        sample rate; this prevents silently drifting the audio timeline.
+        """
+        self.add_silence_samples(ticks_to_samples(ticks, self.sample_rate, rounding="exact"))
+
+    def add_silence_samples(self, samples: int) -> None:
+        if isinstance(samples, bool) or not isinstance(samples, int):
+            raise TypeError("samples must be an integer")
+        if samples < 0:
+            raise ValueError("samples must be non-negative")
+        remaining = samples
         block = b"\x00" * (_BLOCK_FRAMES * _SAMPLE_WIDTH * _CHANNELS)
         while remaining > 0:
             n = min(remaining, _BLOCK_FRAMES)

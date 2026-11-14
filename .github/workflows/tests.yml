@@ -1,0 +1,32 @@
+name: Voxora tests
+
+on:
+  push:
+    branches:
+      - dev/step-3-and-5-2
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install project and test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Run test suite
+        run: python -m pytest -q tests

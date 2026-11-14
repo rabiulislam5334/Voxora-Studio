@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from app.core.exceptions import ProductionError
+from app.core.timebase import seconds_to_ticks, ticks_to_samples, ticks_to_seconds
 from app.studio.models import AudioSettings, MusicTrack
 
 _FORMATS = {
@@ -14,41 +15,52 @@ _FORMATS = {
 
 
 def _fmt(value: float) -> str:
+    """Legacy seconds formatter retained for callers outside this module."""
     return f"{value:.3f}".rstrip("0").rstrip(".") or "0"
+
+
+def _fmt_ticks(ticks: int) -> str:
+    """Format canonical ticks only at the FFmpeg filter-string boundary."""
+    value = format(ticks_to_seconds(ticks), "f")
+    return value.rstrip("0").rstrip(".") if "." in value else value
 
 
 def _music_chain(index: int, track: MusicTrack, duration_s: float, total_s: float, sample_rate: int) -> str:
     """Filter chain for one music input. All times are on the FINAL timeline."""
-    start = track.trim_start_s
-    end = track.trim_end_s if track.trim_end_s is not None else duration_s
-    end = min(end, duration_s)
+    # Convert UI-facing seconds once, then keep all timeline arithmetic integral.
+    start = seconds_to_ticks(track.trim_start_s)
+    end = seconds_to_ticks(track.trim_end_s if track.trim_end_s is not None else duration_s)
+    end = min(end, seconds_to_ticks(duration_s))
+    total = seconds_to_ticks(total_s)
+    offset = seconds_to_ticks(track.offset_s)
     if end <= start:
         raise ProductionError(f"Music '{Path(track.path).name}': trim range is outside the file.")
     clip_len = end - start
-    available = max(0.0, total_s - track.offset_s)  # how long the music may play
+    available = max(0, total - offset)  # how long the music may play
     if available <= 0:
         raise ProductionError(f"Music '{Path(track.path).name}' starts after the narration ends.")
 
     parts = [
         f"aresample={sample_rate}",
         "aformat=channel_layouts=stereo",
-        f"atrim=start={_fmt(start)}:end={_fmt(end)}",
+        f"atrim=start={_fmt_ticks(start)}:end={_fmt_ticks(end)}",
         "asetpts=PTS-STARTPTS",
     ]
     if track.loop and clip_len < available:
-        parts.append(f"aloop=loop=-1:size={int(clip_len * sample_rate) + 1}")
-    parts.append(f"atrim=duration={_fmt(available)}")
+        loop_samples = ticks_to_samples(clip_len, sample_rate, rounding="floor")
+        parts.append(f"aloop=loop=-1:size={loop_samples + 1}")
+    parts.append(f"atrim=duration={_fmt_ticks(available)}")
     parts.append("asetpts=PTS-STARTPTS")
     parts.append(f"volume={track.volume_percent / 100:.4f}")
     play_len = min(available, clip_len if not track.loop else available)
-    fade_in = min(track.fade_in_s, play_len / 2)
-    fade_out = min(track.fade_out_s, play_len / 2)
+    fade_in = min(seconds_to_ticks(track.fade_in_s), play_len // 2)
+    fade_out = min(seconds_to_ticks(track.fade_out_s), play_len // 2)
     if fade_in > 0:
-        parts.append(f"afade=t=in:st=0:d={_fmt(fade_in)}")
+        parts.append(f"afade=t=in:st=0:d={_fmt_ticks(fade_in)}")
     if fade_out > 0:
-        parts.append(f"afade=t=out:st={_fmt(play_len - fade_out)}:d={_fmt(fade_out)}")
-    if track.offset_s > 0:
-        delay = int(round(track.offset_s * 1000))
+        parts.append(f"afade=t=out:st={_fmt_ticks(play_len - fade_out)}:d={_fmt_ticks(fade_out)}")
+    if offset > 0:
+        delay = ticks_to_samples(offset, 1000, rounding="half_up")
         parts.append(f"adelay={delay}|{delay}")
     return f"[{index}:a]" + ",".join(parts) + f"[m{index}]"
 
@@ -96,7 +108,9 @@ def build_mix_args(
     tail = []
     if audio.limiter:
         tail.append("alimiter=limit=0.95:level=0")
-    tail.append(f"atrim=duration={_fmt(total_s if max_seconds is None else min(total_s, max_seconds))}")
+    total_ticks = seconds_to_ticks(total_s)
+    output_ticks = total_ticks if max_seconds is None else min(total_ticks, seconds_to_ticks(max_seconds))
+    tail.append(f"atrim=duration={_fmt_ticks(output_ticks)}")
     filters.append(f"{last}{','.join(tail)}[out]")
 
     cmd += ["-filter_complex", ";".join(filters), "-map", "[out]", "-ar", str(sample_rate), "-ac", "2"]

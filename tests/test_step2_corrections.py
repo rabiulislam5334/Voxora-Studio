@@ -108,7 +108,14 @@ def test_unknown_top_level_and_scene_keys_survive_load_and_dump():
     out = project_to_dict(project)
     assert out["future_top_level_key"] == {"hello": "world"}
     assert out["scenes"][0]["future_scene_key"] == 42
-    assert out == raw
+    assert out["schema_version"] == 4
+    assert out["subtitles"] == {"format_version": 1, "tracks": []}
+    assert out["timebase"] == {"format_version": 1, "ticks_per_second": 141120000}
+    assert out["profile"] == out["assets"] == out["director"] == {}
+    assert out["migration"] == {"from_schema_version": 1}
+    for key, value in raw.items():
+        if key != "schema_version":
+            assert out[key] == value
 
 
 def test_unknown_keys_survive_open_edit_save_through_the_manager(tmp_path):
