@@ -27,7 +27,6 @@ from app.video.render import (
     build_mux_args,
     build_segment_args,
     build_xfade_join_args,
-    build_xfade_script,
     build_xfade_script_ticks,
     is_unknown_option_error,
 )
@@ -230,7 +229,11 @@ class ProductionJob:
         segments: List[Path] = []
         width, height = video.size
         seg_lo, seg_hi = mix_hi, 0.85
-        total_seg_time = sum(s.segment_s for s in timeline.slots) or 1.0
+        total_seg_time = sum(
+            max(1, ticks_to_frames(slot.start_ticks + slot.segment_ticks, video.fps, rounding="half_up")
+                - ticks_to_frames(slot.start_ticks, video.fps, rounding="half_up")) / video.fps
+            for slot in timeline.slots
+        ) or 1.0
         done_time = 0.0
         self._cache.remove_stale_parts()
         for scene, slot in zip(scenes, timeline.slots):
@@ -249,7 +252,7 @@ class ProductionJob:
             key = self._cache.segment_key(spec)
             label = f"Scene '{scene.title}'"
             lo = seg_lo + (seg_hi - seg_lo) * done_time / total_seg_time
-            hi = seg_lo + (seg_hi - seg_lo) * (done_time + slot.segment_s) / total_seg_time
+            hi = seg_lo + (seg_hi - seg_lo) * (done_time + segment_s) / total_seg_time
             report = stage("Video scenes", lo, hi)
             if self._cache.has_segment(key):
                 reused += 1
@@ -258,7 +261,7 @@ class ProductionJob:
                 part = self._cache.part_path(key)
                 try:
                     self._ffmpeg.run_with_progress(
-                        build_segment_args(self._ffmpeg.require(), spec, part), slot.segment_s,
+                        build_segment_args(self._ffmpeg.require(), spec, part), segment_s,
                         lambda f, lbl=label, rep=report: rep(f, f"Rendering {lbl}"), cancel,
                     )
                     self._cache.commit_segment(part, key)
@@ -310,10 +313,16 @@ class ProductionJob:
                 raise ProductionError("The video file was not created.")
             rendered_info = self._ffmpeg.probe(part_video)
             duration_tolerance = (1.0 / video.fps) + 0.03  # one frame plus AAC packet tolerance
-            if rendered_info.kind != "video" or abs(rendered_info.duration_s - total_s) > duration_tolerance:
+            actual_duration = rendered_info.duration_s
+            if (
+                rendered_info.kind != "video"
+                or actual_duration is None
+                or abs(actual_duration - total_s) > duration_tolerance
+            ):
+                actual_label = f"{actual_duration:.6f}s" if actual_duration is not None else "unknown"
                 raise ProductionError(
                     "The rendered MP4 duration does not match the frame-aligned project timeline "
-                    f"(expected {total_s:.6f}s, got {rendered_info.duration_s:.6f}s)."
+                    f"(expected {total_s:.6f}s, got {actual_label})."
                 )
             os.replace(part_video, video_path)
         except BaseException:
