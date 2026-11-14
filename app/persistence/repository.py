@@ -193,7 +193,7 @@ class JsonProjectRepository:
 
     @staticmethod
     def _backup_v1_before_migration(target: Path, old_bytes: bytes) -> Optional[Path]:
-        """Preserve a v1 source exactly once before replacing it with schema v3.
+        """Preserve a v1 source exactly once before replacing it with schema v4.
 
         The hard-link publication is atomic and exclusive: it cannot overwrite
         an existing backup, even if two application instances race.
