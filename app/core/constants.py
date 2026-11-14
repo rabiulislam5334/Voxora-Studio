@@ -39,7 +39,8 @@ NARRATION_RETRY_BASE_DELAY = 1.0       # seconds; doubles each retry (1s, 2s, ..
 NARRATION_RETRY_MAX_DELAY = 10.0
 NARRATION_MAX_CONSECUTIVE_FAILURES = 5 # stop scheduling new chunks after this many failures in a row
 NARRATION_MP3_BITRATE = "128k"
-NARRATION_PIPELINE_VERSION = 1         # bump to invalidate every cached chunk/scene
+NARRATION_PIPELINE_VERSION = 1         # TTS chunk synthesis cache version
+NARRATION_SCENE_PIPELINE_VERSION = 2    # sample-accurate scene WAV assembly cache version
 
 DEFAULT_EXPLICIT_PAUSE_MS = 700        # bare [pause]
 MAX_EXPLICIT_PAUSE_MS = 60000
