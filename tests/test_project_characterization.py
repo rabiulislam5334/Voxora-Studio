@@ -62,8 +62,8 @@ def test_fixture_files_exist_and_are_schema_v1():
         assert _load_raw(name).get("schema_version", 1) == 1, f"{name} must stay a v1 file"
 
 
-def test_current_schema_version_is_three_after_subtitle_stage_1():
-    assert CURRENT_SCHEMA_VERSION == 3
+def test_current_schema_version_is_four_after_timebase_stage():
+    assert CURRENT_SCHEMA_VERSION == 4
 
 
 # ----------------------------------------------------------------------
@@ -77,8 +77,9 @@ def test_golden_v1_fixture_migrates_additively_without_mutating_source(name):
     original = json.loads(json.dumps(raw))
     migrated = project_to_dict(project_from_dict(raw))
     assert raw == original
-    assert migrated["schema_version"] == 3
+    assert migrated["schema_version"] == 4
     assert migrated["subtitles"] == {"format_version": 1, "tracks": []}
+    assert migrated["timebase"] == {"format_version": 1, "ticks_per_second": 141120000}
     assert migrated["profile"] == migrated["assets"] == migrated["director"] == {}
     assert migrated["migration"] == {"from_schema_version": 1}
     for key, value in raw.items():
@@ -112,7 +113,7 @@ def test_full_fixture_content_is_loaded_correctly():
     assert project.id == "full00000001"
     assert project.name == "Deep Ocean ও গভীর সাগর"
     assert project.language == "bn"
-    assert project.schema_version == 3
+    assert project.schema_version == 4
     assert [s.title for s in project.scenes] == ["Intro", "বাংলা অংশ", "Mixed ভাষা", "Outro"]
     assert [s.order for s in project.scenes] == [0, 1, 2, 3]
 
@@ -149,7 +150,7 @@ def test_full_fixture_studio_settings_are_preserved_verbatim():
 def test_legacy_phase3_file_without_schema_version_or_settings_opens_with_defaults(tmp_path):
     manager, project = _open(FIXTURES / "v1_phase3_legacy.voxora")
 
-    assert project.schema_version == 3
+    assert project.schema_version == 4
     assert project.migration == {"from_schema_version": 1}
     assert project.settings == {}
     assert [s.title for s in project.scenes] == ["One", "Two"]
@@ -165,8 +166,9 @@ def test_legacy_phase3_file_without_schema_version_or_settings_opens_with_defaul
 
     # saving writes the migrated v3 shape; the source remains untouched
     saved = json.loads(manager.save(tmp_path / "legacy_resaved.voxora").read_text(encoding="utf-8"))
-    assert saved["schema_version"] == 3
+    assert saved["schema_version"] == 4
     assert saved["subtitles"] == {"format_version": 1, "tracks": []}
+    assert saved["timebase"] == {"format_version": 1, "ticks_per_second": 141120000}
     assert saved["settings"] == {}
     assert saved["scenes"][0]["pitch_hz"] is None
 
