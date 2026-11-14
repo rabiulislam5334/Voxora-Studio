@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 from app.core import constants
-from app.core.timebase import frames_to_ticks, ticks_to_frames, ticks_to_seconds
+from app.core.timebase import ticks_to_frames, ticks_to_seconds
 
 _ZOOM = 0.15  # total zoom travel for zoom_in / zoom_out / pan (15%)
 _SUPERSAMPLE = 1.5  # zoompan works on a larger frame to avoid visible jitter
@@ -77,8 +77,7 @@ def _encode_args(fps: int) -> List[str]:
 
 
 def build_segment_args(ffmpeg_exe: Path, spec: SegmentSpec, dest: Path) -> List[str]:
-    """One silent H.264 segment of exactly spec.length_s: a still image
-    (optionally with zoom/pan), a looped/trimmed video clip, or black."""
+    """One silent H.264 segment containing exactly spec.frames output frames."""
     base = [str(ffmpeg_exe), "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
     out = ["-r", str(spec.fps), *_encode_args(spec.fps), "-f", "mp4", str(dest)]
     w, h = spec.width, spec.height
