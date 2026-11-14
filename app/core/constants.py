@@ -53,7 +53,7 @@ RECOGNIZED_STYLE_TAGS = (
 
 
 # --- Phases 6-8: studio, video, production ---
-VIDEO_PIPELINE_VERSION = 1             # bump to invalidate every cached video segment
+VIDEO_PIPELINE_VERSION = 2             # bump to invalidate every cached video segment
 VIDEO_CRF = 20
 VIDEO_PRESET = "veryfast"
 VIDEO_AUDIO_BITRATE = "192k"
