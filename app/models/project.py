@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.models.scene import Scene
+from app.core.timebase import TICKS_PER_SECOND
 
 
 def _new_id() -> str:
@@ -17,9 +18,11 @@ def _utcnow() -> datetime:
 
 
 def _empty_subtitles() -> Dict[str, Any]:
-    # The caption/track payload remains deliberately unopinionated until the
-    # project timebase decision (TS-01) is resolved.
     return {"format_version": 1, "tracks": []}
+
+
+def _empty_timebase() -> Dict[str, Any]:
+    return {"format_version": 1, "ticks_per_second": TICKS_PER_SECOND}
 
 
 @dataclass
@@ -31,7 +34,7 @@ class Project:
     language: str = "en"
     scenes: List[Scene] = field(default_factory=list)
     settings: dict = field(default_factory=dict)
-    schema_version: int = 3
+    schema_version: int = 4
     # Additive v2 containers. Their inner schemas remain intentionally
     # unopinionated until the owning engines define them.
     profile: Dict[str, Any] = field(default_factory=dict)
@@ -41,6 +44,8 @@ class Project:
     # v3 project-level subtitle namespace. Timing/caption fields are deferred
     # until TS-01 selects the authoritative project timebase.
     subtitles: Dict[str, Any] = field(default_factory=_empty_subtitles)
+    # Canonical project clock. Tick counts are serialized as decimal strings.
+    timebase: Dict[str, Any] = field(default_factory=_empty_timebase)
     # Canonical v2 name; InitVar accepts the historical constructor keyword.
     extras: Dict[str, Any] = field(default_factory=dict)
     extra: InitVar[Optional[Dict[str, Any]]] = None
