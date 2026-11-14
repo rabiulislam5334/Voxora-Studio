@@ -72,9 +72,11 @@ def test_crossfade_limit_uses_integer_half_of_shortest_slot():
 
 def test_long_timeline_cursor_has_no_float_accumulation():
     count = 10_000
-    duration_ticks = seconds_to_ticks("0.1")
+    # Scene slots have a deliberate 0.5 s minimum; use 0.6 s to
+    # exercise repeated cursor accumulation without triggering that clamp.
+    duration_ticks = seconds_to_ticks("0.6")
     timeline = compute_timeline(
-        [SceneTimingInput(str(i), None, 0.1) for i in range(count)],
+        [SceneTimingInput(str(i), None, 0.6) for i in range(count)],
         transition="cut",
         transition_s=0.0,
         default_duration_s=5.0,
