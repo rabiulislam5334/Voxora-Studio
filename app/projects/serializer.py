@@ -77,7 +77,7 @@ def _validate_timebase(data: Any) -> Dict[str, Any]:
 
 
 def _migrate_project_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Return an additive v3 copy. Never mutate the caller's parsed JSON."""
+    """Return an additive v4 copy. Never mutate the caller's parsed JSON."""
     version = _schema_version(data)
     migrated = copy.deepcopy(data)
 
