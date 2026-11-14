@@ -41,10 +41,9 @@ class Project:
     assets: Dict[str, Any] = field(default_factory=dict)
     director: Dict[str, Any] = field(default_factory=dict)
     migration: Dict[str, Any] = field(default_factory=dict)
-    # v3 project-level subtitle namespace. Timing/caption fields are deferred
-    # until TS-01 selects the authoritative project timebase.
+    # v3 project-level subtitle namespace; its payload remains independently versioned.
     subtitles: Dict[str, Any] = field(default_factory=_empty_subtitles)
-    # Canonical project clock. Tick counts are serialized as decimal strings.
+    # v4 canonical project clock. Tick counts are serialized as decimal strings.
     timebase: Dict[str, Any] = field(default_factory=_empty_timebase)
     # Canonical v2 name; InitVar accepts the historical constructor keyword.
     extras: Dict[str, Any] = field(default_factory=dict)
