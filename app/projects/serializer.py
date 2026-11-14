@@ -9,10 +9,12 @@ from typing import Any, Dict
 from app.core.exceptions import ProjectError
 from app.models.project import Project
 from app.models.scene import Scene
+from app.core.timebase import TICKS_PER_SECOND
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 V1_SCHEMA_VERSION = 1
 SUBTITLES_FORMAT_VERSION = 1
+TIMEBASE_FORMAT_VERSION = 1
 
 
 def _parse_datetime(value: Any) -> datetime:
@@ -50,6 +52,30 @@ def _empty_subtitles_data() -> Dict[str, Any]:
     return {"format_version": SUBTITLES_FORMAT_VERSION, "tracks": []}
 
 
+def _empty_timebase_data() -> Dict[str, Any]:
+    return {"format_version": TIMEBASE_FORMAT_VERSION, "ticks_per_second": TICKS_PER_SECOND}
+
+
+def _validate_timebase(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ProjectError("Project file's 'timebase' field must be an object.")
+    version = data.get("format_version", TIMEBASE_FORMAT_VERSION)
+    if type(version) is not int or version < 1:
+        raise ProjectError("Project file's 'timebase.format_version' must be a positive integer.")
+    if version > TIMEBASE_FORMAT_VERSION:
+        raise ProjectError("This project uses a newer timebase data format. Please update Voxora Studio.")
+    ticks_per_second = data.get("ticks_per_second", TICKS_PER_SECOND)
+    if type(ticks_per_second) is not int or ticks_per_second != TICKS_PER_SECOND:
+        raise ProjectError(
+            "Project file uses an unsupported canonical timebase; expected "
+            f"{TICKS_PER_SECOND} ticks per second."
+        )
+    result = copy.deepcopy(data)
+    result.setdefault("format_version", TIMEBASE_FORMAT_VERSION)
+    result.setdefault("ticks_per_second", TICKS_PER_SECOND)
+    return result
+
+
 def _migrate_project_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """Return an additive v3 copy. Never mutate the caller's parsed JSON."""
     version = _schema_version(data)
@@ -74,6 +100,13 @@ def _migrate_project_data(data: Dict[str, Any]) -> Dict[str, Any]:
         # is intentionally left untouched.
         migrated.setdefault("subtitles", _empty_subtitles_data())
         migrated["schema_version"] = 3
+        version = 3
+
+    if version == 3:
+        # v4 declares the canonical project clock without rewriting legacy
+        # seconds-based settings or subtitle payloads.
+        migrated.setdefault("timebase", _empty_timebase_data())
+        migrated["schema_version"] = 4
 
     subtitles = migrated.get("subtitles", _empty_subtitles_data())
     if not isinstance(subtitles, dict):
@@ -91,6 +124,7 @@ def _migrate_project_data(data: Dict[str, Any]) -> Dict[str, Any]:
     subtitles.setdefault("format_version", SUBTITLES_FORMAT_VERSION)
     subtitles.setdefault("tracks", [])
     migrated["subtitles"] = subtitles
+    migrated["timebase"] = _validate_timebase(migrated.get("timebase", _empty_timebase_data()))
     return migrated
 
 
@@ -175,6 +209,7 @@ def project_to_dict(project: Project) -> Dict[str, Any]:
         "director": copy.deepcopy(project.director),
         "migration": copy.deepcopy(project.migration),
         "subtitles": copy.deepcopy(project.subtitles),
+        "timebase": copy.deepcopy(project.timebase),
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
         "scenes": [scene_to_dict(s) for s in ordered_scenes],
@@ -216,6 +251,7 @@ def project_from_dict(data: Dict[str, Any]) -> Project:
         director=copy.deepcopy(migrated["director"]),
         migration=copy.deepcopy(migrated["migration"]),
         subtitles=copy.deepcopy(migrated["subtitles"]),
+        timebase=copy.deepcopy(migrated["timebase"]),
         extras={k: copy.deepcopy(v) for k, v in migrated.items() if k not in _PROJECT_KEYS},
     )
 
