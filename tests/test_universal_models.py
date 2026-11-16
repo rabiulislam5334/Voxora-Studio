@@ -121,3 +121,50 @@ def test_scene_plan_rejects_scene_id_key_mismatch():
     state = UniversalState.from_dict(raw)
     assert state.read_only
     assert state.to_dict() == raw
+
+
+def test_non_finite_complexity_makes_universal_payload_read_only():
+    for complexity in (float("nan"), float("inf"), float("-inf")):
+        raw = {
+            "format_version": 1,
+            "scene_plans": {
+                "scene-1": {
+                    "scene_id": "scene-1",
+                    "complexity_estimate": complexity,
+                }
+            },
+        }
+        state = UniversalState.from_dict(raw)
+        assert state.read_only
+        assert state.to_dict() == raw
+
+
+def test_overflowing_complexity_makes_universal_payload_read_only():
+    raw = {
+        "format_version": 1,
+        "scene_plans": {
+            "scene-1": {
+                "scene_id": "scene-1",
+                "complexity_estimate": 10 ** 10000,
+            }
+        },
+    }
+    state = UniversalState.from_dict(raw)
+    assert state.read_only
+    assert state.to_dict() == raw
+
+
+def test_unknown_plan_status_makes_universal_payload_read_only():
+    raw = {
+        "format_version": 1,
+        "scene_plans": {
+            "scene-1": {
+                "scene_id": "scene-1",
+                "plan_status": "approvd",
+            }
+        },
+    }
+    state = UniversalState.from_dict(raw)
+    assert state.read_only
+    assert state.to_dict() == raw
+
