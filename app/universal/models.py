@@ -7,6 +7,7 @@ from the legacy "studio" settings.
 from __future__ import annotations
 
 import copy
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -166,8 +167,19 @@ class ScenePlan:
             raise ValueError("scene_plan requirements and camera must be objects")
         if not isinstance(raw_assets, list):
             raise ValueError("scene_plan.asset_refs must be a list")
-        if complexity is not None and (isinstance(complexity, bool) or not isinstance(complexity, (int, float))):
-            raise ValueError("scene_plan.complexity_estimate must be a number or null")
+        if complexity is not None:
+            if isinstance(complexity, bool) or not isinstance(complexity, (int, float)):
+                raise ValueError("scene_plan.complexity_estimate must be a finite number or null")
+            try:
+                complexity_value = float(complexity)
+            except (OverflowError, ValueError):
+                raise ValueError("scene_plan.complexity_estimate must be a finite number or null")
+            if not math.isfinite(complexity_value):
+                raise ValueError("scene_plan.complexity_estimate must be a finite number or null")
+        else:
+            complexity_value = None
+        if status not in PLAN_STATUSES:
+            raise ValueError("scene_plan.plan_status is not a supported status")
         if script_hash is not None and not isinstance(script_hash, str):
             raise ValueError("scene_plan.script_hash must be a string or null")
         return cls(
@@ -178,7 +190,7 @@ class ScenePlan:
             engine_choice=EngineChoice.from_dict(data.get("engine_choice", {})),
             camera=copy.deepcopy(camera),
             asset_refs=[AssetRef.from_dict(item) for item in raw_assets],
-            complexity_estimate=float(complexity) if complexity is not None else None,
+            complexity_estimate=complexity_value,
             notes=notes,
             plan_status=status,
             script_hash=script_hash,
@@ -231,7 +243,7 @@ class UniversalState:
                      if isinstance(key, str) and key.strip()}
             if len(plans) != len(plans_data):
                 raise ValueError("scene_plans keys must be non-empty strings")
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return cls(format_version=version, read_only=True, raw_payload=copy.deepcopy(data))
         return cls(
             profile_id=profile_id,
