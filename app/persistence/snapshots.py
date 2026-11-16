@@ -228,6 +228,12 @@ class SnapshotStore:
                 if not validated:
                     self._unlink(payload_path)
                     self._unlink(meta_path)
+                else:
+                    # The immutable payload/metadata pair is already valid.
+                    # Even if publishing current.json fails, reserve this
+                    # revision in memory so an equivalent job cannot publish
+                    # a second generation before the next startup scan.
+                    self.control.note_committed(job)
                 if isinstance(exc, ProjectError):
                     raise
                 raise ProjectError(f"Could not commit snapshot {job.seq}: {exc}") from exc
