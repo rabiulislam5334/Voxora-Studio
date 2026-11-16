@@ -60,8 +60,10 @@ def _music_chain(index: int, track: MusicTrack, duration_s: float, total_s: floa
     if fade_out > 0:
         parts.append(f"afade=t=out:st={_fmt_ticks(play_len - fade_out)}:d={_fmt_ticks(fade_out)}")
     if offset > 0:
-        delay = ticks_to_samples(offset, 1000, rounding="half_up")
-        parts.append(f"adelay={delay}|{delay}")
+        # FFmpeg's adelay defaults to milliseconds. Use its sample suffix so
+        # sub-millisecond timeline offsets are not rounded to whole milliseconds.
+        delay_samples = ticks_to_samples(offset, sample_rate, rounding="half_up")
+        parts.append(f"adelay=delays={delay_samples}S:all=1")
     return f"[{index}:a]" + ",".join(parts) + f"[m{index}]"
 
 
