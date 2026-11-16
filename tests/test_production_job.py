@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.audio.mixer import build_mix_args
+from app.audio.probe import MediaInfo
 from app.cache.manager import NarrationCache
 from app.cache.video_cache import VideoCache
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError, ProductionError
@@ -187,6 +188,30 @@ def test_full_video_with_cuts_has_h264_aac_and_exact_duration(env, media, tmp_pa
     assert events[-1].fraction == 1.0 and {e.stage for e in events} >= {"Narration", "Video scenes", "Final video"}
     fractions = [e.fraction for e in events]
     assert fractions == sorted(fractions)
+
+
+def test_final_video_rejects_muxed_file_without_audio_stream(env, media, tmp_path, monkeypatch):
+    tts, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "missing-audio.mp4"
+    monkeypatch.setattr(
+        job._ffmpeg,
+        "probe",
+        lambda path: MediaInfo(
+            duration_s=2.6,
+            has_video=True,
+            has_audio=False,
+            width=640,
+            height=360,
+            is_image=False,
+        ),
+    )
+
+    with pytest.raises(ProductionError, match="missing audio stream"):
+        run(job, st, ProductionOptions(render_video=True, video_output=out))
+
+    assert not out.exists()
+    assert not out.with_name(out.name + ".part").exists()
 
 
 def test_crossfade_and_vertical_video(env, media, tmp_path):
