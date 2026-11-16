@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -44,6 +45,17 @@ def _opt_str(value: Any) -> Optional[str]:
     return value if isinstance(value, str) and value.strip() else None
 
 
+def _split_extra(data: Dict[str, Any], known: frozenset) -> Dict[str, Any]:
+    return {k: copy.deepcopy(v) for k, v in data.items() if k not in known}
+
+
+def _with_extra(known_values: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    for key, value in extra.items():
+        if key not in known_values:
+            known_values[key] = copy.deepcopy(value)
+    return known_values
+
+
 def output_size(aspect: str, resolution: str) -> Tuple[int, int]:
     """Pixel size (width, height) for an aspect/resolution choice. Even
     numbers only, as H.264 with yuv420p requires."""
@@ -69,14 +81,15 @@ class MusicTrack:
     trim_end_s: Optional[float] = None
     loop: bool = True            # repeat the (trimmed) track to fill the narration
     enabled: bool = True
+    extra: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        return _with_extra({
             "id": self.id, "path": self.path, "volume_percent": self.volume_percent,
             "fade_in_s": self.fade_in_s, "fade_out_s": self.fade_out_s, "offset_s": self.offset_s,
             "trim_start_s": self.trim_start_s, "trim_end_s": self.trim_end_s,
             "loop": self.loop, "enabled": self.enabled,
-        }
+        }, self.extra)
 
     @classmethod
     def from_dict(cls, data: Any) -> Optional["MusicTrack"]:
@@ -95,6 +108,7 @@ class MusicTrack:
             offset_s=_num(data.get("offset_s"), 0.0, 0.0, 86400.0),
             trim_start_s=start, trim_end_s=end,
             loop=bool(data.get("loop", True)), enabled=bool(data.get("enabled", True)),
+            extra=_split_extra(data, _MUSIC_TRACK_KEYS),
         )
 
 
@@ -103,26 +117,44 @@ class AudioSettings:
     narration_volume_percent: int = 100
     limiter: bool = True  # guards against clipping when narration and music sum
     tracks: List[MusicTrack] = field(default_factory=list)
+    extra: Dict[str, Any] = field(default_factory=dict)
+    invalid_tracks: List[Any] = field(default_factory=list)
+    raw_tracks: Any = None
+    has_raw_tracks: bool = False
 
     def active_tracks(self) -> List[MusicTrack]:
         return [t for t in self.tracks if t.enabled]
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        tracks = copy.deepcopy(self.raw_tracks) if self.has_raw_tracks else ([t.to_dict() for t in self.tracks] + copy.deepcopy(self.invalid_tracks))
+        return _with_extra({
             "narration_volume_percent": self.narration_volume_percent,
             "limiter": self.limiter,
-            "tracks": [t.to_dict() for t in self.tracks],
-        }
+            "tracks": tracks,
+        }, self.extra)
 
     @classmethod
     def from_dict(cls, data: Any) -> "AudioSettings":
         if not isinstance(data, dict):
             return cls()
-        tracks = [t for t in (MusicTrack.from_dict(x) for x in data.get("tracks", []) if True) if t]
+        raw_tracks = data.get("tracks", [])
+        tracks, invalid_tracks = [], []
+        has_raw_tracks = not isinstance(raw_tracks, list)
+        if isinstance(raw_tracks, list):
+            for item in raw_tracks:
+                parsed = MusicTrack.from_dict(item)
+                if parsed is None:
+                    invalid_tracks.append(copy.deepcopy(item))
+                else:
+                    tracks.append(parsed)
         return cls(
             narration_volume_percent=int(_num(data.get("narration_volume_percent"), 100, 0, 200)),
             limiter=bool(data.get("limiter", True)),
             tracks=tracks,
+            extra=_split_extra(data, _AUDIO_KEYS),
+            invalid_tracks=invalid_tracks,
+            raw_tracks=copy.deepcopy(raw_tracks) if has_raw_tracks else None,
+            has_raw_tracks=has_raw_tracks,
         )
 
 
@@ -137,10 +169,11 @@ class SceneVideo:
     duration_s: Optional[float] = None  # None = automatic (narration length)
     motion: Optional[str] = None        # None = project default
     fit: Optional[str] = None           # None = project default
+    extra: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"media_path": self.media_path, "duration_s": self.duration_s,
-                "motion": self.motion, "fit": self.fit}
+        return _with_extra({"media_path": self.media_path, "duration_s": self.duration_s,
+                "motion": self.motion, "fit": self.fit}, self.extra)
 
     @classmethod
     def from_dict(cls, data: Any) -> "SceneVideo":
@@ -152,10 +185,11 @@ class SceneVideo:
             duration_s=_opt_num(data.get("duration_s"), 0.5, 3600.0),
             motion=motion if motion in MOTIONS else None,
             fit=fit if fit in FITS else None,
+            extra=_split_extra(data, _SCENE_VIDEO_KEYS),
         )
 
     def is_empty(self) -> bool:
-        return not self.media_path and self.duration_s is None and self.motion is None and self.fit is None
+        return not self.media_path and self.duration_s is None and self.motion is None and self.fit is None and not self.extra
 
 
 @dataclass
@@ -169,6 +203,8 @@ class VideoSettings:
     default_motion: str = "zoom_in"
     default_fit: str = "fill"
     scenes: Dict[str, SceneVideo] = field(default_factory=dict)
+    extra: Dict[str, Any] = field(default_factory=dict)
+    invalid_scene_entries: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def size(self) -> Tuple[int, int]:
@@ -184,23 +220,30 @@ class VideoSettings:
             self.scenes[scene_id] = value
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        scenes = {sid: sv.to_dict() for sid, sv in self.scenes.items()}
+        for sid, raw in self.invalid_scene_entries.items():
+            if sid not in scenes:
+                scenes[sid] = copy.deepcopy(raw)
+        return _with_extra({
             "aspect": self.aspect, "resolution": self.resolution, "fps": self.fps,
             "transition": self.transition, "transition_s": self.transition_s,
             "default_duration_s": self.default_duration_s, "default_motion": self.default_motion,
             "default_fit": self.default_fit,
-            "scenes": {sid: sv.to_dict() for sid, sv in self.scenes.items()},
-        }
+            "scenes": scenes,
+        }, self.extra)
 
     @classmethod
     def from_dict(cls, data: Any) -> "VideoSettings":
         if not isinstance(data, dict):
             return cls()
         scenes_raw = data.get("scenes", {})
-        scenes = {}
+        scenes, invalid_scene_entries = {}, {}
         if isinstance(scenes_raw, dict):
             for sid, raw in scenes_raw.items():
                 if isinstance(sid, str):
+                    if not isinstance(raw, dict):
+                        invalid_scene_entries[sid] = copy.deepcopy(raw)
+                        continue
                     value = SceneVideo.from_dict(raw)
                     if not value.is_empty():
                         scenes[sid] = value
@@ -214,6 +257,8 @@ class VideoSettings:
             default_motion=_choice(data.get("default_motion"), MOTIONS, "zoom_in"),
             default_fit=_choice(data.get("default_fit"), FITS, "fill"),
             scenes=scenes,
+            extra=_split_extra(data, _VIDEO_KEYS),
+            invalid_scene_entries=invalid_scene_entries,
         )
 
 
@@ -228,20 +273,50 @@ class VideoSettings:
 class StudioState:
     audio: AudioSettings = field(default_factory=AudioSettings)
     video: VideoSettings = field(default_factory=VideoSettings)
+    extra: Dict[str, Any] = field(default_factory=dict)
+    format_version: Any = STUDIO_FORMAT_VERSION
+    raw_audio: Any = None
+    raw_video: Any = None
+    raw_studio: Any = None
+    has_raw_audio: bool = False
+    has_raw_video: bool = False
+    has_raw_studio: bool = False
+
+    @property
+    def read_only(self) -> bool:
+        version_invalid = isinstance(self.format_version, bool) or not isinstance(self.format_version, int) or self.format_version < 1
+        return (self.has_raw_studio or self.has_raw_audio or self.has_raw_video or version_invalid
+                or self.format_version > STUDIO_FORMAT_VERSION)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"version": STUDIO_FORMAT_VERSION, "audio": self.audio.to_dict(), "video": self.video.to_dict()}
+        if self.has_raw_studio:
+            return copy.deepcopy(self.raw_studio)
+        audio = copy.deepcopy(self.raw_audio) if self.has_raw_audio else self.audio.to_dict()
+        video = copy.deepcopy(self.raw_video) if self.has_raw_video else self.video.to_dict()
+        return _with_extra({"version": self.format_version, "audio": audio, "video": video}, self.extra)
 
     @classmethod
     def from_dict(cls, data: Any) -> "StudioState":
         if not isinstance(data, dict):
-            return cls()
-        return cls(audio=AudioSettings.from_dict(data.get("audio")), video=VideoSettings.from_dict(data.get("video")))
+            return cls(raw_studio=copy.deepcopy(data), has_raw_studio=True)
+        version = data.get("version", STUDIO_FORMAT_VERSION)
+        raw_audio, raw_video = data.get("audio"), data.get("video")
+        bad_audio = not isinstance(raw_audio, dict)
+        bad_video = not isinstance(raw_video, dict)
+        return cls(
+            audio=AudioSettings.from_dict(raw_audio), video=VideoSettings.from_dict(raw_video),
+            extra=_split_extra(data, _STUDIO_KEYS), format_version=copy.deepcopy(version),
+            raw_audio=copy.deepcopy(raw_audio) if bad_audio and "audio" in data else None,
+            raw_video=copy.deepcopy(raw_video) if bad_video and "video" in data else None,
+            has_raw_audio=bad_audio and "audio" in data,
+            has_raw_video=bad_video and "video" in data,
+        )
 
     @classmethod
     def from_project_settings(cls, settings: Any) -> "StudioState":
-        raw = settings.get(STUDIO_SETTINGS_KEY) if isinstance(settings, dict) else None
-        return cls.from_dict(raw)
+        if not isinstance(settings, dict) or STUDIO_SETTINGS_KEY not in settings:
+            return cls()
+        return cls.from_dict(settings.get(STUDIO_SETTINGS_KEY))
 
     def write_to(self, settings: Dict[str, Any]) -> None:
         settings[STUDIO_SETTINGS_KEY] = self.to_dict()
@@ -253,3 +328,10 @@ class StudioState:
         for sid in stale:
             del self.video.scenes[sid]
         return bool(stale)
+
+# Known keys are derived from the writers above to keep preservation in sync.
+_MUSIC_TRACK_KEYS = frozenset({"id", "path", "volume_percent", "fade_in_s", "fade_out_s", "offset_s", "trim_start_s", "trim_end_s", "loop", "enabled"})
+_AUDIO_KEYS = frozenset({"narration_volume_percent", "limiter", "tracks"})
+_SCENE_VIDEO_KEYS = frozenset({"media_path", "duration_s", "motion", "fit"})
+_VIDEO_KEYS = frozenset({"aspect", "resolution", "fps", "transition", "transition_s", "default_duration_s", "default_motion", "default_fit", "scenes"})
+_STUDIO_KEYS = frozenset({"version", "audio", "video"})
