@@ -8,11 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, Protocol, Union
 
-from app.universal.engines import (
-    EngineDescriptor,
-    EngineRegistry,
-    EngineRegistryError,
-)
+from app.universal.engines import EngineDescriptor, EngineRegistry
 from app.universal.requests import (
     CancellationToken,
     EngineRenderRequest,
@@ -71,7 +67,7 @@ class EngineRuntimeRegistry:
     """
 
     def __init__(self, metadata: Optional[EngineRegistry] = None) -> None:
-        self.metadata = metadata or EngineRegistry()
+        self.metadata = metadata if metadata is not None else EngineRegistry()
         self._bindings: Dict[str, _Binding] = {}
 
     def register(
@@ -83,21 +79,23 @@ class EngineRuntimeRegistry:
     ) -> None:
         if not isinstance(descriptor, EngineDescriptor):
             raise TypeError("descriptor must be an EngineDescriptor")
-        if not callable(adapter) and getattr(adapter, "descriptor", None) is None:
-            raise TypeError("adapter must be an adapter instance or zero-argument factory")
         if descriptor.engine_id in self._bindings and not replace:
             raise ValueError(f"runtime engine already registered: {descriptor.engine_id}")
         if replace and descriptor.engine_id not in self._bindings:
             raise ValueError(f"cannot replace unregistered runtime engine: {descriptor.engine_id}")
-        # Keep the existing metadata registry API intact and authoritative.
+
+        instance = None
+        if callable(adapter):
+            source = adapter
+        else:
+            instance = self._validate_adapter(descriptor.engine_id, adapter)
+            source = adapter
+
+        # Validate the instance before mutating metadata or runtime state.
         self.metadata.register(descriptor, replace=replace)
         self._bindings[descriptor.engine_id] = _Binding(
-            descriptor=descriptor,
-            source=adapter,
-            instance=None if callable(adapter) else adapter,
+            descriptor=descriptor, source=source, instance=instance
         )
-        if self._bindings[descriptor.engine_id].instance is not None:
-            self._validate_adapter(descriptor.engine_id, self._bindings[descriptor.engine_id].instance)
 
     @staticmethod
     def _validate_adapter(engine_id: str, adapter: object) -> EngineAdapter:
@@ -124,7 +122,7 @@ class EngineRuntimeRegistry:
         asset_kinds=(),
         output_format: Optional[str] = None,
     ) -> EngineAdapter:
-        descriptor = self.metadata.resolve(
+        self.metadata.resolve(
             engine_id,
             scene_kind=scene_kind,
             style_tags=style_tags,
@@ -163,14 +161,9 @@ class EngineRuntimeRegistry:
             asset_kinds=tuple(asset.kind for asset in request.asset_refs),
             output_format=request.output_format,
         )
-        try:
-            result = adapter.render(request, on_progress=on_progress, cancel=cancel)
-        except Exception:
-            raise
+        result = adapter.render(request, on_progress=on_progress, cancel=cancel)
         if not isinstance(result, RawEngineOutput):
-            raise EngineRenderError(
-                f"engine '{engine_id}' must return a RawEngineOutput"
-            )
+            raise EngineRenderError(f"engine '{engine_id}' must return a RawEngineOutput")
         if not result.path.is_file() or result.path.stat().st_size <= 0:
             raise EngineRenderError(
                 f"engine '{engine_id}' returned a missing or empty output: {result.path}"
