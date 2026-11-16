@@ -66,7 +66,11 @@ def studio(tmp_path, real_ffmpeg, tone_mp3, monkeypatch):
     panel.voice._on_tree_select()
     panel.voice._current_settings.sentence_pause_ms = 0
     panel.voice._current_settings.scene_pause_ms = 300
-    yield root, script, panel, provider, pump, config, dialogs
+    # Pytest retains fixture values in the test item's funcargs until teardown
+    # completes. Yield a mutable container so teardown can clear that retained
+    # reference as well as releasing the local widget references below.
+    resources = [root, script, panel, provider, pump, config, dialogs]
+    yield resources
     panel.shutdown()
     bridge.shutdown()
     # Destroy widgets and release Tk-backed variable references on the main
@@ -74,6 +78,7 @@ def studio(tmp_path, real_ffmpeg, tone_mp3, monkeypatch):
     # may run later, after root.destroy(), during cyclic garbage collection.
     panel.destroy()
     script.destroy()
+    resources.clear()
     del panel, script
     gc.collect()
     root.destroy()
