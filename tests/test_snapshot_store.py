@@ -118,6 +118,11 @@ def test_pointer_failure_keeps_fully_validated_generation_recoverable(tmp_path, 
     assert store.load_generation(job.seq).payload == b"recoverable"
     assert not (tmp_path / "session" / "current.json").exists()
 
+    # A validated generation is committed state even when pointer publication
+    # failed; do not allow a second generation for the same project revision.
+    duplicate = _queued(control, 1, b"duplicate revision")
+    assert store.commit(duplicate) is CommitDecision.DROP_REVISION
+
 
 def test_metadata_write_failure_removes_only_unvalidated_payload(tmp_path, monkeypatch):
     import app.persistence.snapshots as module
