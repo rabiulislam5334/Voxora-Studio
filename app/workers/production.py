@@ -19,13 +19,14 @@ from app.studio.models import StudioState
 from app.studio.previews import probe_track_durations
 from app.studio.timing import SceneTimingInput, VideoTimeline, compute_timeline
 from app.core.timebase import frames_to_ticks, ticks_to_frames, ticks_to_samples, ticks_to_seconds
+from app.universal.adapters.ffmpeg import FFmpegSegmentAdapter
+from app.universal.engines import EngineRegistry
 from app.video.render import (
     FILTER_SCRIPT_OPTIONS,
     SegmentSpec,
     build_concat_list,
     build_cut_join_args,
     build_mux_args,
-    build_segment_args,
     build_xfade_join_args,
     build_xfade_script_ticks,
     is_unknown_option_error,
@@ -92,6 +93,8 @@ class ProductionJob:
         self._ffmpeg = ffmpeg
         self._cache = video_cache
         self._temp_dir = Path(temp_dir)
+        self._ffmpeg_adapter = FFmpegSegmentAdapter(ffmpeg)
+        self._engine_registry = EngineRegistry((self._ffmpeg_adapter.descriptor,))
         self._script_options = list(FILTER_SCRIPT_OPTIONS)  # best-working option first; reordered once learned
 
     async def run(
@@ -249,6 +252,13 @@ class ProductionJob:
                 scene, segment_s, studio, width, height,
                 length_ticks=segment_ticks, frame_count=segment_frames,
             )
+            asset_kinds = (spec.kind,) if spec.kind in ("image", "video") else ()
+            self._engine_registry.resolve(
+                self._ffmpeg_adapter.engine_id,
+                scene_kind=spec.kind,
+                asset_kinds=asset_kinds,
+                output_format="mp4",
+            )
             key = self._cache.segment_key(spec)
             label = f"Scene '{scene.title}'"
             lo = seg_lo + (seg_hi - seg_lo) * done_time / total_seg_time
@@ -260,9 +270,11 @@ class ProductionJob:
             else:
                 part = self._cache.part_path(key)
                 try:
-                    self._ffmpeg.run_with_progress(
-                        build_segment_args(self._ffmpeg.require(), spec, part), segment_s,
-                        lambda f, lbl=label, rep=report: rep(f, f"Rendering {lbl}"), cancel,
+                    self._ffmpeg_adapter.render_segment(
+                        spec,
+                        part,
+                        on_progress=lambda f, lbl=label, rep=report: rep(f, f"Rendering {lbl}"),
+                        cancel=cancel,
                     )
                     self._cache.commit_segment(part, key)
                 except BaseException:
