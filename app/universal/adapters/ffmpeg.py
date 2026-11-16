@@ -46,7 +46,11 @@ class FFmpegSegmentAdapter:
             raise ValueError(f"unsupported FFmpeg segment kind: {spec.kind!r}")
         if isinstance(spec.length_s, bool) or not isinstance(spec.length_s, (int, float)):
             raise ValueError("segment length must be a positive finite number")
-        if not math.isfinite(float(spec.length_s)) or spec.length_s <= 0:
+        try:
+            finite_length = math.isfinite(float(spec.length_s))
+        except (OverflowError, ValueError):
+            finite_length = False
+        if not finite_length or spec.length_s <= 0:
             raise ValueError("segment length must be a positive finite number")
         for name in ("width", "height", "fps"):
             value = getattr(spec, name)
