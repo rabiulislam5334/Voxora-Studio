@@ -49,8 +49,13 @@ class ProjectFileLock:
         self._windows = os.name == "nt"
 
     def __enter__(self) -> "ProjectFileLock":
-        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        handle = open(self.lock_path, "a+b")
+        try:
+            self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+            handle = open(self.lock_path, "a+b")
+        except OSError as exc:
+            raise ProjectLockError(
+                f"Could not prepare the save lock for '{self.target.name}': {exc}"
+            ) from exc
         try:
             if self._windows:
                 handle.seek(0, os.SEEK_END)
