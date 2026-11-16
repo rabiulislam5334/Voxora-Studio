@@ -60,7 +60,7 @@ class ProjectFileLock:
             if self._windows:
                 handle.seek(0, os.SEEK_END)
                 if handle.tell() == 0:
-                    handle.write(b"\\0")
+                    handle.write(bytes(1))
                     handle.flush()
             deadline = time.monotonic() + self.timeout_s
             while True:
