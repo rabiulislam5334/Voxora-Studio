@@ -65,8 +65,7 @@ def batch(tmp_path):
 
 def test_executes_sequentially_in_caller_order_and_matches_contexts(batch):
     single = FakeSceneCoordinator()
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
     result = coordinator.execute(batch)
 
     assert isinstance(result, MultiSceneExecutionResult)
@@ -118,8 +117,7 @@ def test_request_freezes_context_mapping(batch):
 
 def test_progress_is_monotonic_and_final_one_only_after_all_succeed(batch):
     single = FakeSceneCoordinator()
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
     progress = []
     coordinator.execute(batch, on_progress=progress.append)
 
@@ -131,8 +129,7 @@ def test_progress_is_monotonic_and_final_one_only_after_all_succeed(batch):
 
 def test_observer_exceptions_do_not_interrupt_batch(batch):
     single = FakeSceneCoordinator()
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
 
     def broken(_):
         raise RuntimeError("observer closed")
@@ -144,8 +141,7 @@ def test_observer_exceptions_do_not_interrupt_batch(batch):
 
 def test_invalid_progress_values_are_ignored(batch):
     single = FakeSceneCoordinator()
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
 
     def noisy(scene_plan, scene_context, *, on_progress=None, cancel=None):
         if on_progress:
@@ -163,8 +159,7 @@ def test_invalid_progress_values_are_ignored(batch):
 
 def test_cancellation_before_first_scene_starts_nothing(batch):
     single = FakeSceneCoordinator()
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
     token = CancelToken()
     token.cancel()
 
@@ -175,8 +170,7 @@ def test_cancellation_before_first_scene_starts_nothing(batch):
 
 def test_same_cancel_token_is_forwarded_to_each_scene(batch):
     single = FakeSceneCoordinator()
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
     token = CancelToken()
 
     coordinator.execute(batch, cancel=token)
@@ -185,8 +179,7 @@ def test_same_cancel_token_is_forwarded_to_each_scene(batch):
 
 def test_cancellation_during_scene_propagates_without_starting_later_scenes(batch):
     single = FakeSceneCoordinator(cancel_at=1)
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
 
     with pytest.raises(GenerationCancelled):
         coordinator.execute(batch)
@@ -195,8 +188,7 @@ def test_cancellation_during_scene_propagates_without_starting_later_scenes(batc
 
 def test_failure_is_fail_fast_and_exposes_only_completed_results(batch):
     single = FakeSceneCoordinator(fail_at=1)
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
 
     with pytest.raises(MultiSceneExecutionError) as caught:
         coordinator.execute(batch)
@@ -211,8 +203,7 @@ def test_failure_is_fail_fast_and_exposes_only_completed_results(batch):
 
 def test_progress_callback_must_be_callable(batch):
     single = FakeSceneCoordinator()
-    coordinator = MultiSceneExecutionCoordinator.__new__(MultiSceneExecutionCoordinator)
-    coordinator._scene_coordinator = single
+    coordinator = MultiSceneExecutionCoordinator(single)
     with pytest.raises(TypeError):
         coordinator.execute(batch, on_progress="no")
     assert single.calls == []
