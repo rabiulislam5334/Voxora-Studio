@@ -56,6 +56,57 @@ def _with_extra(known_values: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str
     return known_values
 
 
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _valid_audio_shape(data: Dict[str, Any]) -> bool:
+    if "narration_volume_percent" in data and not _is_number(data["narration_volume_percent"]):
+        return False
+    if "limiter" in data and not isinstance(data["limiter"], bool):
+        return False
+    tracks = data.get("tracks", [])
+    if not isinstance(tracks, list):
+        return False
+    numeric_track_keys = ("volume_percent", "fade_in_s", "fade_out_s", "offset_s", "trim_start_s", "trim_end_s")
+    for track in tracks:
+        if not isinstance(track, dict) or not _opt_str(track.get("path")):
+            return False
+        if "id" in track and not isinstance(track["id"], str):
+            return False
+        if any(key in track and track[key] is not None and not _is_number(track[key]) for key in numeric_track_keys):
+            return False
+        if any(key in track and not isinstance(track[key], bool) for key in ("loop", "enabled")):
+            return False
+    return True
+
+
+def _valid_video_shape(data: Dict[str, Any]) -> bool:
+    enum_fields = {"aspect": ASPECTS, "resolution": tuple(RESOLUTIONS), "transition": TRANSITIONS,
+                   "default_motion": MOTIONS, "default_fit": FITS}
+    for key, allowed in enum_fields.items():
+        if key in data and data[key] not in allowed:
+            return False
+    numeric_fields = ("fps", "transition_s", "default_duration_s")
+    if any(key in data and not _is_number(data[key]) for key in numeric_fields):
+        return False
+    scenes = data.get("scenes", {})
+    if not isinstance(scenes, dict):
+        return False
+    for entry in scenes.values():
+        if not isinstance(entry, dict):
+            return False
+        if "media_path" in entry and entry["media_path"] is not None and not isinstance(entry["media_path"], str):
+            return False
+        if "duration_s" in entry and entry["duration_s"] is not None and not _is_number(entry["duration_s"]):
+            return False
+        if "motion" in entry and entry["motion"] is not None and entry["motion"] not in MOTIONS:
+            return False
+        if "fit" in entry and entry["fit"] is not None and entry["fit"] not in FITS:
+            return False
+    return True
+
+
 def output_size(aspect: str, resolution: str) -> Tuple[int, int]:
     """Pixel size (width, height) for an aspect/resolution choice. Even
     numbers only, as H.264 with yuv420p requires."""
@@ -311,8 +362,8 @@ class StudioState:
         if version_invalid or version > STUDIO_FORMAT_VERSION:
             return cls(format_version=copy.deepcopy(version), raw_studio=copy.deepcopy(data), has_raw_studio=True)
         raw_audio, raw_video = data.get("audio"), data.get("video")
-        bad_audio = not isinstance(raw_audio, dict)
-        bad_video = not isinstance(raw_video, dict)
+        bad_audio = not isinstance(raw_audio, dict) or not _valid_audio_shape(raw_audio)
+        bad_video = not isinstance(raw_video, dict) or not _valid_video_shape(raw_video)
         return cls(
             audio=AudioSettings.from_dict(raw_audio), video=VideoSettings.from_dict(raw_video),
             extra=_split_extra(data, _STUDIO_KEYS), format_version=copy.deepcopy(version),
