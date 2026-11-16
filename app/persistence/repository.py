@@ -21,10 +21,13 @@ Save order (every step that can fail happens *before* the target is touched):
     which another writer could slip in;
  6. replace the target (4 attempts on ``PermissionError``, see ``atomic``).
 
-Known limitation (documented, not hidden): there is no atomic
-compare-and-swap rename on Windows, so a writer that lands between
-verification 2 and the replace (milliseconds) still wins silently. The locks
-planned for a later step do not cover other machines or programs either.
+A per-project operating-system advisory lock now serializes this entire
+save sequence across cooperating Voxora processes on the same machine. The
+lock is released automatically if a process exits or crashes. Disk-stamp
+verification remains necessary: unrelated programs and remote machines do not
+participate in this lock, and Windows still has no atomic compare-and-swap
+rename. Such a non-cooperating writer can still land between verification 2
+and the replace.
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ from app.core.exceptions import ProjectBackupError, ProjectConflictError, Projec
 from app.core.logger import get_logger
 from app.models.project import Project
 from app.persistence.atomic import stage_write
+from app.persistence.file_lock import ProjectFileLock
 from app.persistence.backups import BackupError, BackupStore
 from app.persistence.stamps import FileStamp, read_stamped, stamp_of_written
 from app.projects.serializer import project_from_dict, project_to_dict
@@ -136,33 +140,34 @@ class JsonProjectRepository:
         target = Path(path)
         data = self.serialize(project)  # no file I/O yet
 
-        backup_path: Optional[Path] = None
-        try:
-            with stage_write(target, data, sleep=self._sleep) as staged:
-                existing = self._read_existing(target)
-                if existing is None:
-                    # Opened/saved here before, but the file is gone now:
-                    # never silently recreate it (see _deleted_conflict).
-                    if expected_stamp is not None:
-                        raise self._deleted_conflict(target, expected_stamp)
-                else:
-                    old_bytes, old_stamp = existing
-                    self._check_unchanged(target, expected_stamp, old_stamp)  # verification 1
-                    self._backup_v1_before_migration(target, old_bytes)
-                    backup_path = self._backup(project, target, old_bytes, allow_without_backup)
-                    if expected_stamp is not None:
-                        again = self._read_existing(target)
-                        if again is None:
+        with ProjectFileLock(target):
+            backup_path: Optional[Path] = None
+            try:
+                with stage_write(target, data, sleep=self._sleep) as staged:
+                    existing = self._read_existing(target)
+                    if existing is None:
+                        # Opened/saved here before, but the file is gone now:
+                        # never silently recreate it (see _deleted_conflict).
+                        if expected_stamp is not None:
                             raise self._deleted_conflict(target, expected_stamp)
-                        self._check_unchanged(target, expected_stamp, again[1])  # verification 2
-                staged.commit()
-        except ProjectError:
-            raise
-        except OSError as exc:
-            logger.exception("Failed to save project to %s", target)
-            raise ProjectError(f"Could not save the project: {exc}") from exc
+                    else:
+                        old_bytes, old_stamp = existing
+                        self._check_unchanged(target, expected_stamp, old_stamp)  # verification 1
+                        self._backup_v1_before_migration(target, old_bytes)
+                        backup_path = self._backup(project, target, old_bytes, allow_without_backup)
+                        if expected_stamp is not None:
+                            again = self._read_existing(target)
+                            if again is None:
+                                raise self._deleted_conflict(target, expected_stamp)
+                            self._check_unchanged(target, expected_stamp, again[1])  # verification 2
+                    staged.commit()
+            except ProjectError:
+                raise
+            except OSError as exc:
+                logger.exception("Failed to save project to %s", target)
+                raise ProjectError(f"Could not save the project: {exc}") from exc
 
-        return SaveOutcome(path=target, stamp=stamp_of_written(target, data), backup_path=backup_path)
+            return SaveOutcome(path=target, stamp=stamp_of_written(target, data), backup_path=backup_path)
 
     # ----------------------------------------------------------------- helpers
 
