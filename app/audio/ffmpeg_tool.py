@@ -19,7 +19,7 @@ from app.workers.cancel import CancelToken
 logger = get_logger("audio.ffmpeg")
 
 SETTINGS_KEY = "ffmpeg_path"
-_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # Windows only; 0 elsewhere
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 _INSTALL_HINT = (
     "Install FFmpeg (for example: winget install --id Gyan.FFmpeg -e), restart the app, "
     "or choose ffmpeg.exe with 'Set Path...'."
@@ -31,29 +31,16 @@ class FFmpegStatus:
     available: bool
     path: Optional[Path]
     version: Optional[str]
-    source: str  # "settings" | "path" | "imageio" | "none"
+    source: str
     message: str
 
 
 class FFmpegTool:
-    """Locates, verifies and runs FFmpeg.
-
-    Detection order: path saved in settings -> `ffmpeg` on PATH -> the
-    optional `imageio-ffmpeg` binary (only if that package happens to be
-    installed). A candidate is trusted only after `ffmpeg -version` succeeds
-    AND the build lists the libmp3lame encoder (needed for MP3 export).
-
-    Every command is an argument LIST -- never a shell string -- so file names
-    (spaces, Bengali characters, quotes) cannot be misinterpreted.
-    """
+    """Locate, verify and run FFmpeg commands without invoking a shell."""
 
     def __init__(self, settings: SettingsStore) -> None:
         self._settings = settings
         self._status: Optional[FFmpegStatus] = None
-
-    # ------------------------------------------------------------------
-    # Configuration / detection
-    # ------------------------------------------------------------------
 
     @property
     def status(self) -> Optional[FFmpegStatus]:
@@ -71,7 +58,6 @@ class FFmpegTool:
         return await asyncio.to_thread(self.detect)
 
     def detect(self) -> FFmpegStatus:
-        """Blocking (runs `ffmpeg -version`); call from a worker thread."""
         problems: List[str] = []
         for source, candidate in self._candidates():
             ok, version, reason = self._verify(candidate)
@@ -92,8 +78,6 @@ class FFmpegTool:
         return self._status
 
     def require(self) -> Path:
-        """Return a verified ffmpeg path or raise FFmpegError with a clear,
-        actionable message. Re-detects if FFmpeg disappeared since last check."""
         status = self._status
         if status is None or (status.available and status.path and not status.path.exists()):
             status = self.detect()
@@ -108,11 +92,10 @@ class FFmpegTool:
         found = shutil.which("ffmpeg")
         if found:
             yield "path", Path(found)
-        try:  # optional fallback; never a required dependency
+        try:
             import imageio_ffmpeg  # type: ignore[import-not-found]
-
             yield "imageio", Path(imageio_ffmpeg.get_exe())
-        except Exception:  # noqa: BLE001 - ImportError or runtime lookup failure
+        except Exception:
             return
 
     def _verify(self, exe: Path):
@@ -133,14 +116,9 @@ class FFmpegTool:
             return False, None, "this FFmpeg build has no MP3 encoder (libmp3lame)"
         return True, first_line.replace("ffmpeg version", "").strip().split(" ")[0] or first_line, ""
 
-    # ------------------------------------------------------------------
-    # Operations
-    # ------------------------------------------------------------------
-
     def decode_to_wav(
         self, source: Path, dest: Path, sample_rate: int, cancel: Optional[CancelToken] = None
     ) -> None:
-        """Decode any audio file to mono 16-bit PCM WAV at `sample_rate`."""
         exe = self.require()
         args = [
             str(exe), "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
@@ -163,16 +141,9 @@ class FFmpegTool:
         self._require_output(dest, "MP3 encode")
 
     def run_args(self, args: List[str], cancel: Optional[CancelToken] = None, timeout: float = 600.0) -> str:
-        """Public wrapper: run a prepared ffmpeg argument list (no shell)."""
         return self._run(args, cancel=cancel, timeout=timeout)
 
-    # ------------------------------------------------------------------
-    # Phases 6-8: probing and long-running commands with progress
-    # ------------------------------------------------------------------
-
     def probe(self, path: Path) -> MediaInfo:
-        """Describe a media file (duration, streams, size) using only ffmpeg,
-        so it works even when ffprobe is not installed. Raises MediaError."""
         exe = self.require()
         path = Path(path)
         if not path.is_file():
@@ -195,9 +166,7 @@ class FFmpegTool:
         cancel: Optional[CancelToken] = None,
         timeout: float = 6 * 3600.0,
     ) -> None:
-        """Run `args` (args[0] must be the ffmpeg path) and report progress as
-        a 0..1 fraction of `total_seconds` of output. Cancel terminates the
-        process. Never uses a shell."""
+        """Run FFmpeg and report progress, cleaning up its reader and pipe on every exit."""
         command = [args[0], "-progress", "pipe:1", "-nostats", *args[1:]]
         try:
             proc = subprocess.Popen(
@@ -210,42 +179,61 @@ class FFmpegTool:
         lines: "queue.Queue[Optional[str]]" = queue.Queue()
 
         def reader() -> None:
-            assert proc.stdout is not None
-            for raw in iter(proc.stdout.readline, b""):
-                lines.put(raw.decode("utf-8", errors="replace").strip())
-            lines.put(None)
+            try:
+                assert proc.stdout is not None
+                with proc.stdout:
+                    for raw in iter(proc.stdout.readline, b""):
+                        lines.put(raw.decode("utf-8", errors="replace").strip())
+            except (OSError, ValueError):
+                logger.debug("FFmpeg progress pipe closed while reader was active")
+            finally:
+                lines.put(None)
 
-        threading.Thread(target=reader, daemon=True).start()
+        reader_thread = threading.Thread(
+            target=reader, name="FFmpegProgressReader", daemon=True
+        )
+        reader_thread.start()
         started = time.monotonic()
         tail: List[str] = []
-        finished = False
-        while not finished:
-            try:
-                line = lines.get(timeout=0.2)
-            except queue.Empty:
-                line = ""
-            if line is None:
-                finished = True
-            elif line:
-                key, _, value = line.partition("=")
-                if key in ("out_time_us", "out_time_ms") and value.isdigit() and total_seconds > 0:
-                    if on_progress:
-                        on_progress(min(1.0, int(value) / 1e6 / total_seconds))
-                elif key not in ("progress", "frame", "fps", "stream_0_0_q", "bitrate", "total_size",
-                                 "out_time", "dup_frames", "drop_frames", "speed"):
-                    tail.append(line)
-                    tail = tail[-6:]
-            if cancel is not None and cancel.cancelled:
+        try:
+            finished = False
+            while not finished:
+                try:
+                    line = lines.get(timeout=0.2)
+                except queue.Empty:
+                    line = ""
+                if line is None:
+                    finished = True
+                elif line:
+                    key, _, value = line.partition("=")
+                    if key in ("out_time_us", "out_time_ms") and value.isdigit() and total_seconds > 0:
+                        if on_progress:
+                            on_progress(min(1.0, int(value) / 1e6 / total_seconds))
+                    elif key not in ("progress", "frame", "fps", "stream_0_0_q", "bitrate", "total_size",
+                                     "out_time", "dup_frames", "drop_frames", "speed"):
+                        tail.append(line)
+                        tail = tail[-6:]
+                if cancel is not None and cancel.cancelled:
+                    raise GenerationCancelled("Generation cancelled.")
+                if time.monotonic() - started > timeout:
+                    raise FFmpegError("FFmpeg timed out.")
+
+            proc.wait()
+            if proc.returncode != 0:
+                detail = tail[-1] if tail else "no error output"
+                logger.error("FFmpeg failed (exit %s): %s", proc.returncode, " | ".join(tail))
+                raise FFmpegError(f"FFmpeg failed (exit code {proc.returncode}): {detail}")
+        finally:
+            # A progress callback can fail too; never leave the child process or
+            # reader thread running when any path exits this method.
+            if proc.poll() is None:
                 self._kill(proc)
-                raise GenerationCancelled("Generation cancelled.")
-            if time.monotonic() - started > timeout:
-                self._kill(proc)
-                raise FFmpegError("FFmpeg timed out.")
-        proc.wait()
-        if proc.returncode != 0:
-            detail = tail[-1] if tail else "no error output"
-            logger.error("FFmpeg failed (exit %s): %s", proc.returncode, " | ".join(tail))
-            raise FFmpegError(f"FFmpeg failed (exit code {proc.returncode}): {detail}")
+            else:
+                proc.wait()
+            reader_thread.join()
+            if proc.stdout is not None and not proc.stdout.closed:
+                proc.stdout.close()
+
         if on_progress:
             on_progress(1.0)
 
@@ -255,15 +243,10 @@ class FFmpegTool:
             raise FFmpegError(f"FFmpeg {what} produced no output file.")
 
     def _run(self, args: List[str], cancel: Optional[CancelToken] = None, timeout: float = 300.0) -> str:
-        """Run an argument list (never through a shell). Polls so a cancel
-        request terminates the child process promptly."""
         try:
             proc = subprocess.Popen(
-                args,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                creationflags=_NO_WINDOW,
+                args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, creationflags=_NO_WINDOW,
             )
         except OSError as exc:
             raise FFmpegError(f"Could not start FFmpeg: {exc}") from exc
@@ -293,5 +276,5 @@ class FFmpegTool:
         try:
             proc.kill()
             proc.communicate()
-        except Exception:  # noqa: BLE001 - best effort during cancellation
+        except Exception:
             pass
