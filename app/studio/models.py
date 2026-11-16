@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.core.timebase import deserialize_ticks, seconds_to_ticks, serialize_ticks, ticks_to_seconds
 
 STUDIO_SETTINGS_KEY = "studio"
-STUDIO_FORMAT_VERSION = 2
+STUDIO_FORMAT_VERSION = 1
 
 ASPECTS = ("16:9", "9:16")
 RESOLUTIONS = {"360p (draft)": 360, "720p": 720, "1080p": 1080}  # length of the SHORT side
