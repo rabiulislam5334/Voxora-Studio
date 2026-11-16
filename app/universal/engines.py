@@ -188,6 +188,8 @@ class EngineRegistry:
             detail = f": {descriptor.unavailable_reason}" if descriptor.unavailable_reason else ""
             raise EngineUnavailableError(f"engine unavailable: {engine_id}{detail}")
         caps = descriptor.capabilities
+        _validate_optional_requirement("scene_kind", scene_kind)
+        _validate_optional_requirement("output_format", output_format)
         requested_styles = set(_normalise_values("style_tags", style_tags))
         requested_assets = set(_normalise_values("asset_kinds", asset_kinds))
         compatible = (
