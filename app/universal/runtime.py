@@ -91,8 +91,27 @@ class EngineRuntimeRegistry:
             instance = self._validate_adapter(descriptor.engine_id, adapter)
             source = adapter
 
-        # Validate the instance before mutating metadata or runtime state.
-        self.metadata.register(descriptor, replace=replace)
+        # Reuse a matching metadata descriptor supplied at construction. Reject
+        # conflicts unless the caller explicitly replaces an existing binding.
+        try:
+            existing = self.metadata.get(descriptor.engine_id)
+        except Exception as exc:
+            from app.universal.engines import UnknownEngineError
+            if not isinstance(exc, UnknownEngineError):
+                raise
+            existing = None
+
+        if existing is not None:
+            if existing != descriptor and not replace:
+                raise ValueError(
+                    f"metadata descriptor already registered with different values: "
+                    f"{descriptor.engine_id}"
+                )
+            if existing != descriptor or replace:
+                self.metadata.register(descriptor, replace=True)
+        else:
+            self.metadata.register(descriptor)
+
         self._bindings[descriptor.engine_id] = _Binding(
             descriptor=descriptor, source=source, instance=instance
         )
