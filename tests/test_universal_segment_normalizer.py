@@ -73,7 +73,7 @@ def test_normalizer_produces_and_verifies_shared_silent_mp4(tmp_path):
     assert result.duration_s == 2.0
     args, total_s, passed_progress, passed_cancel = ffmpeg.calls[0]
     assert args[args.index("-map") + 1] == "0:v:0"
-    assert args[args.index("-an"):] [0] == "-an"
+    assert "-an" in args
     assert "fps=30" in args[args.index("-vf") + 1]
     assert "format=yuv420p" in args[args.index("-vf") + 1]
     assert args[args.index("-c:v") + 1] == "libx264"
