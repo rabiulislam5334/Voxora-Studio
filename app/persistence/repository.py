@@ -21,10 +21,13 @@ Save order (every step that can fail happens *before* the target is touched):
     which another writer could slip in;
  6. replace the target (4 attempts on ``PermissionError``, see ``atomic``).
 
-Known limitation (documented, not hidden): there is no atomic
-compare-and-swap rename on Windows, so a writer that lands between
-verification 2 and the replace (milliseconds) still wins silently. The locks
-planned for a later step do not cover other machines or programs either.
+A per-project operating-system advisory lock now serializes this entire
+save sequence across cooperating Voxora processes on the same machine. The
+lock is released automatically if a process exits or crashes. Disk-stamp
+verification remains necessary: unrelated programs and remote machines do not
+participate in this lock, and Windows still has no atomic compare-and-swap
+rename. Such a non-cooperating writer can still land between verification 2
+and the replace.
 """
 from __future__ import annotations
 
