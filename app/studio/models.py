@@ -147,6 +147,7 @@ class AudioSettings:
                     invalid_tracks.append(copy.deepcopy(item))
                 else:
                     tracks.append(parsed)
+        has_raw_tracks = has_raw_tracks or bool(invalid_tracks)
         return cls(
             narration_volume_percent=int(_num(data.get("narration_volume_percent"), 100, 0, 200)),
             limiter=bool(data.get("limiter", True)),
@@ -290,7 +291,8 @@ class StudioState:
     @property
     def read_only(self) -> bool:
         version_invalid = isinstance(self.format_version, bool) or not isinstance(self.format_version, int) or self.format_version < 1
-        return (self.has_raw_studio or self.has_raw_audio or self.has_raw_video or self.video.has_raw_scenes or version_invalid
+        return (self.has_raw_studio or self.has_raw_audio or self.has_raw_video or self.audio.has_raw_tracks
+                or self.video.has_raw_scenes or bool(self.video.invalid_scene_entries) or version_invalid
                 or self.format_version > STUDIO_FORMAT_VERSION)
 
     def to_dict(self) -> Dict[str, Any]:
