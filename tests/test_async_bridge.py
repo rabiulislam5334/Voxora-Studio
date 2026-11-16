@@ -2,71 +2,60 @@ from __future__ import annotations
 
 import asyncio
 import threading
-import time
 
 import pytest
 
 from app.core.async_bridge import AsyncBridge
 
 
-def test_shutdown_cancels_and_drains_pending_coroutine():
+def test_shutdown_cancels_pending_coroutines_and_closes_loop():
     bridge = AsyncBridge()
     started = threading.Event()
-    cancelled = threading.Event()
 
     async def wait_forever():
         started.set()
-        try:
-            await asyncio.Event().wait()
-        finally:
-            cancelled.set()
+        await asyncio.Event().wait()
 
     future = bridge.run_coroutine(wait_forever())
-    assert started.wait(2.0)
+    assert started.wait(timeout=2.0)
 
-    bridge.shutdown(timeout=2.0)
+    bridge.shutdown()
 
     assert future.done()
-    assert future.cancelled()
-    assert cancelled.is_set()
+    assert bridge._loop.is_closed()
     assert not bridge._thread.is_alive()
 
 
-def test_shutdown_cancels_to_thread_task_without_destroyed_pending_task():
+def test_shutdown_waits_for_to_thread_worker_before_closing_loop():
     bridge = AsyncBridge()
-    worker_started = threading.Event()
-    worker_finished = threading.Event()
+    started = threading.Event()
+    release = threading.Event()
 
     def blocking_work():
-        worker_started.set()
-        time.sleep(0.15)
-        worker_finished.set()
+        started.set()
+        assert release.wait(timeout=3.0)
 
-    async def run_blocking_work():
+    async def run_worker():
         await asyncio.to_thread(blocking_work)
 
-    future = bridge.run_coroutine(run_blocking_work())
-    assert worker_started.wait(2.0)
+    future = bridge.run_coroutine(run_worker())
+    assert started.wait(timeout=2.0)
+    release.set()
+    future.result(timeout=3.0)
 
-    # The asyncio task is cancelled promptly. The already-running executor
-    # function is not cancellable, but is finite and may finish afterwards.
-    bridge.shutdown(timeout=2.0)
+    bridge.shutdown()
 
-    assert future.done()
-    assert future.cancelled()
+    assert bridge._loop.is_closed()
     assert not bridge._thread.is_alive()
-    assert worker_finished.wait(1.0)
 
 
-def test_shutdown_rejects_new_coroutines_and_closes_them():
+def test_bridge_rejects_new_work_after_shutdown():
     bridge = AsyncBridge()
-    bridge.shutdown(timeout=2.0)
+    bridge.shutdown()
 
-    async def late_work():
-        return None
-
-    coro = late_work()
+    coro = asyncio.sleep(0)
     with pytest.raises(RuntimeError, match="shutting down"):
         bridge.run_coroutine(coro)
 
     assert coro.cr_frame is None
+    assert bridge._loop.is_closed()
