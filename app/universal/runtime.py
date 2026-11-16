@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, Protocol, Union
 
-from app.universal.engines import EngineDescriptor, EngineRegistry
+from app.universal.engines import EngineDescriptor, EngineRegistry, UnknownEngineError
 from app.universal.requests import (
     CancellationToken,
     EngineRenderRequest,
@@ -95,10 +95,7 @@ class EngineRuntimeRegistry:
         # conflicts unless the caller explicitly replaces an existing binding.
         try:
             existing = self.metadata.get(descriptor.engine_id)
-        except Exception as exc:
-            from app.universal.engines import UnknownEngineError
-            if not isinstance(exc, UnknownEngineError):
-                raise
+        except UnknownEngineError:
             existing = None
 
         if existing is not None:
