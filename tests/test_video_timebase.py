@@ -11,6 +11,9 @@ from app.video.render import (
     build_xfade_script_ticks,
 )
 
+from app.studio.timing import SceneTimingInput, compute_timeline
+from app.workers.production import _slot_sample_bounds
+
 
 def test_segment_spec_uses_explicit_frame_count_as_authority():
     spec = SegmentSpec(
@@ -61,3 +64,25 @@ def test_video_cache_key_changes_when_authoritative_frame_count_changes(tmp_path
     first = SegmentSpec("blank", None, 1.0, 640, 360, 30, frame_count=30)
     second = SegmentSpec("blank", None, 1.0, 640, 360, 30, frame_count=31)
     assert cache.segment_key(first) != cache.segment_key(second)
+
+
+def test_narration_scene_boundaries_remain_sample_aligned_not_frame_rounded():
+    timeline = compute_timeline(
+        [
+            SceneTimingInput("one", 0.5, None, 0.0),
+            SceneTimingInput("two", 0.5, None, 0.0),
+            SceneTimingInput("visual-only", None, 1.0, 0.0),
+        ],
+        transition="cut",
+        transition_s=0.0,
+        default_duration_s=1.0,
+    )
+
+    bounds = [
+        _slot_sample_bounds(slot.start_ticks, slot.slot_ticks, 24_000)
+        for slot in timeline.slots
+    ]
+
+    # At 15 FPS the old frame-rounded approach allocated 12,800 samples
+    # to the first 0.5s slot and only 11,200 to the second.
+    assert bounds[:2] == [(0, 12_000), (12_000, 24_000)]
