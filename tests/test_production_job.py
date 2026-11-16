@@ -98,6 +98,23 @@ def test_ffmpeg_progress_reader_thread_is_joined_after_success(real_ffmpeg):
     )
 
 
+def test_ffmpeg_progress_reader_is_joined_after_cancellation(real_ffmpeg):
+    exe = str(real_ffmpeg.require())
+    token = CancelToken()
+    token.cancel()
+    with pytest.raises(GenerationCancelled):
+        real_ffmpeg.run_with_progress(
+            [exe, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+             "sine=frequency=440:duration=5", "-f", "null", "-"],
+            total_seconds=5.0,
+            cancel=token,
+        )
+    assert not any(
+        thread.name == "FFmpegProgressReader" and thread.is_alive()
+        for thread in threading.enumerate()
+    )
+
+
 def test_probe_real_files(real_ffmpeg, media):
     assert real_ffmpeg.probe(media / "a.png").kind == "image"
     clip = real_ffmpeg.probe(media / "clip.mp4")
