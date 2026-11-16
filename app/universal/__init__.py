@@ -1,6 +1,6 @@
 """Universal Core domain contracts."""
 
-from app.universal.engines import (
+from app.universal.execution import (\n    SceneEngineExecutionError,\n    SceneExecutionContext,\n    SceneExecutionCoordinator,\n    SceneExecutionError,\n    SceneExecutionResult,\n    SceneExecutionValidationError,\n    SceneNormalizationError,\n    ScenePlanResolutionError,\n)\nfrom app.universal.engines import (
     EngineCapabilities,
     EngineCompatibilityError,
     EngineDescriptor,
@@ -48,7 +48,7 @@ __all__ = [
     "EngineUnavailableError",
     "NormalizedSegment",
     "RawEngineOutput",
-    "ScenePlan",
+    "SceneEngineExecutionError",\n    "SceneExecutionContext",\n    "SceneExecutionCoordinator",\n    "SceneExecutionError",\n    "SceneExecutionResult",\n    "SceneExecutionValidationError",\n    "SceneNormalizationError",\n    "ScenePlanResolutionError",\n    "ScenePlan",
     "SegmentNormalizer",
     "SegmentOutputSpec",
     "UnknownEngineError",
