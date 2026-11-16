@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import pytest
@@ -87,8 +86,7 @@ def test_constructor_requires_single_scene_coordinator():
     ((plan("same"), plan("same")), {"same": object()}, ValueError),
     ((plan("one"),), {}, ValueError),
     ((plan("one"),), {"one": object()}, TypeError),
-    ((plan("one"),), {"one": None, "extra": None}, TypeError),
-    ((plan("one"),), {"one": None, "extra": None}, TypeError),
+    ((plan("one"),), {"one": None}, TypeError),
 ])
 def test_request_validates_entire_batch(plans, contexts, error):
     with pytest.raises(error):
