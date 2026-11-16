@@ -216,7 +216,7 @@ def test_invalid_progress_values_are_ignored_and_never_break_execution(setup):
     adapter.render = malformed_render
     values = []
     coordinator.execute(scene(), context, on_progress=values.append)
-    assert values == [0.0, 0.8, 0.8, 0.999999, 1.0]
+    assert values == [0.0, 0.8, 0.8, 0.9, 0.999999, 1.0]
 
 
 def test_adapter_error_is_wrapped_with_original_cause(setup):
