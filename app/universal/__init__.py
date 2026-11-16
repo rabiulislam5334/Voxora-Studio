@@ -19,6 +19,12 @@ from app.universal.engines import (
     EngineUnavailableError,
     UnknownEngineError,
 )
+from app.universal.multi_execution import (
+    MultiSceneExecutionCoordinator,
+    MultiSceneExecutionError,
+    MultiSceneExecutionRequest,
+    MultiSceneExecutionResult,
+)
 from app.universal.normalizer import NormalizedSegment, SegmentNormalizer, SegmentOutputSpec
 from app.universal.plan_resolver import EnginePlanResolution, EnginePlanResolver, EnginePlanStatus
 from app.universal.models import (
@@ -56,6 +62,10 @@ __all__ = [
     "EngineRuntimeError",
     "EngineRuntimeRegistry",
     "EngineUnavailableError",
+    "MultiSceneExecutionCoordinator",
+    "MultiSceneExecutionError",
+    "MultiSceneExecutionRequest",
+    "MultiSceneExecutionResult",
     "NormalizedSegment",
     "RawEngineOutput",
     "SceneEngineExecutionError",
