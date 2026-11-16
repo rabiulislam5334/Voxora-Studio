@@ -225,6 +225,13 @@ class ProductionJob:
         for scene, slot in zip(scenes, timeline.slots):
             cancel.raise_if_cancelled()
             spec = self._segment_spec(scene, slot.segment_s, studio, width, height)
+            asset_kinds = (spec.kind,) if spec.kind in ("image", "video") else ()
+            self._engine_registry.resolve(
+                self._ffmpeg_adapter.engine_id,
+                scene_kind=spec.kind,
+                asset_kinds=asset_kinds,
+                output_format="mp4",
+            )
             key = self._cache.segment_key(spec)
             label = f"Scene '{scene.title}'"
             lo = seg_lo + (seg_hi - seg_lo) * done_time / total_seg_time
@@ -236,13 +243,6 @@ class ProductionJob:
             else:
                 part = self._cache.part_path(key)
                 try:
-                    asset_kinds = (spec.kind,) if spec.kind in ("image", "video") else ()
-                    self._engine_registry.resolve(
-                        self._ffmpeg_adapter.engine_id,
-                        scene_kind=spec.kind,
-                        asset_kinds=asset_kinds,
-                        output_format="mp4",
-                    )
                     self._ffmpeg_adapter.render_segment(
                         spec,
                         part,
