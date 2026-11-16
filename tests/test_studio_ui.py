@@ -69,9 +69,11 @@ def studio(tmp_path, real_ffmpeg, tone_mp3, monkeypatch):
     yield root, script, panel, provider, pump, config, dialogs
     panel.shutdown()
     bridge.shutdown()
-    # Release Tk-backed panel/variable references on the main thread while
-    # the Tcl interpreter is still alive; otherwise Variable.__del__ may run
-    # later, after root.destroy(), during cyclic garbage collection.
+    # Destroy widgets and release Tk-backed variable references on the main
+    # thread while the Tcl interpreter is still alive. Otherwise Variable.__del__
+    # may run later, after root.destroy(), during cyclic garbage collection.
+    panel.destroy()
+    script.destroy()
     del panel, script
     gc.collect()
     root.destroy()
