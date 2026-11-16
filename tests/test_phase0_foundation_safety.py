@@ -70,7 +70,9 @@ def test_malformed_audio_and_video_payloads_are_preserved():
 def test_malformed_track_entries_and_tracks_container_are_not_dropped():
     malformed_items = [{"volume_percent": 20}, None, "bad-track"]
     raw = {"version": 1, "audio": {"tracks": malformed_items}, "video": {}}
-    assert StudioState.from_dict(raw).to_dict()["audio"]["tracks"] == malformed_items
+    state = StudioState.from_dict(raw)
+    assert state.read_only is True
+    assert state.to_dict()["audio"]["tracks"] == malformed_items
 
     raw_container = {"version": 1, "audio": {"tracks": {"unexpected": True}}, "video": {}}
     assert StudioState.from_dict(raw_container).to_dict()["audio"]["tracks"] == {"unexpected": True}
@@ -79,7 +81,9 @@ def test_malformed_track_entries_and_tracks_container_are_not_dropped():
 def test_malformed_scene_entries_and_scenes_container_are_not_dropped():
     raw_entries = {"s1": "bad-scene", "s2": ["bad-scene"]}
     raw = {"version": 1, "audio": {}, "video": {"scenes": raw_entries}}
-    assert StudioState.from_dict(raw).to_dict()["video"]["scenes"] == raw_entries
+    state_entries = StudioState.from_dict(raw)
+    assert state_entries.read_only is True
+    assert state_entries.to_dict()["video"]["scenes"] == raw_entries
 
     raw_container = {"version": 1, "audio": {}, "video": {"scenes": ["bad-scenes"]}}
     state = StudioState.from_dict(raw_container)
