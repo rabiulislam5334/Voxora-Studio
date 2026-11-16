@@ -5,7 +5,7 @@ another process may already have opened the same inode while a third creates a
 new one. The operating system releases the lock automatically if a process
 exits or crashes.
 
-This coordinates cooperating Voxora processes on the same machine. It cannot
+This coordinates cooperating Voxora processes running under the same OS user account on the same machine. It cannot
 prevent unrelated programs or remote machines from writing the project file;
 the repository's disk-stamp checks remain necessary.
 """
