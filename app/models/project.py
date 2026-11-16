@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -77,6 +78,8 @@ class Project:
             sentence_pause_ms=original.sentence_pause_ms,
             paragraph_pause_ms=original.paragraph_pause_ms,
             scene_pause_ms=original.scene_pause_ms,
+            # Preserve forward-compatible scene metadata without sharing mutable objects.
+            extra=deepcopy(original.extra),
         )
         index = self.scenes.index(original)
         self.scenes.insert(index + 1, copy)
