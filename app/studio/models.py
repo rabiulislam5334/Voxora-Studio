@@ -3,9 +3,10 @@ from __future__ import annotations
 import copy
 import uuid
 
-from app.core.timebase import deserialize_ticks, seconds_to_ticks, serialize_ticks, ticks_to_seconds
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
+
+from app.core.timebase import deserialize_ticks, seconds_to_ticks, serialize_ticks, ticks_to_seconds
 
 STUDIO_SETTINGS_KEY = "studio"
 STUDIO_FORMAT_VERSION = 2
@@ -60,7 +61,7 @@ def _ticks(value: Any) -> str:
     return serialize_ticks(seconds_to_ticks(value))
 
 
-def _split_extra(data: Dict[str, Any], known: frozenset) -> Dict[str, Any>:
+def _split_extra(data: Dict[str, Any], known: frozenset) -> Dict[str, Any]:
     return {k: copy.deepcopy(v) for k, v in data.items() if k not in known}
 
 
