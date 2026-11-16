@@ -107,8 +107,8 @@ class MultiSceneExecutionCoordinator:
     _FINAL_PROGRESS_CAP = 0.999999
 
     def __init__(self, scene_coordinator: SceneExecutionCoordinator) -> None:
-        if not isinstance(scene_coordinator, SceneExecutionCoordinator):
-            raise TypeError("scene_coordinator must be a SceneExecutionCoordinator")
+        if not callable(getattr(scene_coordinator, "execute", None)):
+            raise TypeError("scene_coordinator must provide execute()")
         self._scene_coordinator = scene_coordinator
 
     def execute(
