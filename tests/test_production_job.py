@@ -85,6 +85,19 @@ def run(job, st, opts, cancel=None, events=None, name="proj", reqs=None, scenes=
                                on_progress=events.append if events is not None else None))
 
 
+def test_ffmpeg_progress_reader_thread_is_joined_after_success(real_ffmpeg):
+    exe = str(real_ffmpeg.require())
+    real_ffmpeg.run_with_progress(
+        [exe, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+         "sine=frequency=440:duration=0.15", "-f", "null", "-"],
+        total_seconds=0.15,
+    )
+    assert not any(
+        thread.name == "FFmpegProgressReader" and thread.is_alive()
+        for thread in threading.enumerate()
+    )
+
+
 def test_probe_real_files(real_ffmpeg, media):
     assert real_ffmpeg.probe(media / "a.png").kind == "image"
     clip = real_ffmpeg.probe(media / "clip.mp4")
