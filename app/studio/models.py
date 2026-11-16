@@ -305,6 +305,9 @@ class StudioState:
         if not isinstance(data, dict):
             return cls(raw_studio=copy.deepcopy(data), has_raw_studio=True)
         version = data.get("version", STUDIO_FORMAT_VERSION)
+        version_invalid = isinstance(version, bool) or not isinstance(version, int) or version < 1
+        if version_invalid or version > STUDIO_FORMAT_VERSION:
+            return cls(format_version=copy.deepcopy(version), raw_studio=copy.deepcopy(data), has_raw_studio=True)
         raw_audio, raw_video = data.get("audio"), data.get("video")
         bad_audio = not isinstance(raw_audio, dict)
         bad_video = not isinstance(raw_video, dict)
