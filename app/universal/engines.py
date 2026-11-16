@@ -9,8 +9,18 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, Optional, Tuple
 
 
+def _validate_optional_requirement(name: str, value: Optional[str]) -> None:
+    if value is not None and (not isinstance(value, str) or not value.strip()):
+        raise ValueError(f"{name} must be a non-empty string or null")
+
+
 def _normalise_values(name: str, values: Iterable[str]) -> Tuple[str, ...]:
-    result = tuple(values)
+    if isinstance(values, (str, bytes)):
+        raise ValueError(f"{name} must be an iterable of strings, not a string")
+    try:
+        result = tuple(values)
+    except TypeError:
+        raise ValueError(f"{name} must be an iterable of strings") from None
     if any(not isinstance(value, str) or not value.strip() for value in result):
         raise ValueError(f"{name} must contain only non-empty strings")
     if len(set(result)) != len(result):
@@ -145,6 +155,8 @@ class EngineRegistry:
         include_unavailable: bool = False,
     ) -> Tuple[EngineDescriptor, ...]:
         """Return every declared match; this method does not choose an engine."""
+        _validate_optional_requirement("scene_kind", scene_kind)
+        _validate_optional_requirement("output_format", output_format)
         requested_styles = set(_normalise_values("style_tags", style_tags))
         requested_assets = set(_normalise_values("asset_kinds", asset_kinds))
         matches = []
