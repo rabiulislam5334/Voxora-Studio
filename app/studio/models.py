@@ -205,6 +205,8 @@ class VideoSettings:
     scenes: Dict[str, SceneVideo] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
     invalid_scene_entries: Dict[str, Any] = field(default_factory=dict)
+    raw_scenes: Any = None
+    has_raw_scenes: bool = False
 
     @property
     def size(self) -> Tuple[int, int]:
@@ -220,10 +222,11 @@ class VideoSettings:
             self.scenes[scene_id] = value
 
     def to_dict(self) -> Dict[str, Any]:
-        scenes = {sid: sv.to_dict() for sid, sv in self.scenes.items()}
-        for sid, raw in self.invalid_scene_entries.items():
-            if sid not in scenes:
-                scenes[sid] = copy.deepcopy(raw)
+        scenes = copy.deepcopy(self.raw_scenes) if self.has_raw_scenes else {sid: sv.to_dict() for sid, sv in self.scenes.items()}
+        if not self.has_raw_scenes:
+            for sid, raw in self.invalid_scene_entries.items():
+                if sid not in scenes:
+                    scenes[sid] = copy.deepcopy(raw)
         return _with_extra({
             "aspect": self.aspect, "resolution": self.resolution, "fps": self.fps,
             "transition": self.transition, "transition_s": self.transition_s,
@@ -259,6 +262,8 @@ class VideoSettings:
             scenes=scenes,
             extra=_split_extra(data, _VIDEO_KEYS),
             invalid_scene_entries=invalid_scene_entries,
+            raw_scenes=copy.deepcopy(scenes_raw) if not isinstance(scenes_raw, dict) and "scenes" in data else None,
+            has_raw_scenes=not isinstance(scenes_raw, dict) and "scenes" in data,
         )
 
 
@@ -285,7 +290,7 @@ class StudioState:
     @property
     def read_only(self) -> bool:
         version_invalid = isinstance(self.format_version, bool) or not isinstance(self.format_version, int) or self.format_version < 1
-        return (self.has_raw_studio or self.has_raw_audio or self.has_raw_video or version_invalid
+        return (self.has_raw_studio or self.has_raw_audio or self.has_raw_video or self.video.has_raw_scenes or version_invalid
                 or self.format_version > STUDIO_FORMAT_VERSION)
 
     def to_dict(self) -> Dict[str, Any]:
