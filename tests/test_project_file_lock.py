@@ -19,10 +19,11 @@ def test_lock_file_is_stable_and_reusable_after_release(tmp_path):
     target = tmp_path / "episode.voxora"
 
     with ProjectFileLock(target):
-        lock_path = tmp_path / ".episode.voxora.lock"
+        lock_path = ProjectFileLock(target).lock_path
         assert lock_path.is_file()
+        assert lock_path.parent != tmp_path
 
-    # The persistent sidecar is reused rather than unlinked on release.
+    # The persistent lock file is reused rather than unlinked on release.
     assert lock_path.is_file()
     with ProjectFileLock(target):
         assert lock_path.is_file()
