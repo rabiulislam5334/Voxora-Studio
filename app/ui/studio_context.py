@@ -63,11 +63,17 @@ class StudioContext:
         self.state = StudioState.from_project_settings(project.settings)
         self.state.prune_scenes(s.id for s in project.scenes)
         self.known_durations.clear()
+        if self.state.read_only:
+            self.on_status("Studio settings were created by a newer or malformed format. They are preserved read-only; update Voxora before editing Studio settings.")
 
     def commit(self) -> None:
         """Store the studio settings in the project (and mark it unsaved)
         only when something actually changed."""
         project = self.project()
+        if self.state.read_only:
+            # Never rewrite a future or structurally malformed Studio payload
+            # with defaults from this older build.
+            return
         new = self.state.to_dict()
         if project.settings.get("studio") != new:
             project.settings["studio"] = new
