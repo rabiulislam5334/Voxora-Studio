@@ -340,13 +340,23 @@ class ProductionJob:
             actual_duration = rendered_info.duration_s
             if (
                 rendered_info.kind != "video"
+                or not rendered_info.has_audio
                 or actual_duration is None
                 or abs(actual_duration - total_s) > duration_tolerance
             ):
                 actual_label = f"{actual_duration:.6f}s" if actual_duration is not None else "unknown"
+                problems = []
+                if rendered_info.kind != "video":
+                    problems.append("missing or invalid video stream")
+                if not rendered_info.has_audio:
+                    problems.append("missing audio stream")
+                if actual_duration is None or abs(actual_duration - total_s) > duration_tolerance:
+                    problems.append(
+                        "duration mismatch "
+                        f"(expected {total_s:.6f}s, got {actual_label})"
+                    )
                 raise ProductionError(
-                    "The rendered MP4 duration does not match the frame-aligned project timeline "
-                    f"(expected {total_s:.6f}s, got {actual_label})."
+                    "The rendered MP4 failed output validation: " + "; ".join(problems) + "."
                 )
             os.replace(part_video, video_path)
         except BaseException:
