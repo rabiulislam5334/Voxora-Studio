@@ -230,6 +230,26 @@ def test_second_replacement_is_refused_and_abort_restores_the_previous_state():
     assert control.state is SnapshotState.NORMAL and control.epoch == 1
 
 
+def test_late_enqueued_older_capture_cannot_regress_committed_revision():
+    control = SnapshotControl()
+    older_ticket = control.begin_capture()
+    newer_ticket = control.begin_capture()
+
+    # The newer capture finishes serialization/enqueue first and gets the
+    # lower sequence. The older capture is enqueued later with a higher seq.
+    newer = _queue(control, newer_ticket, 11)
+    older = _queue(control, older_ticket, 10)
+
+    assert newer.seq < older.seq
+    assert control.acquire_write(0)
+    try:
+        assert control.decide_commit(newer) is CommitDecision.COMMIT
+        control.note_committed(newer)
+        assert control.decide_commit(older) is CommitDecision.DROP_REVISION
+    finally:
+        control.release_write()
+
+
 # ------------------------------------------------------- sequences / locks
 
 

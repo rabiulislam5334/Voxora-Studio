@@ -129,7 +129,7 @@ def test_normalizer_rejects_missing_source_and_same_source_destination(tmp_path)
 def test_normalizer_requires_mp4_destination(tmp_path):
     source = tmp_path / "raw.mov"
     source.write_bytes(b"raw")
-    with pytest.raises(ValueError, match="\.mp4"):
+    with pytest.raises(ValueError, match=r"\.mp4"):
         SegmentNormalizer(FakeFFmpeg()).normalize(
             source, tmp_path / "out.mkv", SegmentOutputSpec(2.0, 640, 360, 30)
         )

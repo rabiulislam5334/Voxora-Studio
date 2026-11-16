@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 from app.core import constants
+from app.core.timebase import ticks_to_frames, ticks_to_seconds
 
 _ZOOM = 0.15  # total zoom travel for zoom_in / zoom_out / pan (15%)
 _SUPERSAMPLE = 1.5  # zoompan works on a larger frame to avoid visible jitter
@@ -20,10 +21,21 @@ class SegmentSpec:
     fps: int
     motion: str = "none"
     fit: str = "fill"
+    length_ticks: Optional[int] = None
+    frame_count: Optional[int] = None
 
     @property
     def frames(self) -> int:
+        if self.frame_count is not None:
+            return max(1, int(self.frame_count))
+        if self.length_ticks is not None:
+            return max(1, ticks_to_frames(self.length_ticks, self.fps, rounding="half_up"))
         return max(1, int(round(self.length_s * self.fps)))
+
+
+def _fmt_ticks(ticks: int) -> str:
+    value = format(ticks_to_seconds(ticks), "f")
+    return value.rstrip("0").rstrip(".") if "." in value else value
 
 
 def _even(value: float) -> int:
@@ -65,19 +77,18 @@ def _encode_args(fps: int) -> List[str]:
 
 
 def build_segment_args(ffmpeg_exe: Path, spec: SegmentSpec, dest: Path) -> List[str]:
-    """One silent H.264 segment of exactly spec.length_s: a still image
-    (optionally with zoom/pan), a looped/trimmed video clip, or black."""
+    """One silent H.264 segment containing exactly spec.frames output frames."""
     base = [str(ffmpeg_exe), "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
     out = ["-r", str(spec.fps), *_encode_args(spec.fps), "-f", "mp4", str(dest)]
     w, h = spec.width, spec.height
 
     if spec.kind == "blank" or not spec.media:
         return base + ["-f", "lavfi", "-i", f"color=c=black:s={w}x{h}:r={spec.fps}",
-                       "-t", f"{spec.length_s:.3f}", "-vf", "setsar=1", *out]
+                       "-frames:v", str(spec.frames), "-vf", "setsar=1", *out]
 
     if spec.kind == "video":
         vf = f"fps={spec.fps},{_fit_filter(w, h, spec.fit)},setsar=1,format=yuv420p"
-        return base + ["-stream_loop", "-1", "-i", spec.media, "-t", f"{spec.length_s:.3f}", "-vf", vf, *out]
+        return base + ["-stream_loop", "-1", "-i", spec.media, "-frames:v", str(spec.frames), "-vf", vf, *out]
 
     # image
     if spec.motion == "none":
@@ -129,6 +140,23 @@ def build_xfade_script(starts: Sequence[float], transition_s: float) -> str:
     return ";".join(chain)
 
 
+def build_xfade_script_ticks(starts_ticks: Sequence[int], transition_ticks: int) -> str:
+    """Build an xfade graph from frame-aligned canonical tick positions."""
+    n = len(starts_ticks)
+    if n < 2:
+        return "[0:v]format=yuv420p[vout]"
+    chain = []
+    previous = "[0:v]"
+    duration = _fmt_ticks(transition_ticks)
+    for i in range(1, n):
+        label = "[vout]" if i == n - 1 else f"[v{i}]"
+        chain.append(
+            f"{previous}[{i}:v]xfade=transition=fade:duration={duration}:offset={_fmt_ticks(starts_ticks[i])}{label}"
+        )
+        previous = label
+    return ";".join(chain)
+
+
 # How to hand FFmpeg a filter graph stored in a file. FFmpeg 7+ spells it
 # `-/filter_complex <file>`; the old `-filter_complex_script <file>` was
 # deprecated in 7 and REMOVED in later releases (e.g. 9.x), but is the only
@@ -154,7 +182,10 @@ def is_unknown_option_error(message: str) -> bool:
     return "option not found" in text or "unrecognized option" in text
 
 
-def build_mux_args(ffmpeg_exe: Path, video: Path, audio: Path, total_s: float, dest: Path) -> List[str]:
+def build_mux_args(
+    ffmpeg_exe: Path, video: Path, audio: Path, total_s: float, dest: Path,
+    *, frame_count: Optional[int] = None, duration_ticks: Optional[int] = None,
+) -> List[str]:
     """Combine the joined video and the mixed audio: video is copied (no
     quality loss, no re-encode), audio becomes AAC at a fixed sample rate."""
     return [
@@ -162,7 +193,9 @@ def build_mux_args(ffmpeg_exe: Path, video: Path, audio: Path, total_s: float, d
         "-i", str(video), "-i", str(audio), "-map", "0:v:0", "-map", "1:a:0",
         "-c:v", "copy", "-c:a", "aac", "-b:a", constants.VIDEO_AUDIO_BITRATE,
         "-ar", str(constants.VIDEO_AUDIO_SAMPLE_RATE), "-ac", "2",
-        "-t", f"{total_s:.3f}", "-movflags", "+faststart", "-f", "mp4", str(dest),
+        "-t", _fmt_ticks(duration_ticks) if duration_ticks is not None else f"{total_s:.3f}",
+        *( ["-frames:v", str(frame_count)] if frame_count is not None else [] ),
+        "-shortest", "-movflags", "+faststart", "-f", "mp4", str(dest),
     ]
 
 

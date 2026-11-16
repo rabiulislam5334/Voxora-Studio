@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import copy
 import uuid
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.core.timebase import deserialize_ticks, seconds_to_ticks, serialize_ticks, ticks_to_seconds
+
 STUDIO_SETTINGS_KEY = "studio"
-STUDIO_FORMAT_VERSION = 1
+STUDIO_FORMAT_VERSION = 2
 
 ASPECTS = ("16:9", "9:16")
 RESOLUTIONS = {"360p (draft)": 360, "720p": 720, "1080p": 1080}  # length of the SHORT side
@@ -43,6 +46,19 @@ def _choice(value: Any, allowed, default):
 
 def _opt_str(value: Any) -> Optional[str]:
     return value if isinstance(value, str) and value.strip() else None
+
+
+def _read_time(data: Dict[str, Any], ticks_key: str, seconds_key: str, default: Any) -> Any:
+    if ticks_key in data:
+        try:
+            return float(ticks_to_seconds(deserialize_ticks(data[ticks_key])))
+        except (TypeError, ValueError):
+            pass
+    return data.get(seconds_key, default)
+
+
+def _ticks(value: Any) -> str:
+    return serialize_ticks(seconds_to_ticks(value))
 
 
 def _split_extra(data: Dict[str, Any], known: frozenset) -> Dict[str, Any]:
@@ -139,6 +155,9 @@ class MusicTrack:
             "id": self.id, "path": self.path, "volume_percent": self.volume_percent,
             "fade_in_s": self.fade_in_s, "fade_out_s": self.fade_out_s, "offset_s": self.offset_s,
             "trim_start_s": self.trim_start_s, "trim_end_s": self.trim_end_s,
+            "fade_in_ticks": _ticks(self.fade_in_s), "fade_out_ticks": _ticks(self.fade_out_s),
+            "offset_ticks": _ticks(self.offset_s), "trim_start_ticks": _ticks(self.trim_start_s),
+            "trim_end_ticks": _ticks(self.trim_end_s) if self.trim_end_s is not None else None,
             "loop": self.loop, "enabled": self.enabled,
         }, self.extra)
 
@@ -146,17 +165,17 @@ class MusicTrack:
     def from_dict(cls, data: Any) -> Optional["MusicTrack"]:
         if not isinstance(data, dict) or not _opt_str(data.get("path")):
             return None
-        start = _num(data.get("trim_start_s"), 0.0, 0.0, 86400.0)
-        end = _opt_num(data.get("trim_end_s"), 0.0, 86400.0)
+        start = _num(_read_time(data, "trim_start_ticks", "trim_start_s", 0.0), 0.0, 0.0, 86400.0)
+        end = _opt_num(_read_time(data, "trim_end_ticks", "trim_end_s", None), 0.0, 86400.0)
         if end is not None and end <= start:
             end = None
         return cls(
             path=data["path"],
             id=_opt_str(data.get("id")) or uuid.uuid4().hex[:8],
             volume_percent=int(_num(data.get("volume_percent"), 15, 0, 200)),
-            fade_in_s=_num(data.get("fade_in_s"), 2.0, 0.0, 600.0),
-            fade_out_s=_num(data.get("fade_out_s"), 3.0, 0.0, 600.0),
-            offset_s=_num(data.get("offset_s"), 0.0, 0.0, 86400.0),
+            fade_in_s=_num(_read_time(data, "fade_in_ticks", "fade_in_s", 2.0), 2.0, 0.0, 600.0),
+            fade_out_s=_num(_read_time(data, "fade_out_ticks", "fade_out_s", 3.0), 3.0, 0.0, 600.0),
+            offset_s=_num(_read_time(data, "offset_ticks", "offset_s", 0.0), 0.0, 0.0, 86400.0),
             trim_start_s=start, trim_end_s=end,
             loop=bool(data.get("loop", True)), enabled=bool(data.get("enabled", True)),
             extra=_split_extra(data, _MUSIC_TRACK_KEYS),
@@ -225,6 +244,7 @@ class SceneVideo:
 
     def to_dict(self) -> Dict[str, Any]:
         return _with_extra({"media_path": self.media_path, "duration_s": self.duration_s,
+                "duration_ticks": _ticks(self.duration_s) if self.duration_s is not None else None,
                 "motion": self.motion, "fit": self.fit}, self.extra)
 
     @classmethod
@@ -234,7 +254,7 @@ class SceneVideo:
         motion, fit = data.get("motion"), data.get("fit")
         return cls(
             media_path=_opt_str(data.get("media_path")),
-            duration_s=_opt_num(data.get("duration_s"), 0.5, 3600.0),
+            duration_s=_opt_num(_read_time(data, "duration_ticks", "duration_s", None), 0.5, 3600.0),
             motion=motion if motion in MOTIONS else None,
             fit=fit if fit in FITS else None,
             extra=_split_extra(data, _SCENE_VIDEO_KEYS),
@@ -282,7 +302,9 @@ class VideoSettings:
         return _with_extra({
             "aspect": self.aspect, "resolution": self.resolution, "fps": self.fps,
             "transition": self.transition, "transition_s": self.transition_s,
-            "default_duration_s": self.default_duration_s, "default_motion": self.default_motion,
+            "transition_ticks": _ticks(self.transition_s),
+            "default_duration_s": self.default_duration_s,
+            "default_duration_ticks": _ticks(self.default_duration_s), "default_motion": self.default_motion,
             "default_fit": self.default_fit,
             "scenes": scenes,
         }, self.extra)
@@ -307,8 +329,8 @@ class VideoSettings:
             resolution=_choice(data.get("resolution"), RESOLUTIONS, "720p"),
             fps=int(_num(data.get("fps"), 30, 12, 60)),
             transition=_choice(data.get("transition"), TRANSITIONS, "cut"),
-            transition_s=_num(data.get("transition_s"), 0.5, 0.1, 3.0),
-            default_duration_s=_num(data.get("default_duration_s"), 5.0, 0.5, 600.0),
+            transition_s=_num(_read_time(data, "transition_ticks", "transition_s", 0.5), 0.5, 0.1, 3.0),
+            default_duration_s=_num(_read_time(data, "default_duration_ticks", "default_duration_s", 5.0), 5.0, 0.5, 600.0),
             default_motion=_choice(data.get("default_motion"), MOTIONS, "zoom_in"),
             default_fit=_choice(data.get("default_fit"), FITS, "fill"),
             scenes=scenes,
@@ -391,8 +413,8 @@ class StudioState:
         return bool(stale)
 
 # Known keys are derived from the writers above to keep preservation in sync.
-_MUSIC_TRACK_KEYS = frozenset({"id", "path", "volume_percent", "fade_in_s", "fade_out_s", "offset_s", "trim_start_s", "trim_end_s", "loop", "enabled"})
+_MUSIC_TRACK_KEYS = frozenset({"id", "path", "volume_percent", "fade_in_s", "fade_out_s", "offset_s", "trim_start_s", "trim_end_s", "fade_in_ticks", "fade_out_ticks", "offset_ticks", "trim_start_ticks", "trim_end_ticks", "loop", "enabled"})
 _AUDIO_KEYS = frozenset({"narration_volume_percent", "limiter", "tracks"})
-_SCENE_VIDEO_KEYS = frozenset({"media_path", "duration_s", "motion", "fit"})
-_VIDEO_KEYS = frozenset({"aspect", "resolution", "fps", "transition", "transition_s", "default_duration_s", "default_motion", "default_fit", "scenes"})
+_SCENE_VIDEO_KEYS = frozenset({"media_path", "duration_s", "duration_ticks", "motion", "fit"})
+_VIDEO_KEYS = frozenset({"aspect", "resolution", "fps", "transition", "transition_s", "transition_ticks", "default_duration_s", "default_duration_ticks", "default_motion", "default_fit", "scenes"})
 _STUDIO_KEYS = frozenset({"version", "audio", "video"})

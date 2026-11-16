@@ -40,7 +40,7 @@ def test_unknown_studio_keys_survive_every_nested_level():
 
 
 def test_newer_studio_version_is_preserved_and_read_only():
-    raw = {"version": 2, "audio": {}, "video": {}, "future": {"x": 1}}
+    raw = {"version": 3, "audio": {}, "video": {}, "future": {"x": 1}}
     state = StudioState.from_dict(raw)
     assert state.read_only is True
     assert state.to_dict() == raw
@@ -111,7 +111,7 @@ def test_known_values_win_over_extra_values():
     state.extra = {"version": 99, "audio": "not-audio", "custom": True}
     state.video.extra = {"fps": 1}
     result = state.to_dict()
-    assert result["version"] == 1
+    assert result["version"] == 2
     assert isinstance(result["audio"], dict)
     assert result["video"]["fps"] == 30
     assert result["custom"] is True
@@ -119,7 +119,7 @@ def test_known_values_win_over_extra_values():
 
 
 def test_studio_context_never_commits_over_newer_format_settings():
-    original = {"version": 2, "audio": {}, "video": {}, "future": {"keep": True}}
+    original = {"version": 3, "audio": {}, "video": {}, "future": {"keep": True}}
     project = Project(settings={"studio": copy.deepcopy(original)})
     script = SimpleNamespace(
         get_project=lambda: project,

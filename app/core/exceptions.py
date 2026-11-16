@@ -23,6 +23,10 @@ class ProjectBackupError(ProjectError):
     the save was not performed. The original file is untouched."""
 
 
+class SnapshotSequenceExhausted(ProjectError):
+    """The 12-digit snapshot sequence space has been exhausted."""
+
+
 class TTSProviderError(ApplicationError):
     """Raised when a TTS provider fails or is misconfigured."""
 

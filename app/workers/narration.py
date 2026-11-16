@@ -6,9 +6,11 @@ import shutil
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from decimal import Decimal
 from typing import Callable, Dict, List, Optional, Sequence
 
-from app.audio.assembler import WavBuilder, wav_duration_seconds
+from app.audio.assembler import WavBuilder, wav_duration_seconds, wav_duration_ticks
+from app.core.timebase import seconds_to_ticks, ticks_to_seconds
 from app.audio.ffmpeg_tool import FFmpegTool
 from app.cache.manager import NarrationCache
 from app.core import constants
@@ -73,6 +75,8 @@ class SceneTiming:
     title: str
     start_seconds: float
     end_seconds: float
+    start_ticks: int = 0
+    end_ticks: int = 0
 
 
 @dataclass(frozen=True)
@@ -84,6 +88,7 @@ class SceneAudio:
     wav_path: Path
     duration_s: float
     pause_ms: int
+    duration_ticks: int = 0
 
 
 @dataclass
@@ -97,6 +102,7 @@ class NarrationResult:
     synthesized_chunks: int
     warnings: List[str] = field(default_factory=list)
     scene_audio: List[SceneAudio] = field(default_factory=list)
+    duration_ticks: int = 0
 
 
 def build_scene_request(
@@ -284,11 +290,17 @@ class NarrationJob:
                 timings: List[SceneTiming] = []
                 with WavBuilder(wav_path, self._sample_rate) as builder:
                     for i, (request, scene_wav) in enumerate(zip(scene_requests, scene_wavs)):
-                        start = builder.duration_seconds
+                        start_ticks = builder.duration_ticks
                         builder.add_wav(scene_wav)
-                        timings.append(SceneTiming(request.scene_id, request.title, start, builder.duration_seconds))
+                        end_ticks = builder.duration_ticks
+                        timings.append(SceneTiming(
+                            request.scene_id, request.title,
+                            float(ticks_to_seconds(start_ticks)), float(ticks_to_seconds(end_ticks)),
+                            start_ticks, end_ticks,
+                        ))
                         if i < len(scene_wavs) - 1:
-                            builder.add_silence(request.scene_pause_ms)
+                            pause_ticks = seconds_to_ticks(Decimal(request.scene_pause_ms) / Decimal(1000))
+                            builder.add_silence_ticks(pause_ticks)
 
                 report("Encoding MP3...")
                 part_mp3 = mp3_path.with_name(mp3_path.name + ".part")
@@ -302,16 +314,18 @@ class NarrationJob:
                 return NarrationResult(
                     mp3_path=mp3_path,
                     wav_path=wav_path,
-                    duration_seconds=wav_duration_seconds(wav_path),
+                    duration_seconds=float(ticks_to_seconds(wav_duration_ticks(wav_path))),
                     scene_timings=timings,
                     chunk_count=total_chunks,
                     cached_chunks=cached_count,
                     synthesized_chunks=len(pending),
                     warnings=warnings,
                     scene_audio=[
-                        SceneAudio(req.scene_id, wav, wav_duration_seconds(wav), req.scene_pause_ms)
+                        SceneAudio(req.scene_id, wav, wav_duration_seconds(wav), req.scene_pause_ms,
+                                  wav_duration_ticks(wav))
                         for req, wav in zip(scene_requests, scene_wavs)
                     ],
+                    duration_ticks=wav_duration_ticks(wav_path),
                 )
 
             try:
@@ -441,7 +455,7 @@ class NarrationJob:
                 for item in plan.items:
                     cancel.raise_if_cancelled()
                     if isinstance(item, Silence):
-                        builder.add_silence(item.ms)
+                        builder.add_silence_ticks(seconds_to_ticks(Decimal(item.ms) / Decimal(1000)))
                         continue
                     source = self._cache.chunk_path(keys_by_chunk[item.id])
                     if not source.is_file():

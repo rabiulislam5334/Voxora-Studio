@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Iterable
 
-from app.core.constants import NARRATION_PIPELINE_VERSION
+from app.core.constants import NARRATION_PIPELINE_VERSION, NARRATION_SCENE_PIPELINE_VERSION
 from app.core.logger import get_logger
 
 logger = get_logger("cache.narration")
@@ -72,7 +72,7 @@ class NarrationCache:
 
     @staticmethod
     def scene_key(plan_signature: Iterable) -> str:
-        payload = [NARRATION_PIPELINE_VERSION, list(plan_signature)]
+        payload = [NARRATION_SCENE_PIPELINE_VERSION, list(plan_signature)]
         raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 

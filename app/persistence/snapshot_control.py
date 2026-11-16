@@ -10,8 +10,8 @@ A payload is captured (serialized) and only later enqueued; a Save can happen
 in between. A sequence number allocated at enqueue time says nothing about
 which project *state* the payload holds. Every payload therefore carries the
 project **revision** read in the same call that serialized it, and freshness is
-decided by revision: a job is stale if ``job.revision <= barrier`` where the
-barrier is the revision a successful Save wrote to disk.
+decided by revision: a job is stale if its revision is at or below the
+successful-Save barrier or the newest revision already committed.
 
 Locks and invariants
 --------------------
@@ -40,7 +40,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+from app.core.exceptions import SnapshotSequenceExhausted
 from app.persistence.stamps import FileStamp
+
+MAX_SNAPSHOT_SEQUENCE = 999_999_999_999
 
 
 class SnapshotState(enum.Enum):
@@ -145,7 +148,8 @@ class SnapshotControl:
         self._pending: Optional[SaveRecord] = None
         self._state = SnapshotState.NORMAL
         self._prev_state = SnapshotState.NORMAL
-        self._last_committed = 0
+        self._last_committed = 0  # highest committed sequence
+        self._last_committed_revision = -1
 
     # ----------------------------------------------------------- read access
 
@@ -213,11 +217,40 @@ class SnapshotControl:
                 return EnqueueOutcome.DEFERRED, None
             if ticket.epoch != self._epoch:
                 return EnqueueOutcome.STALE, None
+            if self._counter > MAX_SNAPSHOT_SEQUENCE:
+                raise SnapshotSequenceExhausted(
+                    "Snapshot sequence limit reached (12 digits). No new snapshot was created."
+                )
             job = Job(epoch=ticket.epoch, seq=self._counter, revision=revision, payload=payload)
             self._counter += 1
             if sink is not None:
                 sink(job)
             return EnqueueOutcome.QUEUED, job
+
+    def restore_sequence_state(
+        self, *, highest_valid: int = 0, highest_seen: int = 0, restored_seq: int = 0
+    ) -> int:
+        """Restore the next sequence floor from an on-disk scan.
+
+        Corrupt/orphan identifiers still count as seen so their numbers are
+        never reused. Safe both during startup and while replacement already
+        owns write_mutex.
+        """
+        values = (highest_valid, highest_seen, restored_seq)
+        if any(type(value) is not int or value < 0 for value in values):
+            raise ValueError("Snapshot sequence values must be non-negative integers.")
+
+        def apply() -> int:
+            with self._alloc:
+                maximum = max(values)
+                self._counter = max(self._counter, maximum + 1)
+                self._last_committed = max(self._last_committed, highest_valid)
+                return self._counter
+
+        if self._write.owned():
+            return apply()
+        with self._write:
+            return apply()
 
     # ---------------------------------------------------------------- commit
 
@@ -227,11 +260,11 @@ class SnapshotControl:
         with self._alloc:
             if job.epoch != self._epoch:
                 return CommitDecision.DROP_EPOCH
-            pending = self._pending.revision if self._current_pending() else -1
-            if job.revision <= max(self._barrier, pending):
-                return CommitDecision.DROP_REVISION
             if job.seq <= self._last_committed:
                 return CommitDecision.DROP_SEQUENCE
+            pending = self._pending.revision if self._current_pending() else -1
+            if job.revision <= max(self._barrier, pending, self._last_committed_revision):
+                return CommitDecision.DROP_REVISION
             return CommitDecision.COMMIT
 
     def note_committed(self, job: Job) -> None:
@@ -240,28 +273,41 @@ class SnapshotControl:
         with self._alloc:
             if job.seq > self._last_committed:
                 self._last_committed = job.seq
+            if job.revision > self._last_committed_revision:
+                self._last_committed_revision = job.revision
 
     # ------------------------------------------------------------------ save
 
     def on_save_success(self, record: SaveRecord) -> SealOutcome:
-        """Called after a *verified* successful Save (UI thread). Never holds a
-        lock while waiting longer than ``seal_timeout_s``."""
-        if self.acquire_write(self._seal_timeout):
-            try:
-                return self._seal_locked(record)
-            finally:
-                self.release_write()
+        """Record a verified Save before waiting for the commit mutex.
+
+        Publishing the pending record first closes the hand-off race: a worker
+        that acquires write_mutex immediately after another worker releases it
+        must already see this Save's revision in decide_commit().
+        """
         with self._alloc:
             if record.epoch != self._epoch:
                 return SealOutcome.DISCARDED
-            if self._pending is None or record.revision > self._pending.revision:
-                self._pending = record  # replaced as one object
-        if self.acquire_write(0):  # the worker may have just finished
+            if self._pending is None or self._pending.epoch != self._epoch or record.revision > self._pending.revision:
+                self._pending = record  # revision, path and stamp move together
+
+        acquired = self.acquire_write(self._seal_timeout)
+        if not acquired:
+            # The worker may have released the mutex just as the timed wait
+            # expired. Since the pending record is already visible, retry once
+            # without waiting to seal it here if the mutex is now free.
+            acquired = self.acquire_write(0)
+        if acquired:
             try:
                 self.apply_pending()
             finally:
                 self.release_write()
+
+        # A worker may have applied the pending record while we were waiting,
+        # or may apply it later at the end of its current commit.
         with self._alloc:
+            if record.epoch != self._epoch:
+                return SealOutcome.DISCARDED
             sealed = self._barrier >= record.revision
         return SealOutcome.SEALED if sealed else SealOutcome.DEFERRED
 

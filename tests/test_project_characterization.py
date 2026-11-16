@@ -62,9 +62,8 @@ def test_fixture_files_exist_and_are_schema_v1():
         assert _load_raw(name).get("schema_version", 1) == 1, f"{name} must stay a v1 file"
 
 
-def test_current_schema_version_is_still_one():
-    # Step 3 bumps this to 2 on purpose; update this test in that commit.
-    assert CURRENT_SCHEMA_VERSION == 1
+def test_current_schema_version_is_four_after_timebase_stage():
+    assert CURRENT_SCHEMA_VERSION == 4
 
 
 # ----------------------------------------------------------------------
@@ -73,9 +72,19 @@ def test_current_schema_version_is_still_one():
 
 
 @pytest.mark.parametrize("name", GOLDEN)
-def test_golden_fixture_roundtrips_exactly_through_the_serializer(name):
+def test_golden_v1_fixture_migrates_additively_without_mutating_source(name):
     raw = _load_raw(name)
-    assert project_to_dict(project_from_dict(raw)) == raw
+    original = json.loads(json.dumps(raw))
+    migrated = project_to_dict(project_from_dict(raw))
+    assert raw == original
+    assert migrated["schema_version"] == 4
+    assert migrated["subtitles"] == {"format_version": 1, "tracks": []}
+    assert migrated["timebase"] == {"format_version": 1, "ticks_per_second": 141120000}
+    assert migrated["profile"] == migrated["assets"] == migrated["director"] == {}
+    assert migrated["migration"] == {"from_schema_version": 1}
+    for key, value in raw.items():
+        if key != "schema_version":
+            assert migrated[key] == value
 
 
 @pytest.mark.parametrize("name", GOLDEN)
@@ -104,7 +113,7 @@ def test_full_fixture_content_is_loaded_correctly():
     assert project.id == "full00000001"
     assert project.name == "Deep Ocean ও গভীর সাগর"
     assert project.language == "bn"
-    assert project.schema_version == 1
+    assert project.schema_version == 4
     assert [s.title for s in project.scenes] == ["Intro", "বাংলা অংশ", "Mixed ভাষা", "Outro"]
     assert [s.order for s in project.scenes] == [0, 1, 2, 3]
 
@@ -141,7 +150,8 @@ def test_full_fixture_studio_settings_are_preserved_verbatim():
 def test_legacy_phase3_file_without_schema_version_or_settings_opens_with_defaults(tmp_path):
     manager, project = _open(FIXTURES / "v1_phase3_legacy.voxora")
 
-    assert project.schema_version == 1
+    assert project.schema_version == 4
+    assert project.migration == {"from_schema_version": 1}
     assert project.settings == {}
     assert [s.title for s in project.scenes] == ["One", "Two"]
     first, second = project.scenes
@@ -154,9 +164,11 @@ def test_legacy_phase3_file_without_schema_version_or_settings_opens_with_defaul
         assert scene.sentence_pause_ms is None and scene.paragraph_pause_ms is None
         assert scene.scene_pause_ms is None
 
-    # saving writes the modern explicit shape, still schema 1
+    # saving writes the migrated v3 shape; the source remains untouched
     saved = json.loads(manager.save(tmp_path / "legacy_resaved.voxora").read_text(encoding="utf-8"))
-    assert saved["schema_version"] == 1
+    assert saved["schema_version"] == 4
+    assert saved["subtitles"] == {"format_version": 1, "tracks": []}
+    assert saved["timebase"] == {"format_version": 1, "ticks_per_second": 141120000}
     assert saved["settings"] == {}
     assert saved["scenes"][0]["pitch_hz"] is None
 
@@ -168,7 +180,9 @@ def test_unknown_keys_are_preserved_on_load_and_save():
     assert raw["future_top_level_key"] == {"hello": "world"}
     assert raw["scenes"][0]["future_scene_key"] == 42
 
-    assert project_to_dict(project_from_dict(raw)) == raw
+    migrated = project_to_dict(project_from_dict(raw))
+    assert migrated["future_top_level_key"] == raw["future_top_level_key"]
+    assert migrated["scenes"][0]["future_scene_key"] == raw["scenes"][0]["future_scene_key"]
 
 
 # ----------------------------------------------------------------------
@@ -276,13 +290,11 @@ def test_defect_invalid_utf8_file_should_raise_project_error(tmp_path):
         ProjectManager().open(path)
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT: mixed-type scene 'order' values raise an uncaught TypeError (serializer.py sort)")
 def test_defect_mixed_type_scene_order_should_raise_project_error():
     with pytest.raises(ProjectError):
         project_from_dict({"scenes": [{"id": "a", "order": "1"}, {"id": "b", "order": 0}]})
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT: JSON null for a scene's text loads as None instead of an empty string")
 def test_defect_null_scene_text_should_load_as_empty_string():
     project = project_from_dict({"scenes": [{"id": "a", "text": None}]})
     assert project.scenes[0].text == ""
