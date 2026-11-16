@@ -12,7 +12,11 @@ the repository's disk-stamp checks remain necessary.
 from __future__ import annotations
 
 import errno
+import getpass
+import hashlib
+import math
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import BinaryIO
@@ -33,11 +37,13 @@ class ProjectFileLock:
     def __init__(self, target: Path, *, timeout_s: float = _DEFAULT_TIMEOUT_S) -> None:
         if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)):
             raise TypeError("timeout_s must be a finite positive number")
-        if timeout_s <= 0:
-            raise ValueError("timeout_s must be greater than zero")
+        if not math.isfinite(float(timeout_s)) or timeout_s <= 0:
+            raise ValueError("timeout_s must be a finite number greater than zero")
         self.target = Path(target)
-        canonical = Path(os.path.realpath(os.path.abspath(os.fspath(self.target))))
-        self.lock_path = canonical.with_name(f".{canonical.name}.lock")
+        canonical = os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(self.target))))
+        key = hashlib.sha256(os.fsencode(canonical)).hexdigest()
+        lock_root = Path(tempfile.gettempdir()) / f"voxora-studio-{getpass.getuser()}" / "project-locks"
+        self.lock_path = lock_root / f"{key}.lock"
         self.timeout_s = float(timeout_s)
         self._handle: BinaryIO | None = None
         self._windows = os.name == "nt"
