@@ -78,6 +78,7 @@ def test_adapter_passes_progress_and_cancel_through_unchanged(tmp_path):
         SegmentSpec("blank", "unexpected.png", 1.0, 320, 180, 15),
         SegmentSpec("blank", None, 0.0, 320, 180, 15),
         SegmentSpec("blank", None, float("inf"), 320, 180, 15),
+        SegmentSpec("blank", None, 10**1000, 320, 180, 15),
         SegmentSpec("blank", None, 1.0, 0, 180, 15),
         SegmentSpec("blank", None, 1.0, 320, 180, 0),
         SegmentSpec("image", "scene.png", 1.0, 320, 180, 15, "rotate", "fill"),
