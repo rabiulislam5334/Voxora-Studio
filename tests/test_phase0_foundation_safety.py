@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import copy
+from types import SimpleNamespace
 
+from app.ui.studio_context import StudioContext
 from app.models.project import Project
 from app.models.scene import Scene
 from app.studio.models import StudioState
@@ -113,3 +115,21 @@ def test_known_values_win_over_extra_values():
     assert isinstance(result["audio"], dict)
     assert result["video"]["fps"] == 30
     assert result["custom"] is True
+
+
+
+def test_studio_context_never_commits_over_newer_format_settings():
+    original = {"version": 2, "audio": {}, "video": {}, "future": {"keep": True}}
+    project = Project(settings={"studio": copy.deepcopy(original)})
+    script = SimpleNamespace(
+        get_project=lambda: project,
+        get_scenes=lambda: project.scenes,
+        mark_project_dirty=lambda: (_ for _ in ()).throw(AssertionError("must not mark dirty")),
+    )
+    messages = []
+    context = StudioContext(None, None, {}, None, None, script, None, messages.append)
+    context.load()
+    context.state.video.fps = 24
+    context.commit()
+    assert project.settings["studio"] == original
+    assert messages and "read-only" in messages[-1]
