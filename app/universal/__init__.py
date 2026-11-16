@@ -16,17 +16,34 @@ from app.universal.models import (
     ScenePlan,
     UniversalState,
 )
+from app.universal.requests import EngineRenderRequest, RawEngineOutput
+from app.universal.runtime import (
+    EngineAdapter,
+    EngineBindingError,
+    EngineInitializationError,
+    EngineRenderError,
+    EngineRuntimeError,
+    EngineRuntimeRegistry,
+)
 
 __all__ = [
     "AssetRef",
+    "EngineAdapter",
+    "EngineBindingError",
     "EngineCapabilities",
     "EngineChoice",
     "EngineCompatibilityError",
     "EngineDescriptor",
+    "EngineInitializationError",
     "EngineRegistry",
     "EngineRegistryError",
+    "EngineRenderError",
+    "EngineRenderRequest",
+    "EngineRuntimeError",
+    "EngineRuntimeRegistry",
     "EngineUnavailableError",
     "NormalizedSegment",
+    "RawEngineOutput",
     "ScenePlan",
     "SegmentNormalizer",
     "SegmentOutputSpec",
