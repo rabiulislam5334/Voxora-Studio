@@ -1,9 +1,9 @@
-from pathlib import Path
-
 import pytest
 
 from app.universal.engines import (
     EngineCapabilities,
+    EngineCompatibilityError,
+    EngineRegistry,
     EngineDescriptor,
     EngineUnavailableError,
     UnknownEngineError,
@@ -155,10 +155,23 @@ def test_factory_failure_has_engine_context():
 
 
 def test_metadata_without_runtime_binding_is_explicit_error():
-    from app.universal.engines import EngineRegistry
     registry = EngineRuntimeRegistry(EngineRegistry([descriptor()]))
     with pytest.raises(EngineBindingError, match="no runtime binding"):
         registry.resolve("fake")
+
+
+def test_runtime_binding_reuses_matching_pre_registered_metadata(tmp_path):
+    engine = descriptor()
+    raw = tmp_path / "raw.webm"
+    raw.write_bytes(b"raw")
+    adapter = FakeAdapter(engine, RawEngineOutput(raw))
+    metadata = EngineRegistry([engine])
+    registry = EngineRuntimeRegistry(metadata)
+
+    registry.register(engine, adapter)
+
+    assert registry.resolve("fake") is adapter
+    assert registry.list_engines() == (engine,)
 
 
 def test_unknown_and_unavailable_engines_never_fallback():
@@ -179,9 +192,8 @@ def test_incompatible_capabilities_are_rejected_before_adapter_creation():
     adapter = FakeAdapter(descriptor(), RawEngineOutput("unused.webm"))
     registry = EngineRuntimeRegistry()
     registry.register(adapter.descriptor, lambda: (created.append(True), adapter)[1])
-    with pytest.raises(Exception) as error:
+    with pytest.raises(EngineCompatibilityError, match="capabilities"):
         registry.resolve("fake", scene_kind="scientific_3d")
-    assert "capabilities" in str(error.value)
     assert created == []
 
 
