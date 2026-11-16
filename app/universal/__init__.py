@@ -10,6 +10,7 @@ from app.universal.engines import (
     UnknownEngineError,
 )
 from app.universal.normalizer import NormalizedSegment, SegmentNormalizer, SegmentOutputSpec
+from app.universal.plan_resolver import EnginePlanResolution, EnginePlanResolver, EnginePlanStatus
 from app.universal.models import (
     AssetRef,
     EngineChoice,
@@ -39,6 +40,9 @@ __all__ = [
     "EngineRegistryError",
     "EngineRenderError",
     "EngineRenderRequest",
+    "EnginePlanResolution",
+    "EnginePlanResolver",
+    "EnginePlanStatus",
     "EngineRuntimeError",
     "EngineRuntimeRegistry",
     "EngineUnavailableError",
