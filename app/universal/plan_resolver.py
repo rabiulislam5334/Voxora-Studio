@@ -15,7 +15,7 @@ from app.universal.engines import (
     EngineUnavailableError,
     UnknownEngineError,
 )
-from app.universal.models import ScenePlan
+from app.universal.models import PLAN_STATUSES, ScenePlan
 
 
 class EnginePlanStatus(str, Enum):
@@ -215,14 +215,21 @@ class EnginePlanResolver:
             diagnostics.append("style_tags must contain only non-empty strings")
         if not isinstance(plan.requirements, dict):
             diagnostics.append("requirements must be an object")
+        elif any(not isinstance(key, str) for key in plan.requirements):
+            diagnostics.append("requirements keys must be strings")
         if not isinstance(plan.asset_refs, (list, tuple)) or any(
             not hasattr(asset, "kind") or not isinstance(asset.kind, str) or not asset.kind.strip()
             for asset in plan.asset_refs
         ):
             diagnostics.append("asset_refs must contain valid asset references")
-        if not isinstance(plan.plan_status, str) or not plan.plan_status:
-            diagnostics.append("plan_status must be a non-empty string")
+        if plan.plan_status not in PLAN_STATUSES:
+            diagnostics.append("plan_status is not a supported status")
         if plan.engine_choice is not None:
+            fallback_chain = getattr(plan.engine_choice, "fallback_chain", None)
+            if not isinstance(fallback_chain, (list, tuple)) or any(
+                not isinstance(item, str) or not item.strip() for item in fallback_chain
+            ):
+                diagnostics.append("engine_choice.fallback_chain must contain non-empty engine IDs")
             engine_id = getattr(plan.engine_choice, "engine_id", None)
             if engine_id is not None and (
                 not isinstance(engine_id, str) or not engine_id.strip()
