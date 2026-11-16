@@ -146,3 +146,16 @@ def test_engine_descriptor_validates_identity_and_availability(kwargs):
     values.update(kwargs)
     with pytest.raises(ValueError):
         EngineDescriptor(**values)
+
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"style_tags": "documentary"},
+    {"asset_kinds": "image"},
+    {"scene_kind": ""},
+    {"output_format": ""},
+])
+def test_compatibility_queries_reject_malformed_requirements(kwargs):
+    registry = EngineRegistry([make_engine()])
+    with pytest.raises(ValueError):
+        registry.find_compatible(**kwargs)
