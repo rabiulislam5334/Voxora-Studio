@@ -226,15 +226,17 @@ class FFmpegTool:
         finally:
             # A progress callback can fail too; never leave the child process or
             # reader thread running when any path exits this method.
-            if proc.poll() is None:
-                try:
-                    proc.kill()
-                except OSError:
-                    pass
-            proc.wait()
-            reader_thread.join()
-            if proc.stdout is not None and not proc.stdout.closed:
-                proc.stdout.close()
+            try:
+                if proc.poll() is None:
+                    try:
+                        proc.kill()
+                    except OSError:
+                        pass
+                proc.wait()
+            finally:
+                reader_thread.join()
+                if proc.stdout is not None and not proc.stdout.closed:
+                    proc.stdout.close()
 
         if on_progress:
             on_progress(1.0)
