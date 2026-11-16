@@ -37,6 +37,13 @@ from app.workers.narration import NarrationJob, NarrationResult, SceneRequest
 logger = get_logger("workers.production")
 
 
+def _slot_sample_bounds(start_ticks: int, slot_ticks: int, sample_rate: int) -> tuple[int, int]:
+    """Return a scene's half-open audio sample range without video-frame rounding."""
+    start = ticks_to_samples(start_ticks, sample_rate, rounding="half_up")
+    end = ticks_to_samples(start_ticks + slot_ticks, sample_rate, rounding="half_up")
+    return start, end
+
+
 @dataclass(frozen=True)
 class SceneInfo:
     """A project scene, in script order (video uses ALL scenes; narration only
@@ -172,29 +179,34 @@ class ProductionJob:
                         f"Scene '{titles.get(slot.scene_id, slot.scene_id)}': narration is longer than the "
                         f"configured duration, so the scene was extended to {slot.slot_s:.1f}s."
                     )
+            # Video is frame-aligned, but narration placement must stay on the
+            # audio sample grid. Rounding each scene boundary to frames can make
+            # one slot shorter and the next longer (e.g. two 0.5s scenes at 15 FPS).
+            fps = video.fps
+            total_frames = max(1, ticks_to_frames(timeline.total_ticks, fps, rounding="half_up"))
+            video_duration_ticks = frames_to_ticks(total_frames, fps, rounding="half_up")
+            total_s = float(ticks_to_seconds(video_duration_ticks))
+            target_total_samples = ticks_to_samples(
+                video_duration_ticks, constants.NARRATION_SAMPLE_RATE, rounding="half_up"
+            )
             narration_track = work / "narration_aligned.wav"
             with WavBuilder(narration_track, constants.NARRATION_SAMPLE_RATE) as builder:
                 for slot in timeline.slots:
                     cancel.raise_if_cancelled()
                     audio = audio_by_id.get(slot.scene_id)
-                    start_frame = ticks_to_frames(slot.start_ticks, video.fps, rounding="half_up")
-                    end_frame = ticks_to_frames(slot.start_ticks + slot.slot_ticks, video.fps, rounding="half_up")
-                    start_ticks = frames_to_ticks(start_frame, video.fps, rounding="half_up")
-                    end_ticks = frames_to_ticks(end_frame, video.fps, rounding="half_up")
-                    start_sample = ticks_to_samples(start_ticks, constants.NARRATION_SAMPLE_RATE, rounding="half_up")
-                    end_sample = ticks_to_samples(end_ticks, constants.NARRATION_SAMPLE_RATE, rounding="half_up")
+                    start_sample, end_sample = _slot_sample_bounds(
+                        slot.start_ticks, slot.slot_ticks, constants.NARRATION_SAMPLE_RATE
+                    )
                     target_samples = max(0, end_sample - start_sample)
                     before_samples = builder.frames
                     if audio:
                         builder.add_wav(audio.wav_path)
                     used_samples = builder.frames - before_samples
                     builder.add_silence_samples(max(0, target_samples - used_samples))
-            # Quantize the complete timeline once to the output frame grid.
-            # All downstream video and mux durations derive from this frame count.
-            fps = video.fps
-            total_frames = max(1, ticks_to_frames(timeline.total_ticks, fps, rounding="half_up"))
-            video_duration_ticks = frames_to_ticks(total_frames, fps, rounding="half_up")
-            total_s = float(ticks_to_seconds(video_duration_ticks))
+                # The final video may be slightly longer than the exact project
+                # timeline after frame quantization. Keep the audio stream alive
+                # through the final frame rather than letting -shortest truncate it.
+                builder.add_silence_samples(max(0, target_total_samples - builder.frames))
         else:
             narration_track = narration.wav_path
             total_s = narration.duration_seconds
