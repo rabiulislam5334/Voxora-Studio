@@ -18,6 +18,10 @@ class ProjectConflictError(ProjectError):
     after this session last read or wrote it. Nothing was overwritten."""
 
 
+class ProjectLockError(ProjectError):
+    """The project file could not be locked for a safe save."""
+
+
 class ProjectBackupError(ProjectError):
     """A rolling backup of the existing project file could not be created, so
     the save was not performed. The original file is untouched."""
