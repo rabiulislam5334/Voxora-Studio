@@ -279,3 +279,8 @@ def test_ffprobe_inspection_does_not_start_after_cancellation(monkeypatch, real_
             ["ffprobe", "-show_frames"], path=tmp_path / "clip.mp4",
             operation="inspect frame timestamps in", timeout=60.0, cancel=token,
         )
+
+
+def test_parse_ffprobe_packet_count():
+    parsed = parse_ffprobe_json('{"streams":[{"index":0,"codec_type":"video","nb_read_packets":"45"}],"format":{"duration":"3.0"}}')
+    assert parsed.streams[0].packet_count == 45

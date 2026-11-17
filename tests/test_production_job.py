@@ -246,7 +246,7 @@ def test_final_video_rejects_invalid_per_stream_duration(
     video_duration = stream_duration if stream_type == "video" else 2.6
     audio_duration = stream_duration if stream_type == "audio" else 2.6
 
-    def structured_probe(path, *, count_frames=False, cancel=None):
+    def structured_probe(path, *, count_frames=False, count_packets=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -294,7 +294,7 @@ def test_final_video_rejects_unaligned_or_unknown_stream_start_times(
     st = studio_with(media)
     out = tmp_path / "bad-stream-start.mp4"
 
-    def structured_probe(path, *, count_frames=False, cancel=None):
+    def structured_probe(path, *, count_frames=False, count_packets=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -374,7 +374,7 @@ def test_final_video_rejects_invalid_decoded_frame_count(
     st = studio_with(media)
     out = tmp_path / "bad-frame-count.mp4"
 
-    def structured_probe(path, *, count_frames=False, cancel=None):
+    def structured_probe(path, *, count_frames=False, count_packets=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -468,6 +468,20 @@ def test_music_change_reuses_narration_and_video_but_media_change_rerenders_one_
         run(job, st, ProductionOptions(render_video=True, video_output=tmp_path / "e.mp4"), name="e")
     assert not (tmp_path / "e.mp4").exists()
 
+
+
+def test_corrupt_nonempty_cached_segment_is_invalidated_and_rerendered(env, media, tmp_path):
+    _, job, cache = env()
+    st = studio_with(media)
+    first = run(job, st, ProductionOptions(render_video=True, video_output=tmp_path / "cache-first.mp4"))
+    assert first.segments_rendered == 3
+    cached = sorted(cache.segments_dir.glob("*.mp4"))
+    assert len(cached) == 3
+    cached[0].write_bytes(b"not a valid mp4, but non-empty")
+    second = run(job, st, ProductionOptions(render_video=True, video_output=tmp_path / "cache-repair.mp4"))
+    assert second.segments_rendered == 1
+    assert second.segments_cached == 2
+    assert (tmp_path / "cache-repair.mp4").is_file()
 
 def test_narration_longer_than_configured_duration_extends_scene(env, media, tmp_path):
     tts, job, _ = env()

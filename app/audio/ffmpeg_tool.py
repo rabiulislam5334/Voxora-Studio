@@ -156,7 +156,7 @@ class FFmpegTool:
         return parse_probe_output(stderr.decode("utf-8", errors="replace"))
 
     def probe_structured(
-        self, path: Path, *, count_frames: bool = False,
+        self, path: Path, *, count_frames: bool = False, count_packets: bool = False,
         cancel: Optional[CancelToken] = None,
     ) -> StructuredMediaInfo:
         """Inspect container and stream metadata with cancellable FFprobe execution.
@@ -171,6 +171,8 @@ class FFmpegTool:
         args = [str(ffprobe), "-v", "error"]
         if count_frames:
             args.append("-count_frames")
+        if count_packets:
+            args.append("-count_packets")
         args.extend(["-show_format", "-show_streams", "-of", "json", str(path)])
         stdout, _ = self._run_probe_capture(
             args, path=path, operation="inspect with FFprobe",
