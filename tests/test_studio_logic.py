@@ -213,7 +213,9 @@ def test_segment_commit_and_prune(tmp_path):
         part.write_bytes(b"x" * 1000)
         cache.commit_segment(part, f"k{i}")
         os.utime(cache.segment_path(f"k{i}"), (time.time() + i, time.time() + i))
-    cache.prune(max_bytes=1500)
+    # Use a controlled clock so the synthetic future mtimes are outside the
+    # eviction grace window while still exercising oldest-first LRU ordering.
+    cache.prune(max_bytes=1500, now=time.time() + 1000)
     assert [p.name for p in cache.segments_dir.glob("*.mp4")] == ["k2.mp4"]
     empty = cache.part_path("z")
     empty.write_bytes(b"")

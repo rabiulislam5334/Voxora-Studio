@@ -18,6 +18,8 @@ def make_thumbnail(ffmpeg: FFmpegTool, cache: VideoCache, source: Path, width: i
     file's identity. Blocking; call from a worker thread."""
     dest = cache.image_path("thumb", source, width)
     if dest.is_file() and dest.stat().st_size > 0:
+        cache.touch_image(dest)
+        cache.prune_images()
         return dest
     exe = ffmpeg.require()
     part = dest.with_name(dest.name + ".part")
@@ -29,6 +31,7 @@ def make_thumbnail(ffmpeg: FFmpegTool, cache: VideoCache, source: Path, width: i
     except FFmpegError as exc:
         part.unlink(missing_ok=True)
         raise MediaError(f"Could not create a preview for '{Path(source).name}': {exc}") from exc
+    cache.prune_images()
     return dest
 
 
@@ -36,6 +39,8 @@ def make_waveform(ffmpeg: FFmpegTool, cache: VideoCache, source: Path, width: in
     """Waveform PNG for an audio file, drawn by FFmpeg and cached."""
     dest = cache.image_path("wave", source, width, height, color)
     if dest.is_file() and dest.stat().st_size > 0:
+        cache.touch_image(dest)
+        cache.prune_images()
         return dest
     exe = ffmpeg.require()
     part = dest.with_name(dest.name + ".part")
@@ -47,6 +52,7 @@ def make_waveform(ffmpeg: FFmpegTool, cache: VideoCache, source: Path, width: in
     except FFmpegError as exc:
         part.unlink(missing_ok=True)
         raise MediaError(f"Could not draw the waveform for '{Path(source).name}': {exc}") from exc
+    cache.prune_images()
     return dest
 
 

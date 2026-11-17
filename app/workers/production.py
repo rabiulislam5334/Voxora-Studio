@@ -405,6 +405,7 @@ class ProductionJob:
                 duration_s=segment_s, fps=video.fps, cancel=cancel,
             )
             if cache_valid:
+                self._cache.touch_segment(key)
                 reused += 1
                 report(1.0, f"{label}: reused cached video")
             else:
