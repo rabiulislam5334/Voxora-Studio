@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from app.audio.probe import (FrameTimestampInfo, MediaInfo, StructuredMediaInfo,\n                             parse_ffprobe_json, parse_frame_timestamp_output, parse_probe_output)
+from app.audio.probe import (FrameTimestampInfo, MediaInfo, StructuredMediaInfo,
+                             parse_ffprobe_json, parse_frame_timestamp_output, parse_probe_output)
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError
 from app.core.logger import get_logger
 from app.core.settings_store import SettingsStore
