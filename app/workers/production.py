@@ -146,6 +146,28 @@ class ProductionJob:
     # Blocking part (runs in a worker thread)
     # ------------------------------------------------------------------
 
+    def _cached_segment_is_valid(self, path: Path, *, width: int, height: int,
+                                  frame_count: int, duration_s: float, fps: int,
+                                  cancel: CancelToken) -> bool:
+        """Check cached MP4 structure and packet count without decoding every frame."""
+        try:
+            info = self._ffmpeg.probe_structured(path, count_packets=True, cancel=cancel)
+        except MediaError:
+            return False
+        video_streams = [stream for stream in info.streams if stream.codec_type == "video"]
+        if len(video_streams) != 1:
+            return False
+        stream = video_streams[0]
+        tolerance = (1.0 / fps) + 0.03
+        return (
+            stream.width == width and stream.height == height
+            and stream.packet_count == frame_count
+            and stream.duration_s is not None
+            and abs(stream.duration_s - duration_s) <= tolerance
+            and info.format_duration_s is not None
+            and abs(info.format_duration_s - duration_s) <= tolerance
+        )
+
     def _produce(self, narration, scenes, studio, options, work, start, cancel, emit) -> ProductionResult:
         warnings: List[str] = list(narration.warnings)
         audio_by_id = {a.scene_id: a for a in narration.scene_audio}
@@ -276,10 +298,17 @@ class ProductionJob:
             lo = seg_lo + (seg_hi - seg_lo) * done_time / total_seg_time
             hi = seg_lo + (seg_hi - seg_lo) * (done_time + segment_s) / total_seg_time
             report = stage("Video scenes", lo, hi)
-            if self._cache.has_segment(key):
+            cached_path = self._cache.segment_path(key)
+            cache_valid = self._cache.has_segment(key) and self._cached_segment_is_valid(
+                cached_path, width=width, height=height, frame_count=segment_frames,
+                duration_s=segment_s, fps=video.fps, cancel=cancel,
+            )
+            if cache_valid:
                 reused += 1
                 report(1.0, f"{label}: reused cached video")
             else:
+                # Never pass a non-empty but invalid cache entry to concat/xfade.
+                cached_path.unlink(missing_ok=True)
                 part = self._cache.part_path(key)
                 try:
                     self._ffmpeg_adapter.render_segment(
