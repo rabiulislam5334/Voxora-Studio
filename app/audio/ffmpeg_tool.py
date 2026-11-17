@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from app.audio.probe import (FrameTimestampInfo, MediaInfo, StructuredMediaInfo,
-                             parse_ffprobe_json, parse_frame_timestamp_output, parse_probe_output)
+                             parse_ffprobe_json, parse_frame_timestamp_json, parse_probe_output)
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError
 from app.core.logger import get_logger
 from app.core.settings_store import SettingsStore
@@ -199,7 +199,7 @@ class FFmpegTool:
         args = [
             str(ffprobe), "-v", "error", "-select_streams", "v:0",
             "-show_frames", "-show_entries", "frame=best_effort_timestamp_time",
-            "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+            "-of", "json", str(path),
         ]
         try:
             proc = subprocess.run(
@@ -214,7 +214,7 @@ class FFmpegTool:
             detail = stderr or f"FFprobe exited with code {proc.returncode}"
             raise MediaError(f"FFprobe could not inspect frame timestamps in '{path.name}': {detail}")
         output = (proc.stdout or b"").decode("utf-8", errors="replace")
-        return parse_frame_timestamp_output(output, expected_fps)
+        return parse_frame_timestamp_json(output, expected_fps)
 
     def _find_ffprobe(self) -> Path:
         """Find FFprobe beside the selected FFmpeg, then on PATH."""
