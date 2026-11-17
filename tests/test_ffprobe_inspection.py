@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from app.audio.probe import parse_ffprobe_json, parse_frame_timestamp_json, parse_frame_timestamp_output
-from app.core.exceptions import MediaError
+from app.core.exceptions import GenerationCancelled, MediaError
+from app.workers.cancel import CancelToken
 
 
 @pytest.fixture
@@ -218,3 +219,63 @@ def test_structured_probe_rejects_missing_media_before_ffprobe_lookup(real_ffmpe
     monkeypatch.setattr(real_ffmpeg, "_find_ffprobe", should_not_run)
     with pytest.raises(MediaError, match="File not found"):
         real_ffmpeg.probe_structured(tmp_path / "missing.mp4")
+
+
+
+def test_ffprobe_inspection_process_is_killed_when_cancelled(monkeypatch, real_ffmpeg, tmp_path):
+    token = CancelToken()
+    created = []
+
+    class FakeProcess:
+        returncode = None
+
+        def __init__(self):
+            self.killed = False
+            self.communicate_calls = 0
+
+        def communicate(self, timeout=None):
+            self.communicate_calls += 1
+            if self.communicate_calls == 1:
+                token.cancel()
+                raise subprocess.TimeoutExpired(cmd="ffprobe", timeout=timeout)
+            return b"", b""
+
+        def poll(self):
+            return -9 if self.killed else None
+
+        def kill(self):
+            self.killed = True
+            self.returncode = -9
+
+    def fake_popen(*args, **kwargs):
+        process = FakeProcess()
+        created.append(process)
+        return process
+
+    monkeypatch.setattr("app.audio.ffmpeg_tool.subprocess.Popen", fake_popen)
+
+    with pytest.raises(GenerationCancelled):
+        real_ffmpeg._run_probe_capture(
+            ["ffprobe", "-show_frames"], path=tmp_path / "clip.mp4",
+            operation="inspect frame timestamps in", timeout=60.0, cancel=token,
+        )
+
+    assert len(created) == 1
+    assert created[0].killed
+    assert created[0].communicate_calls == 2
+
+
+def test_ffprobe_inspection_does_not_start_after_cancellation(monkeypatch, real_ffmpeg, tmp_path):
+    token = CancelToken()
+    token.cancel()
+
+    def should_not_start(*args, **kwargs):
+        pytest.fail("FFprobe must not start after cancellation")
+
+    monkeypatch.setattr("app.audio.ffmpeg_tool.subprocess.Popen", should_not_start)
+
+    with pytest.raises(GenerationCancelled):
+        real_ffmpeg._run_probe_capture(
+            ["ffprobe", "-show_frames"], path=tmp_path / "clip.mp4",
+            operation="inspect frame timestamps in", timeout=60.0, cancel=token,
+        )
