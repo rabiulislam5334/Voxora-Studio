@@ -359,7 +359,16 @@ class ProductionJob:
 
             actual_duration = rendered_info.duration_s
             duration_tolerance = (1.0 / video.fps) + 0.03  # container tolerance: one frame plus AAC packet
-            frame_count_valid = (\n                decoded_frames == total_frames\n                and frame_timestamps.missing_timestamp_count == 0\n            )\n            timestamp_continuity_valid = (\n                frame_timestamps.frame_count > 0\n                and frame_timestamps.missing_timestamp_count == 0\n                and frame_timestamps.non_monotonic_count == 0\n                and frame_timestamps.cfr_interval_mismatch_count == 0\n            )
+            frame_count_valid = (
+                decoded_frames == total_frames
+                and frame_timestamps.missing_timestamp_count == 0
+            )
+            timestamp_continuity_valid = (
+                frame_timestamps.frame_count > 0
+                and frame_timestamps.missing_timestamp_count == 0
+                and frame_timestamps.non_monotonic_count == 0
+                and frame_timestamps.cfr_interval_mismatch_count == 0
+            )
             video_stream_duration = video_stream.duration_s if video_stream else None
             audio_stream_duration = audio_stream.duration_s if audio_stream else None
             video_stream_duration_valid = (
