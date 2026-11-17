@@ -620,3 +620,37 @@ def test_unrelated_ffmpeg_errors_are_not_mistaken_for_an_option_problem(env, med
     with pytest.raises(FFmpegError, match="No space"):
         run(job, studio_with(media, transition="crossfade"), ProductionOptions(render_video=True, video_output=tmp_path / "x.mp4"))
     assert attempts == ["-/filter_complex"]                                  # no pointless retry
+
+
+def test_cancel_during_final_frame_inspection_prevents_video_publish(
+    env, media, tmp_path, monkeypatch
+):
+    _, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "cancel-during-validation.mp4"
+    token = CancelToken()
+
+    def cancel_during_inspection(path, expected_fps, cancel=None):
+        assert cancel is token
+        token.cancel()
+        return FrameTimestampInfo(
+            frame_count=39,
+            missing_timestamp_count=0,
+            non_monotonic_count=0,
+            cfr_interval_mismatch_count=0,
+            first_timestamp_s=0.0,
+            last_timestamp_s=2.533333,
+        )
+
+    monkeypatch.setattr(job._ffmpeg, "probe_frame_timestamps", cancel_during_inspection)
+
+    with pytest.raises(GenerationCancelled):
+        run(
+            job, st,
+            ProductionOptions(render_video=True, video_output=out),
+            cancel=token,
+        )
+
+    assert token.cancelled
+    assert not out.exists()
+    assert not out.with_name(out.name + ".part").exists()
