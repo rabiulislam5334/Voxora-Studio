@@ -361,7 +361,7 @@ def test_final_video_rejects_non_monotonic_or_vfr_frame_timestamps(
 
 
 @pytest.mark.parametrize(
-    ("non_monotonic", "cfr_mismatches", "message"),
+    ("decoded_frames", "message"),
     [
         (1, "decoded frame count mismatch (expected 39, got 1)"),
         (None, "could not determine decoded video frame count"),
