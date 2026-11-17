@@ -52,6 +52,7 @@ class StreamInfo:
     height: Optional[int]
     sample_rate: Optional[int]
     channels: Optional[int]
+    decoded_frame_count: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,7 @@ def parse_ffprobe_json(payload: str) -> StructuredMediaInfo:
             height=_optional_int(raw.get("height")),
             sample_rate=_optional_int(raw.get("sample_rate")),
             channels=_optional_int(raw.get("channels")),
+            decoded_frame_count=_optional_int(raw.get("nb_read_frames")),
         ))
 
     raw_format = document.get("format", {})

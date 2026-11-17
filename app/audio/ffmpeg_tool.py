@@ -158,7 +158,7 @@ class FFmpegTool:
             raise MediaError(f"Could not inspect '{path.name}': {exc}") from exc
         return parse_probe_output(proc.stderr.decode("utf-8", errors="replace"))
 
-    def probe_structured(self, path: Path) -> StructuredMediaInfo:
+    def probe_structured(self, path: Path, *, count_frames: bool = False) -> StructuredMediaInfo:
         """Inspect container and stream metadata with the companion FFprobe binary.
 
         This is intentionally separate from probe(), which retains its legacy
@@ -169,13 +169,14 @@ class FFmpegTool:
             raise MediaError(f"File not found: {path}")
         ffprobe = self._find_ffprobe()
         try:
+            args = [str(ffprobe), "-v", "error"]
+            if count_frames:
+                args.append("-count_frames")
+            args.extend(["-show_format", "-show_streams", "-of", "json", str(path)])
             proc = subprocess.run(
-                [
-                    str(ffprobe), "-v", "error",
-                    "-show_format", "-show_streams", "-of", "json", str(path),
-                ],
+                args,
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                creationflags=_NO_WINDOW, timeout=60,
+                creationflags=_NO_WINDOW, timeout=(3600 if count_frames else 60),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise MediaError(f"Could not inspect '{path.name}' with FFprobe: {exc}") from exc

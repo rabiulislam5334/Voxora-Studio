@@ -336,13 +336,20 @@ class ProductionJob:
             if not part_video.is_file() or part_video.stat().st_size == 0:
                 raise ProductionError("The video file was not created.")
             rendered_info = self._ffmpeg.probe(part_video)
+            structured_info = self._ffmpeg.probe_structured(part_video, count_frames=True)
+            video_streams = [
+                stream for stream in structured_info.streams if stream.codec_type == "video"
+            ]
+            decoded_frames = video_streams[0].decoded_frame_count if video_streams else None
             duration_tolerance = (1.0 / video.fps) + 0.03  # one frame plus AAC packet tolerance
             actual_duration = rendered_info.duration_s
+            frame_count_valid = decoded_frames == total_frames
             if (
                 rendered_info.kind != "video"
                 or not rendered_info.has_audio
                 or actual_duration is None
                 or abs(actual_duration - total_s) > duration_tolerance
+                or not frame_count_valid
             ):
                 actual_label = f"{actual_duration:.6f}s" if actual_duration is not None else "unknown"
                 problems = []
@@ -354,6 +361,13 @@ class ProductionJob:
                     problems.append(
                         "duration mismatch "
                         f"(expected {total_s:.6f}s, got {actual_label})"
+                    )
+                if decoded_frames is None:
+                    problems.append("could not determine decoded video frame count")
+                elif decoded_frames != total_frames:
+                    problems.append(
+                        "decoded frame count mismatch "
+                        f"(expected {total_frames}, got {decoded_frames})"
                     )
                 raise ProductionError(
                     "The rendered MP4 failed output validation: " + "; ".join(problems) + "."
