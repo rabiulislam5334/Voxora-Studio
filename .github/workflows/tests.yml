@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - ci/windows-tests
       - dev/step-3-and-5-2
       - repair/persistence-pr1-main-sync
   pull_request:
