@@ -5,7 +5,7 @@ APP_VERSION = "0.1.0"
 
 SUPPORTED_LANGUAGES = ("bn", "en")
 
-EXPORT_AUDIO_FORMATS = ("mp3", "wav")
+EXPORT_AUDIO_FORMATS = ("mp3",)
 EXPORT_SUBTITLE_FORMATS = ("srt",)
 EXPORT_VIDEO_FORMATS = ("mp4",)
 
@@ -61,7 +61,8 @@ VIDEO_AUDIO_BITRATE = "192k"
 VIDEO_AUDIO_SAMPLE_RATE = 48000
 EXPORT_AUDIO_SAMPLE_RATE = 44100
 EXPORT_MP3_BITRATE = "192k"
-VIDEO_CACHE_MAX_BYTES = 3 * 1024 ** 3  # prune cached segments beyond ~3 GB
+VIDEO_CACHE_MAX_BYTES = 3 * 1024 ** 3  # rendered scene segment budget (~3 GB)
+VIDEO_IMAGE_CACHE_MAX_BYTES = 256 * 1024 ** 2  # thumbnails and waveforms (~256 MB)
 
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff")
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
