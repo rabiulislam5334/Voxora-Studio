@@ -182,6 +182,11 @@ def test_full_video_with_cuts_has_h264_aac_and_exact_duration(env, media, tmp_pa
     assert out.exists() and not list(out.parent.glob("*.part"))
     assert "Video: h264" in text and "Audio: aac" in text and "640x360" in text and "48000 Hz" in text
     assert info.duration_s == pytest.approx(result.duration_s, abs=0.25)
+    structured = job._ffmpeg.probe_structured(out)
+    video_stream = next(stream for stream in structured.streams if stream.codec_type == "video")
+    audio_stream = next(stream for stream in structured.streams if stream.codec_type == "audio")
+    assert video_stream.duration_s == pytest.approx(result.duration_s, abs=1 / st.video.fps)
+    assert audio_stream.duration_s == pytest.approx(result.duration_s, abs=(1024 + 1) / audio_stream.sample_rate)
     # slots: scene1 = .5 narration + .3 pause ; scene2 = .5 + .3 pause ; scene3 (no text) = default 1.0
     assert [round(s.slot_s, 2) for s in result.timeline.slots] == [0.8, 0.8, 1.0]
     assert result.segments_rendered == 3 and result.segments_cached == 0
@@ -208,6 +213,58 @@ def test_final_video_rejects_muxed_file_without_audio_stream(env, media, tmp_pat
     )
 
     with pytest.raises(ProductionError, match="missing audio stream"):
+        run(job, st, ProductionOptions(render_video=True, video_output=out))
+
+    assert not out.exists()
+    assert not out.with_name(out.name + ".part").exists()
+
+
+@pytest.mark.parametrize(
+    ("stream_type", "stream_duration", "message"),
+    [
+        ("video", 1.0, "video stream duration mismatch (expected 2.600000s, got 1.000000s)"),
+        ("audio", 1.0, "audio stream duration mismatch (expected 2.600000s, got 1.000000s)"),
+        ("video", None, "could not determine video stream duration"),
+        ("audio", None, "could not determine audio stream duration"),
+    ],
+)
+def test_final_video_rejects_invalid_per_stream_duration(
+    env, media, tmp_path, monkeypatch, stream_type, stream_duration, message
+):
+    _, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "bad-stream-duration.mp4"
+
+    video_duration = stream_duration if stream_type == "video" else 2.6
+    audio_duration = stream_duration if stream_type == "audio" else 2.6
+
+    def structured_probe(path, *, count_frames=False):
+        assert count_frames is True
+        return StructuredMediaInfo(
+            format_name="mov,mp4",
+            format_duration_s=2.6,
+            format_start_time_s=0.0,
+            streams=(
+                StreamInfo(
+                    index=0, codec_type="video", codec_name="h264",
+                    duration_s=video_duration, start_time_s=0.0,
+                    time_base="1/15360", avg_frame_rate="15/1",
+                    real_frame_rate="15/1", width=640, height=360,
+                    sample_rate=None, channels=None, decoded_frame_count=39,
+                ),
+                StreamInfo(
+                    index=1, codec_type="audio", codec_name="aac",
+                    duration_s=audio_duration, start_time_s=0.0,
+                    time_base="1/48000", avg_frame_rate=None,
+                    real_frame_rate=None, width=None, height=None,
+                    sample_rate=48000, channels=2,
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(job._ffmpeg, "probe_structured", structured_probe)
+
+    with pytest.raises(ProductionError, match=re.escape(message)):
         run(job, st, ProductionOptions(render_video=True, video_output=out))
 
     assert not out.exists()
@@ -249,6 +306,20 @@ def test_final_video_rejects_invalid_decoded_frame_count(
                     sample_rate=None,
                     channels=None,
                     decoded_frame_count=decoded_frames,
+                ),
+                StreamInfo(
+                    index=1,
+                    codec_type="audio",
+                    codec_name="aac",
+                    duration_s=2.6,
+                    start_time_s=0.0,
+                    time_base="1/48000",
+                    avg_frame_rate=None,
+                    real_frame_rate=None,
+                    width=None,
+                    height=None,
+                    sample_rate=48000,
+                    channels=2,
                 ),
             ),
         )

@@ -340,16 +340,43 @@ class ProductionJob:
             video_streams = [
                 stream for stream in structured_info.streams if stream.codec_type == "video"
             ]
-            decoded_frames = video_streams[0].decoded_frame_count if video_streams else None
-            duration_tolerance = (1.0 / video.fps) + 0.03  # one frame plus AAC packet tolerance
+            audio_streams = [
+                stream for stream in structured_info.streams if stream.codec_type == "audio"
+            ]
+            video_stream = video_streams[0] if video_streams else None
+            audio_stream = audio_streams[0] if audio_streams else None
+            decoded_frames = video_stream.decoded_frame_count if video_stream else None
+
+            # The video stream is frame-quantized. AAC duration can differ by
+            # one encoded access unit because AAC-LC encodes 1024 samples per
+            # packet; derive that tolerance from the actual stream sample rate.
+            video_stream_tolerance = 1.0 / video.fps
+            if audio_stream and audio_stream.codec_name == "aac" and audio_stream.sample_rate:
+                audio_stream_tolerance = (1024 + 1) / audio_stream.sample_rate
+            else:
+                audio_stream_tolerance = (1.0 / video.fps) + 0.03
+
             actual_duration = rendered_info.duration_s
+            duration_tolerance = (1.0 / video.fps) + 0.03  # container tolerance: one frame plus AAC packet
             frame_count_valid = decoded_frames == total_frames
+            video_stream_duration = video_stream.duration_s if video_stream else None
+            audio_stream_duration = audio_stream.duration_s if audio_stream else None
+            video_stream_duration_valid = (
+                video_stream_duration is not None
+                and abs(video_stream_duration - total_s) <= video_stream_tolerance
+            )
+            audio_stream_duration_valid = (
+                audio_stream_duration is not None
+                and abs(audio_stream_duration - total_s) <= audio_stream_tolerance
+            )
             if (
                 rendered_info.kind != "video"
                 or not rendered_info.has_audio
                 or actual_duration is None
                 or abs(actual_duration - total_s) > duration_tolerance
                 or not frame_count_valid
+                or not video_stream_duration_valid
+                or not audio_stream_duration_valid
             ):
                 actual_label = f"{actual_duration:.6f}s" if actual_duration is not None else "unknown"
                 problems = []
@@ -368,6 +395,20 @@ class ProductionJob:
                     problems.append(
                         "decoded frame count mismatch "
                         f"(expected {total_frames}, got {decoded_frames})"
+                    )
+                if video_stream_duration is None:
+                    problems.append("could not determine video stream duration")
+                elif not video_stream_duration_valid:
+                    problems.append(
+                        "video stream duration mismatch "
+                        f"(expected {total_s:.6f}s, got {video_stream_duration:.6f}s)"
+                    )
+                if audio_stream_duration is None:
+                    problems.append("could not determine audio stream duration")
+                elif not audio_stream_duration_valid:
+                    problems.append(
+                        "audio stream duration mismatch "
+                        f"(expected {total_s:.6f}s, got {audio_stream_duration:.6f}s)"
                     )
                 raise ProductionError(
                     "The rendered MP4 failed output validation: " + "; ".join(problems) + "."
