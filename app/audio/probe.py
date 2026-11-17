@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
+import math
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from app.core.exceptions import MediaError
 
@@ -34,8 +36,103 @@ class MediaInfo:
         return "unknown"
 
 
+@dataclass(frozen=True)
+class StreamInfo:
+    """Structured metadata for one FFprobe stream; absent values remain None."""
+
+    index: Optional[int]
+    codec_type: Optional[str]
+    codec_name: Optional[str]
+    duration_s: Optional[float]
+    start_time_s: Optional[float]
+    time_base: Optional[str]
+    avg_frame_rate: Optional[str]
+    real_frame_rate: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+    sample_rate: Optional[int]
+    channels: Optional[int]
+
+
+@dataclass(frozen=True)
+class StructuredMediaInfo:
+    """Container and stream metadata returned by FFprobe."""
+
+    format_name: Optional[str]
+    format_duration_s: Optional[float]
+    format_start_time_s: Optional[float]
+    streams: tuple[StreamInfo, ...]
+
+
+def _optional_float(value: Any) -> Optional[float]:
+    if value is None or value == "" or value == "N/A":
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _optional_int(value: Any) -> Optional[int]:
+    if value is None or value == "" or value == "N/A":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_text(value: Any) -> Optional[str]:
+    return value if isinstance(value, str) and value and value != "N/A" else None
+
+
+def parse_ffprobe_json(payload: str) -> StructuredMediaInfo:
+    """Parse FFprobe JSON without inventing values for missing metadata."""
+    try:
+        document = json.loads(payload)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise MediaError(f"FFprobe returned invalid JSON: {exc}") from exc
+    if not isinstance(document, dict):
+        raise MediaError("FFprobe returned an unexpected JSON document.")
+    raw_streams = document.get("streams", [])
+    if not isinstance(raw_streams, list):
+        raise MediaError("FFprobe returned an invalid streams collection.")
+
+    streams: list[StreamInfo] = []
+    for raw in raw_streams:
+        if not isinstance(raw, dict):
+            raise MediaError("FFprobe returned an invalid stream entry.")
+        streams.append(StreamInfo(
+            index=_optional_int(raw.get("index")),
+            codec_type=_optional_text(raw.get("codec_type")),
+            codec_name=_optional_text(raw.get("codec_name")),
+            duration_s=_optional_float(raw.get("duration")),
+            start_time_s=_optional_float(raw.get("start_time")),
+            time_base=_optional_text(raw.get("time_base")),
+            avg_frame_rate=_optional_text(raw.get("avg_frame_rate")),
+            real_frame_rate=_optional_text(raw.get("r_frame_rate")),
+            width=_optional_int(raw.get("width")),
+            height=_optional_int(raw.get("height")),
+            sample_rate=_optional_int(raw.get("sample_rate")),
+            channels=_optional_int(raw.get("channels")),
+        ))
+
+    raw_format = document.get("format", {})
+    if raw_format is None:
+        raw_format = {}
+    if not isinstance(raw_format, dict):
+        raise MediaError("FFprobe returned invalid format metadata.")
+    return StructuredMediaInfo(
+        format_name=_optional_text(raw_format.get("format_name")),
+        format_duration_s=_optional_float(raw_format.get("duration")),
+        format_start_time_s=_optional_float(raw_format.get("start_time")),
+        streams=tuple(streams),
+    )
+
+
 def parse_probe_output(stderr_text: str) -> MediaInfo:
-    """Parse the banner `ffmpeg -i <file>` prints (no ffprobe needed).
+    """Parse the FFmpeg input banner (no FFprobe needed).
     Raises MediaError when the output does not describe a media file."""
     if "Input #0" not in stderr_text:
         reason = "not a readable media file"
