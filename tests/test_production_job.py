@@ -19,6 +19,7 @@ from app.studio.previews import make_thumbnail, make_waveform, render_mix_previe
 from app.workers.cancel import CancelToken
 from app.workers.narration import NarrationJob
 from app.workers.production import ProductionJob, ProductionOptions, SceneInfo
+from app.video.render import windows_command_line_length
 from tests.helpers import FakeTTS, make_request
 
 
@@ -806,3 +807,30 @@ def test_production_filesystem_errors_are_reported_as_production_errors(env, med
         run(job, studio_with(media), ProductionOptions(render_video=True, video_output=tmp_path / "blocked.mp4"))
     assert isinstance(error.value.__cause__, PermissionError)
     assert tts.calls == []
+
+
+def test_windows_command_line_length_counts_utf16_units_and_terminator():
+    # The supplementary-plane character occupies two UTF-16 code units.
+    assert windows_command_line_length(["ffmpeg.exe", "𐐷"]) == 14
+
+
+def test_windows_crossfade_command_limit_fails_before_launch(env, tmp_path, monkeypatch):
+    _, job, _ = env()
+    # Construct paths before simulating Windows so pathlib keeps the host path type.
+    segments = [
+        Path(f"C:/render/বাংলা𐐷/{index:04d}/" + "segment_" + "x" * 110 + ".mp4")
+        for index in range(300)
+    ]
+    script = Path("C:/render/xfade.txt")
+    dest = Path("C:/render/output.mp4")
+    exe = Path("C:/Program Files/FFmpeg/bin/ffmpeg.exe")
+    launches = []
+    monkeypatch.setattr(job._ffmpeg, "run_with_progress", lambda *args, **kwargs: launches.append(args))
+    monkeypatch.setattr("app.workers.production.os.name", "nt")
+
+    with pytest.raises(ProductionError, match="Windows command-line limit"):
+        job._run_xfade_join(
+            exe, segments, script, 30, dest, 120.0, lambda _fraction: None, CancelToken()
+        )
+
+    assert launches == []

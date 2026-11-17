@@ -33,6 +33,8 @@ from app.video.render import (
     build_xfade_join_args,
     build_xfade_script_ticks,
     is_unknown_option_error,
+    windows_command_line_length,
+    WINDOWS_MAX_COMMAND_LINE_CHARS,
 )
 from app.workers.cancel import CancelToken
 from app.workers.narration import NarrationJob, NarrationResult, SceneRequest
@@ -669,6 +671,25 @@ class ProductionJob:
         """Run the crossfade join with whichever filter-script option this
         FFmpeg understands (new `-/filter_complex`, or the old
         `-filter_complex_script`). The one that works is remembered."""
+        # Windows CreateProcess limits the complete command line to 32,767
+        # UTF-16 code units including its terminating NUL. Check the longest
+        # supported option spelling before launching either attempt.
+        if os.name == "nt":
+            candidate_lengths = [
+                windows_command_line_length(
+                    build_xfade_join_args(exe, segments, script, fps, dest, option)
+                )
+                for option in self._script_options
+            ]
+            command_length = max(candidate_lengths, default=0)
+            if command_length > WINDOWS_MAX_COMMAND_LINE_CHARS:
+                raise ProductionError(
+                    f"Crossfade with {len(segments)} scenes exceeds the Windows command-line limit "
+                    f"({command_length} UTF-16 code units including the terminator; "
+                    f"maximum {WINDOWS_MAX_COMMAND_LINE_CHARS}). "
+                    "Use cut transitions or split the project into shorter renders."
+                )
+
         last_error: Optional[FFmpegError] = None
         for option in list(self._script_options):
             try:

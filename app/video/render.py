@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 from typing import List, Optional, Sequence
 
 from app.core import constants
@@ -162,6 +163,20 @@ def build_xfade_script_ticks(starts_ticks: Sequence[int], transition_ticks: int)
 # deprecated in 7 and REMOVED in later releases (e.g. 9.x), but is the only
 # form FFmpeg 6 and older understand. The caller tries them in this order.
 FILTER_SCRIPT_OPTIONS = ("-/filter_complex", "-filter_complex_script")
+
+
+WINDOWS_MAX_COMMAND_LINE_CHARS = 32767
+
+
+def windows_command_line_length(args: Sequence[str]) -> int:
+    """Return Windows CreateProcess command-line length in UTF-16 code units.
+
+    subprocess.list2cmdline mirrors the quoting used when Python launches a
+    process with an argument sequence on Windows. The terminating NUL is part
+    of the documented 32,767-character CreateProcess limit.
+    """
+    command_line = subprocess.list2cmdline([str(arg) for arg in args])
+    return len(command_line.encode("utf-16-le")) // 2 + 1
 
 
 def build_xfade_join_args(
