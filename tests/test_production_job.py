@@ -736,3 +736,73 @@ def test_cancel_during_final_frame_inspection_prevents_video_publish(
     assert token.cancelled
     assert not out.exists()
     assert not out.with_name(out.name + ".part").exists()
+
+
+def _decoded_rms(samples, sample_rate, start_s, duration_s):
+    start = max(0, int(start_s * sample_rate))
+    end = min(len(samples), int((start_s + duration_s) * sample_rate))
+    window = samples[start:end]
+    if not window:
+        return 0.0
+    return (sum(int(value) * int(value) for value in window) / len(window)) ** 0.5
+
+
+def test_final_video_decoded_audio_matches_scene_placement(env, media, tmp_path):
+    """Decode the muxed AAC and verify narration is audible in its own slots only."""
+    import array
+    import wave
+
+    _, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "decoded-placement.mp4"
+    result = run(job, st, ProductionOptions(render_video=True, video_output=out))
+    assert [round(slot.slot_s, 2) for slot in result.timeline.slots] == [0.8, 0.8, 1.0]
+
+    decoded = tmp_path / "decoded-placement.wav"
+    job._ffmpeg.decode_to_wav(out, decoded, 48000)
+    with wave.open(str(decoded), "rb") as wav:
+        assert wav.getnchannels() == 1
+        assert wav.getframerate() == 48000
+        samples = array.array("h", wav.readframes(wav.getnframes()))
+    if __import__("sys").byteorder != "little":
+        samples.byteswap()
+
+    # Scene 1 narration occupies the opening 0.5 s; scene 2 starts at 0.8 s.
+    # AAC priming is handled by testing well inside each expected active region.
+    assert _decoded_rms(samples, 48000, 0.10, 0.20) > 500
+    assert _decoded_rms(samples, 48000, 0.90, 0.20) > 500
+    # The 300 ms inter-scene pause and the empty final scene must remain silent.
+    assert _decoded_rms(samples, 48000, 0.62, 0.10) < 100
+    assert _decoded_rms(samples, 48000, 1.85, 0.20) < 100
+
+
+def test_scene_preflight_rejects_missing_media_before_tts(env, media, tmp_path):
+    tts, job, _ = env()
+    st = studio_with(media)
+    st.video.set_scene("s2", SceneVideo(media_path=str(media / "missing-before-tts.png")))
+
+    with pytest.raises(ProductionError, match="Middle"):
+        run(job, st, ProductionOptions(render_video=True, video_output=tmp_path / "preflight.mp4"))
+
+    assert tts.calls == []
+    assert not (tmp_path / "preflight.mp4").exists()
+
+
+def test_production_filesystem_errors_are_reported_as_production_errors(env, media, tmp_path, monkeypatch):
+    from app.workers.production import ProductionJob
+
+    tts, job, _ = env()
+    blocked_temp = tmp_path / "blocked-temp"
+    job._temp_dir = blocked_temp
+    original_mkdir = Path.mkdir
+
+    def fail_temp_mkdir(path, *args, **kwargs):
+        if path == blocked_temp:
+            raise PermissionError("access denied by test")
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_temp_mkdir)
+    with pytest.raises(ProductionError, match="Could not access or update production files") as error:
+        run(job, studio_with(media), ProductionOptions(render_video=True, video_output=tmp_path / "blocked.mp4"))
+    assert isinstance(error.value.__cause__, PermissionError)
+    assert tts.calls == []
