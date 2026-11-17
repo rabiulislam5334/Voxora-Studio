@@ -182,6 +182,11 @@ def test_full_video_with_cuts_has_h264_aac_and_exact_duration(env, media, tmp_pa
     assert out.exists() and not list(out.parent.glob("*.part"))
     assert "Video: h264" in text and "Audio: aac" in text and "640x360" in text and "48000 Hz" in text
     assert info.duration_s == pytest.approx(result.duration_s, abs=0.25)
+    structured = job._ffmpeg.probe_structured(out)
+    video_stream = next(stream for stream in structured.streams if stream.codec_type == "video")
+    audio_stream = next(stream for stream in structured.streams if stream.codec_type == "audio")
+    assert video_stream.duration_s == pytest.approx(result.duration_s, abs=1 / st.video.fps)
+    assert audio_stream.duration_s == pytest.approx(result.duration_s, abs=(1024 + 1) / audio_stream.sample_rate)
     # slots: scene1 = .5 narration + .3 pause ; scene2 = .5 + .3 pause ; scene3 (no text) = default 1.0
     assert [round(s.slot_s, 2) for s in result.timeline.slots] == [0.8, 0.8, 1.0]
     assert result.segments_rendered == 3 and result.segments_cached == 0
