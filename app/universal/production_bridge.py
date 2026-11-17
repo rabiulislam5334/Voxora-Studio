@@ -75,6 +75,13 @@ def build_production_render_request(
         raise ProductionPlanError(
             f"visual plan kind '{plan.kind}' does not match configured media kind '{spec.kind}'"
         )
+    if not isinstance(plan.requirements, dict):
+        raise ProductionPlanError("visual plan requirements must be an object")
+    if not isinstance(plan.asset_refs, (list, tuple)) or any(
+        not isinstance(asset, AssetRef) for asset in plan.asset_refs
+    ):
+        raise ProductionPlanError("visual plan asset_refs must contain only AssetRef values")
+
     if len(plan.asset_refs) != len(expected_assets):
         raise ProductionPlanError(
             f"{spec.kind} production currently requires exactly {len(expected_assets)} "
