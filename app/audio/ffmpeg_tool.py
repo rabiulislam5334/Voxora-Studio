@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from app.audio.probe import MediaInfo, parse_probe_output
+from app.audio.probe import MediaInfo, StructuredMediaInfo, parse_ffprobe_json, parse_probe_output
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError
 from app.core.logger import get_logger
 from app.core.settings_store import SettingsStore
@@ -157,6 +157,51 @@ class FFmpegTool:
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise MediaError(f"Could not inspect '{path.name}': {exc}") from exc
         return parse_probe_output(proc.stderr.decode("utf-8", errors="replace"))
+
+    def probe_structured(self, path: Path) -> StructuredMediaInfo:
+        """Inspect container and stream metadata with the companion FFprobe binary.
+
+        This is intentionally separate from probe(), which retains its legacy
+        FFmpeg-banner behavior for existing callers.
+        """
+        path = Path(path)
+        if not path.is_file():
+            raise MediaError(f"File not found: {path}")
+        ffprobe = self._find_ffprobe()
+        try:
+            proc = subprocess.run(
+                [
+                    str(ffprobe), "-v", "error", "-nostdin",
+                    "-show_format", "-show_streams", "-of", "json", str(path),
+                ],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                creationflags=_NO_WINDOW, timeout=60,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise MediaError(f"Could not inspect '{path.name}' with FFprobe: {exc}") from exc
+        stderr = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        if proc.returncode != 0:
+            detail = stderr or f"FFprobe exited with code {proc.returncode}"
+            raise MediaError(f"FFprobe could not inspect '{path.name}': {detail}")
+        output = (proc.stdout or b"").decode("utf-8", errors="replace")
+        return parse_ffprobe_json(output)
+
+    def _find_ffprobe(self) -> Path:
+        """Find FFprobe beside the selected FFmpeg, then on PATH."""
+        ffmpeg = self.require()
+        import os
+        names = ("ffprobe.exe", "ffprobe") if os.name == "nt" else ("ffprobe",)
+        candidates = [ffmpeg.with_name(name) for name in names]
+        found = shutil.which("ffprobe")
+        if found:
+            candidates.append(Path(found))
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        raise MediaError(
+            "FFprobe is required for structured media inspection but was not found. "
+            "Install the FFmpeg package that includes ffprobe.exe, or add ffprobe to PATH."
+        )
 
     def run_with_progress(
         self,
