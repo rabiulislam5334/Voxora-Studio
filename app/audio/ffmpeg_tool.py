@@ -151,7 +151,7 @@ class FFmpegTool:
             raise MediaError(f"File not found: {path}")
         _, stderr = self._run_probe_capture(
             [str(exe), "-hide_banner", "-nostdin", "-i", str(path)],
-            path=path, operation="inspect", timeout=60.0, cancel=cancel,
+            path=path, operation="inspect", timeout=60.0, cancel=cancel, check_returncode=False,
         )
         return parse_probe_output(stderr.decode("utf-8", errors="replace"))
 
@@ -207,6 +207,7 @@ class FFmpegTool:
         operation: str,
         timeout: float,
         cancel: Optional[CancelToken],
+        check_returncode: bool = True,
     ) -> tuple[bytes, bytes]:
         """Run a media-inspection subprocess with bounded polling and cancellation."""
         if cancel is not None:
@@ -234,7 +235,7 @@ class FFmpegTool:
                     break
                 except subprocess.TimeoutExpired:
                     continue
-            if proc.returncode != 0:
+            if check_returncode and proc.returncode != 0:
                 detail = (stderr or b"").decode("utf-8", errors="replace").strip()
                 detail = detail or f"FFprobe exited with code {proc.returncode}"
                 raise MediaError(f"FFprobe could not {operation} '{path.name}': {detail}")
