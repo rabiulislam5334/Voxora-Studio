@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.audio.mixer import build_mix_args
-from app.audio.probe import MediaInfo, StreamInfo, StructuredMediaInfo
+from app.audio.probe import FrameTimestampInfo, MediaInfo, StreamInfo, StructuredMediaInfo
 from app.cache.manager import NarrationCache
 from app.cache.video_cache import VideoCache
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError, ProductionError
@@ -190,6 +190,11 @@ def test_full_video_with_cuts_has_h264_aac_and_exact_duration(env, media, tmp_pa
     assert video_stream.start_time_s is not None
     assert audio_stream.start_time_s is not None
     assert abs(audio_stream.start_time_s - video_stream.start_time_s) <= (1024 + 1) / audio_stream.sample_rate
+    frame_timestamps = job._ffmpeg.probe_frame_timestamps(out, st.video.fps)
+    assert frame_timestamps.frame_count == 39
+    assert frame_timestamps.missing_timestamp_count == 0
+    assert frame_timestamps.non_monotonic_count == 0
+    assert frame_timestamps.cfr_interval_mismatch_count == 0
     # slots: scene1 = .5 narration + .3 pause ; scene2 = .5 + .3 pause ; scene3 (no text) = default 1.0
     assert [round(s.slot_s, 2) for s in result.timeline.slots] == [0.8, 0.8, 1.0]
     assert result.segments_rendered == 3 and result.segments_cached == 0
@@ -242,7 +247,7 @@ def test_final_video_rejects_invalid_per_stream_duration(
     audio_duration = stream_duration if stream_type == "audio" else 2.6
 
     def structured_probe(path, *, count_frames=False):
-        assert count_frames is True
+        assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
             format_duration_s=2.6,
@@ -323,7 +328,40 @@ def test_final_video_rejects_unaligned_or_unknown_stream_start_times(
 
 
 @pytest.mark.parametrize(
-    ("decoded_frames", "message"),
+    ("non_monotonic", "cfr_mismatches", "message"),
+    [
+        (1, 0, "video presentation timestamps are not strictly monotonic"),
+        (0, 1, "video frame intervals are not constant at 15 FPS"),
+    ],
+)
+def test_final_video_rejects_non_monotonic_or_vfr_frame_timestamps(
+    env, media, tmp_path, monkeypatch, non_monotonic, cfr_mismatches, message
+):
+    _, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "bad-frame-timestamps.mp4"
+    frame_info = FrameTimestampInfo(
+        frame_count=39,
+        missing_timestamp_count=0,
+        non_monotonic_count=non_monotonic,
+        cfr_interval_mismatch_count=cfr_mismatches,
+        first_timestamp_s=0.0,
+        last_timestamp_s=2.533333,
+    )
+    monkeypatch.setattr(
+        job._ffmpeg, "probe_frame_timestamps",
+        lambda path, expected_fps: frame_info,
+    )
+
+    with pytest.raises(ProductionError, match=re.escape(message)):
+        run(job, st, ProductionOptions(render_video=True, video_output=out))
+
+    assert not out.exists()
+    assert not out.with_name(out.name + ".part").exists()
+
+
+@pytest.mark.parametrize(
+    ("non_monotonic", "cfr_mismatches", "message"),
     [
         (1, "decoded frame count mismatch (expected 39, got 1)"),
         (None, "could not determine decoded video frame count"),
@@ -376,6 +414,18 @@ def test_final_video_rejects_invalid_decoded_frame_count(
         )
 
     monkeypatch.setattr(job._ffmpeg, "probe_structured", structured_probe)
+    timestamp_result = FrameTimestampInfo(
+        frame_count=decoded_frames or 0,
+        missing_timestamp_count=0,
+        non_monotonic_count=0,
+        cfr_interval_mismatch_count=0,
+        first_timestamp_s=0.0,
+        last_timestamp_s=2.533333 if decoded_frames else None,
+    )
+    monkeypatch.setattr(
+        job._ffmpeg, "probe_frame_timestamps",
+        lambda path, expected_fps: timestamp_result,
+    )
 
     with pytest.raises(ProductionError, match=re.escape(message)):
         run(job, st, ProductionOptions(render_video=True, video_output=out))
