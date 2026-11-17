@@ -1,11 +1,30 @@
 from __future__ import annotations
 
 import json
+import subprocess
+from pathlib import Path
 
 import pytest
 
 from app.audio.probe import parse_ffprobe_json
 from app.core.exceptions import MediaError
+
+
+@pytest.fixture
+def media(real_ffmpeg, tmp_path):
+    clip = tmp_path / "clip.mp4"
+    music = tmp_path / "music.mp3"
+    subprocess.run(
+        [str(real_ffmpeg.require()), "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "lavfi", "-i", "testsrc=s=320x240:r=25:d=1", "-pix_fmt", "yuv420p", str(clip)],
+        check=True, capture_output=True,
+    )
+    subprocess.run(
+        [str(real_ffmpeg.require()), "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "lavfi", "-i", "sine=frequency=500:duration=2", "-ac", "2", str(music)],
+        check=True, capture_output=True,
+    )
+    return tmp_path
 
 
 def test_parse_ffprobe_json_preserves_container_and_stream_timing_fields():
