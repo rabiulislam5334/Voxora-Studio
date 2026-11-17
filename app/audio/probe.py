@@ -150,24 +150,9 @@ def parse_frame_timestamp_output(output: str, expected_fps: int) -> FrameTimesta
     if expected_fps <= 0:
         raise ValueError("expected_fps must be positive")
 
-    # JSON preserves one object per decoded frame. The default/keyless
-    # writer can emit additional side-data lines (for example H.264 SEI),
-    # which must never be counted as frames.
-    try:
-        document = json.loads(output)
-    except (TypeError, json.JSONDecodeError):
-        document = None
-
-    if isinstance(document, dict) and isinstance(document.get("frames"), list):
-        timestamps = [
-            _optional_float(frame.get("best_effort_timestamp_time"))
-            if isinstance(frame, dict) else None
-            for frame in document["frames"]
-        ]
-    else:
-        raw_values = [line.strip().split(",", 1)[0].strip()
-                      for line in output.splitlines() if line.strip()]
-        timestamps = [_optional_float(value) for value in raw_values]
+    raw_values = [line.strip().split(",", 1)[0].strip()
+                  for line in output.splitlines() if line.strip()]
+    timestamps = [_optional_float(value) for value in raw_values]
     expected_interval = 1.0 / expected_fps
     # FFprobe's default timestamp formatting is microsecond precision.
     tolerance = max(2e-6, expected_interval * 1e-5)
@@ -192,7 +177,6 @@ def parse_frame_timestamp_output(output: str, expected_fps: int) -> FrameTimesta
         first_timestamp_s=valid[0] if valid else None,
         last_timestamp_s=valid[-1] if valid else None,
     )
-
 
 
 def parse_frame_timestamp_json(payload: str, expected_fps: int) -> FrameTimestampInfo:
