@@ -171,7 +171,7 @@ class FFmpegTool:
         try:
             proc = subprocess.run(
                 [
-                    str(ffprobe), "-v", "error", "-nostdin",
+                    str(ffprobe), "-v", "error",
                     "-show_format", "-show_streams", "-of", "json", str(path),
                 ],
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
