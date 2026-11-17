@@ -220,13 +220,6 @@ def test_final_video_rejects_muxed_file_without_audio_stream(env, media, tmp_pat
 
 
 @pytest.mark.parametrize(
-    ("decoded_frames", "message"),
-    [
-        (1, "decoded frame count mismatch (expected 39, got 1)"),
-        (None, "could not determine decoded video frame count"),
-    ],
-)
-@pytest.mark.parametrize(
     ("stream_type", "stream_duration", "message"),
     [
         ("video", 1.0, "video stream duration mismatch (expected 2.600000s, got 1.000000s)"),
@@ -278,6 +271,13 @@ def test_final_video_rejects_invalid_per_stream_duration(
     assert not out.with_name(out.name + ".part").exists()
 
 
+@pytest.mark.parametrize(
+    ("decoded_frames", "message"),
+    [
+        (1, "decoded frame count mismatch (expected 39, got 1)"),
+        (None, "could not determine decoded video frame count"),
+    ],
+)
 def test_final_video_rejects_invalid_decoded_frame_count(
     env, media, tmp_path, monkeypatch, decoded_frames, message
 ):
