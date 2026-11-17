@@ -255,7 +255,7 @@ def test_final_video_rejects_invalid_decoded_frame_count(
 
     monkeypatch.setattr(job._ffmpeg, "probe_structured", structured_probe)
 
-    with pytest.raises(ProductionError, match=message):
+    with pytest.raises(ProductionError, match=re.escape(message)):
         run(job, st, ProductionOptions(render_video=True, video_output=out))
 
     assert not out.exists()
