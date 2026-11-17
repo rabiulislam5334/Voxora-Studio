@@ -35,12 +35,12 @@ def test_parse_ffprobe_json_preserves_container_and_stream_timing_fields():
                 "index": 0, "codec_type": "video", "codec_name": "h264",
                 "start_time": "0.000000", "duration": "1.000000",
                 "time_base": "1/12800", "avg_frame_rate": "25/1", "r_frame_rate": "25/1",
-                "width": 320, "height": 240,
+                "width": 320, "height": 240, "nb_read_frames": "25",
             },
             {
                 "index": 1, "codec_type": "audio", "codec_name": "aac",
                 "start_time": "0.021333", "duration": "0.978667",
-                "time_base": "1/48000", "sample_rate": "48000", "channels": 2, "nb_read_frames": "25",
+                "time_base": "1/48000", "sample_rate": "48000", "channels": 2,
             },
         ],
     }
