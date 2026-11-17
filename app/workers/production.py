@@ -130,12 +130,14 @@ class ProductionJob:
             raise ProductionError("No MP4 output file was chosen.")
         if options.export_audio and options.audio_output is None:
             raise ProductionError("No audio output file was chosen.")
-        await asyncio.to_thread(self._ffmpeg.require)
-
+        if options.export_audio and options.audio_format not in ("mp3", "wav"):
+            raise ProductionError(f"Unsupported audio format: {options.audio_format}")
         narration_share = 0.35 if options.render_video else 0.6
         work = self._temp_dir / f"production_{uuid.uuid4().hex[:8]}"
-        work.mkdir(parents=True, exist_ok=True)
         try:
+            await asyncio.to_thread(self._ffmpeg.require)
+            await asyncio.to_thread(self._preflight, requests, scenes, studio, options)
+            work.mkdir(parents=True, exist_ok=True)
             narration = await self._narration.run(
                 requests, output_dir=work, basename=basename, cancel=cancel,
                 on_progress=lambda ev: emit(ProductionProgress(ev.fraction * narration_share, "Narration", ev.message)),
@@ -144,8 +146,62 @@ class ProductionJob:
             return await asyncio.to_thread(
                 self._produce, narration, scenes, studio, options, work, narration_share, cancel, emit
             )
+        except OSError as exc:
+            target = getattr(exc, "filename", None) or str(exc)
+            raise ProductionError(f"Could not access or update production files: {target}: {exc}") from exc
         finally:
             shutil.rmtree(work, ignore_errors=True)
+
+    def _preflight(self, requests, scenes, studio, options) -> None:
+        """Validate production inputs before spending time or quota on TTS."""
+        scene_ids = [scene.scene_id for scene in scenes]
+        if any(not isinstance(scene_id, str) or not scene_id.strip() for scene_id in scene_ids):
+            raise ProductionError("Every scene must have a non-empty scene ID.")
+        if len(scene_ids) != len(set(scene_ids)):
+            raise ProductionError("Scene IDs must be unique.")
+        request_ids = [request.scene_id for request in requests]
+        if len(request_ids) != len(set(request_ids)):
+            raise ProductionError("Narration requests must contain at most one request per scene.")
+        unknown_requests = sorted(set(request_ids) - set(scene_ids))
+        if unknown_requests:
+            raise ProductionError(
+                "Narration requests reference unknown scene IDs: " + ", ".join(unknown_requests)
+            )
+        if options.render_video:
+            if not scenes:
+                raise ProductionError("Add at least one scene before rendering a video.")
+            if studio.video.fps <= 0:
+                raise ProductionError("Video frame rate must be greater than zero.")
+            width, height = studio.video.size
+            if width <= 0 or height <= 0:
+                raise ProductionError("Video output dimensions must be greater than zero.")
+            for scene in scenes:
+                # Probe each source and resolve its visual plan now, using a
+                # harmless placeholder duration. Real timing is rebuilt after TTS.
+                spec = self._segment_spec(scene, 1.0, studio, width, height)
+                try:
+                    plan, _request = build_production_render_request(
+                        scene.scene_id, spec,
+                        self._temp_dir / "preflight" / f"{scene.scene_id}.mp4",
+                        scene.visual_plan,
+                    )
+                except (ProductionPlanError, TypeError, ValueError) as exc:
+                    raise ProductionError(
+                        f"Scene '{scene.title}' has an invalid visual plan: {exc}"
+                    ) from exc
+                resolution = self._plan_resolver.resolve(plan)
+                if (
+                    resolution.status is not EnginePlanStatus.COMPATIBLE
+                    or resolution.selected_descriptor is None
+                ):
+                    detail = "; ".join(resolution.diagnostics) or resolution.status.value
+                    raise ProductionError(
+                        f"Scene '{scene.title}' cannot use its visual plan: {detail}"
+                    )
+        # Music files are also inspected before TTS. The production stage
+        # repeats this inexpensive metadata lookup to keep its inputs local.
+        probe_track_durations(self._ffmpeg, studio.audio)
+
 
     # ------------------------------------------------------------------
     # Blocking part (runs in a worker thread)
@@ -337,7 +393,10 @@ class ProductionJob:
                     )
                     self._cache.commit_segment(part, key)
                 except BaseException:
-                    part.unlink(missing_ok=True)
+                    try:
+                        part.unlink(missing_ok=True)
+                    except OSError:
+                        logger.warning("Could not remove failed scene temporary file: %s", part, exc_info=True)
                     raise
                 rendered += 1
             segments.append(self._cache.segment_path(key))
@@ -567,7 +626,10 @@ class ProductionJob:
             cancel.raise_if_cancelled()
             os.replace(part_video, video_path)
         except BaseException:
-            part_video.unlink(missing_ok=True)
+            try:
+                part_video.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Could not remove failed final video temporary file: %s", part_video, exc_info=True)
             raise
         self._cache.prune()
         emit(ProductionProgress(1.0, "Done", "Video rendered."))
@@ -596,7 +658,10 @@ class ProductionJob:
             if atomic:
                 os.replace(target, dest)
         except BaseException:
-            target.unlink(missing_ok=True)
+            try:
+                target.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Could not remove failed audio temporary file: %s", target, exc_info=True)
             raise
         return dest
 
