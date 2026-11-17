@@ -52,7 +52,7 @@ class StreamInfo:
     height: Optional[int]
     sample_rate: Optional[int]
     channels: Optional[int]
-    decoded_frame_count: Optional[int]
+    decoded_frame_count: Optional[int] = None
 
 
 @dataclass(frozen=True)
