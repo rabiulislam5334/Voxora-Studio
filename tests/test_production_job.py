@@ -294,7 +294,7 @@ def test_final_video_rejects_unaligned_or_unknown_stream_start_times(
     st = studio_with(media)
     out = tmp_path / "bad-stream-start.mp4"
 
-    def structured_probe(path, *, count_frames=False):
+    def structured_probe(path, *, count_frames=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -374,7 +374,7 @@ def test_final_video_rejects_invalid_decoded_frame_count(
     st = studio_with(media)
     out = tmp_path / "bad-frame-count.mp4"
 
-    def structured_probe(path, *, count_frames=False):
+    def structured_probe(path, *, count_frames=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
