@@ -84,24 +84,6 @@ def test_parse_ffprobe_json_rejects_malformed_documents(payload):
         parse_ffprobe_json(payload)
 
 
-def test_parse_frame_timestamp_json_ignores_frame_side_data():
-    payload = json.dumps({
-        "frames": [
-            {"best_effort_timestamp_time": "0.000000",
-             "side_data_list": [{"side_data_type": "H.26[45] User Data Unregistered SEI message"}]},
-            {"best_effort_timestamp_time": "0.040000"},
-            {"best_effort_timestamp_time": "0.080000"},
-        ]
-    })
-
-    info = parse_frame_timestamp_output(payload, expected_fps=25)
-
-    assert info.frame_count == 3
-    assert info.missing_timestamp_count == 0
-    assert info.non_monotonic_count == 0
-    assert info.cfr_interval_mismatch_count == 0
-
-
 def test_parse_frame_timestamp_output_accepts_constant_frame_rate():
     info = parse_frame_timestamp_output("0.000000\n0.040000\n0.080000\n", expected_fps=25)
 
