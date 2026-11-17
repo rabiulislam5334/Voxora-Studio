@@ -210,7 +210,7 @@ def test_final_video_rejects_muxed_file_without_audio_stream(env, media, tmp_pat
     monkeypatch.setattr(
         job._ffmpeg,
         "probe",
-        lambda path: MediaInfo(
+        lambda path, cancel=None: MediaInfo(
             duration_s=2.6,
             has_video=True,
             has_audio=False,
