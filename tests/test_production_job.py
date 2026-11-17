@@ -246,7 +246,7 @@ def test_final_video_rejects_invalid_per_stream_duration(
     video_duration = stream_duration if stream_type == "video" else 2.6
     audio_duration = stream_duration if stream_type == "audio" else 2.6
 
-    def structured_probe(path, *, count_frames=False):
+    def structured_probe(path, *, count_frames=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -350,7 +350,7 @@ def test_final_video_rejects_non_monotonic_or_vfr_frame_timestamps(
     )
     monkeypatch.setattr(
         job._ffmpeg, "probe_frame_timestamps",
-        lambda path, expected_fps: frame_info,
+        lambda path, expected_fps, cancel=None: frame_info,
     )
 
     with pytest.raises(ProductionError, match=re.escape(message)):
@@ -424,7 +424,7 @@ def test_final_video_rejects_invalid_decoded_frame_count(
     )
     monkeypatch.setattr(
         job._ffmpeg, "probe_frame_timestamps",
-        lambda path, expected_fps: timestamp_result,
+        lambda path, expected_fps, cancel=None: timestamp_result,
     )
 
     with pytest.raises(ProductionError, match=re.escape(message)):
