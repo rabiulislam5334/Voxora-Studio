@@ -235,6 +235,8 @@ class FFmpegTool:
                     break
                 except subprocess.TimeoutExpired:
                     continue
+            if cancel is not None:
+                cancel.raise_if_cancelled()
             if check_returncode and proc.returncode != 0:
                 detail = (stderr or b"").decode("utf-8", errors="replace").strip()
                 detail = detail or f"FFprobe exited with code {proc.returncode}"
