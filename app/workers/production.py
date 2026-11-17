@@ -272,7 +272,8 @@ class ProductionJob:
             for slot in timeline.slots
         ) or 1.0
         done_time = 0.0
-        self._cache.remove_stale_parts()
+        # Avoid sweeping shared cache .part files: another render process
+        # may currently be writing one. Each job cleans up only its own part.
         for scene, slot in zip(scenes, timeline.slots):
             cancel.raise_if_cancelled()
             start_frame = ticks_to_frames(slot.start_ticks, video.fps, rounding="half_up")
