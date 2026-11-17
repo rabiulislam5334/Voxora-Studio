@@ -175,7 +175,6 @@ class FFmpegTool:
             args.extend(["-show_format", "-show_streams", "-of", "json", str(path)])
             proc = subprocess.run(
                 args,
-                ],
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 creationflags=_NO_WINDOW, timeout=60,
             )
