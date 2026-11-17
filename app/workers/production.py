@@ -436,6 +436,17 @@ class ProductionJob:
                 stream_start_offset is not None
                 and stream_start_offset <= stream_start_tolerance
             )
+            # Relative alignment alone is insufficient: both streams must also
+            # begin at the zero-based project timeline origin. Use each stream's
+            # own clock tolerance (video frame / AAC access unit).
+            video_stream_origin_valid = (
+                video_stream_start is not None
+                and abs(video_stream_start) <= video_stream_tolerance
+            )
+            audio_stream_origin_valid = (
+                audio_stream_start is not None
+                and abs(audio_stream_start) <= audio_stream_tolerance
+            )
             if (
                 rendered_info.kind != "video"
                 or not rendered_info.has_audio
@@ -446,6 +457,8 @@ class ProductionJob:
                 or not video_stream_duration_valid
                 or not audio_stream_duration_valid
                 or not stream_start_aligned
+                or not video_stream_origin_valid
+                or not audio_stream_origin_valid
             ):
                 actual_label = f"{actual_duration:.6f}s" if actual_duration is not None else "unknown"
                 problems = []
@@ -511,6 +524,24 @@ class ProductionJob:
                         f"audio starts at {audio_stream_start:.6f}s, "
                         f"offset {stream_start_offset:.6f}s exceeds "
                         f"{stream_start_tolerance:.6f}s)"
+                    )
+                if (
+                    video_stream_start is not None
+                    and not video_stream_origin_valid
+                ):
+                    problems.append(
+                        "video stream does not start at the zero-based timeline origin "
+                        f"(expected 0.000000s within {video_stream_tolerance:.6f}s, "
+                        f"got {video_stream_start:.6f}s)"
+                    )
+                if (
+                    audio_stream_start is not None
+                    and not audio_stream_origin_valid
+                ):
+                    problems.append(
+                        "audio stream does not start at the zero-based timeline origin "
+                        f"(expected 0.000000s within {audio_stream_tolerance:.6f}s, "
+                        f"got {audio_stream_start:.6f}s)"
                     )
                 raise ProductionError(
                     "The rendered MP4 failed output validation: " + "; ".join(problems) + "."
