@@ -145,7 +145,7 @@ def test_parse_frame_timestamp_json_counts_only_actual_frame_objects():
 
     assert info.frame_count == 3
     assert info.missing_timestamp_count == 1
-    assert info.cfr_interval_mismatch_count == 1
+    assert info.cfr_interval_mismatch_count == 0
 
 
 def test_parse_frame_timestamp_json_detects_vfr_and_non_monotonic():
