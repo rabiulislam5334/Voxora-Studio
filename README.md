@@ -1,16 +1,18 @@
 # Voxora Studio
 
-A modular, provider-flexible desktop AI voice production studio for creating
-Bengali and English YouTube narration/voiceovers.
+A local-first desktop studio for producing Bengali and English narration and video content.
 
 ## Current Phase
 
-**Phase 1 — Project Setup + Desktop Shell**
+**Phase 2 — Production reliability and visual-production foundation (in progress).**
+
+See [Phase 2 status](docs/architecture/PHASE_2_STATUS.md) for completed milestones, remaining hardening work, and exit criteria.
 
 ## Requirements
 
-- Windows 10
+- Windows 10 or later
 - Python 3.11+
+- FFmpeg and FFprobe available on `PATH`
 - VS Code (recommended)
 
 ## Installation
@@ -18,11 +20,10 @@ Bengali and English YouTube narration/voiceovers.
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt -r requirements-dev.txt
+python -m pip install -e ".[dev]"
 ```
 
-If PowerShell blocks activation with an execution-policy error, run this once
-(user scope, no admin rights required):
+If PowerShell blocks activation with an execution-policy error, run this once (user scope; no admin rights required):
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
@@ -37,51 +38,29 @@ python -m app.main
 ## Testing
 
 ```powershell
-pytest
+python -m pytest -q tests
 ```
 
-## Current Features
+## Current capabilities
 
-- Desktop shell: top bar, sidebar navigation, status bar
-- Dark/light theme with runtime toggle
-- Resizable window with sensible minimum size
-- Config system with auto-created app directories (`projects/`, `output/`,
-  `cache/`, `temp/`, `logs/`)
-- Rotating file logging + console logging
-- Application exception hierarchy
-- Core data models: `Project`, `Scene`, `Voice`, `AudioInfo`
-- `TTSProvider` abstract interface and `ProviderCapabilities` model
-- pytest test suite for config, models, and capabilities
+- Desktop application shell with navigation, status display, and light/dark themes.
+- Edge TTS integration with voice discovery, language/gender filtering, voice preview, and MP3 generation.
+- Scene-oriented narration and video-production workflow using the existing FFmpeg renderer.
+- Sequential multi-scene execution with progress reporting and cancellation.
+- Audio/video assembly and final-output inspection, including stream, duration, frame-count, timestamp, and synchronization checks.
+- Video segment caching with validation before cached segments are reused.
+- Universal Core scene-plan, engine-resolution, runtime-adapter, and production-bridge contracts, while retaining compatibility with legacy projects.
 
-## Not Yet Implemented
+## Not yet in scope
 
-- Edge TTS (or any) speech generation
-- ElevenLabs / OpenAI / Azure / Piper providers
-- Real script/scene editor
-- Long-form chunking + generation queue
-- Audio playback and processing
-- Pronunciation and pause system
-- SRT subtitle generation
-- Background music / mixing
-- Video voice-over / FFmpeg integration
-- Project save/load/autosave
-- Timeline
-- Packaging (PyInstaller)
+- Additional cloud or local TTS provider integrations.
+- A complete visual scene-authoring experience and automatic creation of Universal scene plans.
+- Parallel rendering, a render scheduler, automatic engine fallback, and distributed rendering.
+- Commercial packaging and installer workflows.
 
-## Project Structure
+## Development
 
-## Current Features
-
-- Everything from Phase 1 (shell, theming, navigation)
-- Microsoft Edge TTS integration: dynamic voice discovery, Bengali/English/gender filtering
-- Voice preview playback
-- Text-to-speech generation to MP3, with speed control and a chosen output folder
-- Background generation/voice-loading that never freezes the UI
-
-## Not Yet Implemented
-
-- ElevenLabs / OpenAI / Azure / Piper providers
-- Pitch/volume/style controls in the UI (provider supports them; UI exposes them in a later phase)
-- Scene-based script editor, long-form chunking, generation queue
-- Pronunciation dictionary, pause system, SRT, background music, video, timeline
-- Project save/load/autosave, packaging
+- Keep rendering and network work off the Tk main thread.
+- Preserve sequential, deterministic production unless a separately reviewed design changes that constraint.
+- Do not change cache identity, project schema, or timeline behavior without focused compatibility tests.
+- Treat cancellation, temporary-file ownership, and final-output validation as production-safety requirements.
