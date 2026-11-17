@@ -56,6 +56,18 @@ class StreamInfo:
 
 
 @dataclass(frozen=True)
+class FrameTimestampInfo:
+    """Summary of decoded video presentation timestamps."""
+
+    frame_count: int
+    missing_timestamp_count: int
+    non_monotonic_count: int
+    cfr_interval_mismatch_count: int
+    first_timestamp_s: Optional[float]
+    last_timestamp_s: Optional[float]
+
+
+@dataclass(frozen=True)
 class StructuredMediaInfo:
     """Container and stream metadata returned by FFprobe."""
 
@@ -130,6 +142,40 @@ def parse_ffprobe_json(payload: str) -> StructuredMediaInfo:
         format_duration_s=_optional_float(raw_format.get("duration")),
         format_start_time_s=_optional_float(raw_format.get("start_time")),
         streams=tuple(streams),
+    )
+
+
+def parse_frame_timestamp_output(output: str, expected_fps: int) -> FrameTimestampInfo:
+    """Summarize one decoded video timestamp per line and verify CFR spacing."""
+    if expected_fps <= 0:
+        raise ValueError("expected_fps must be positive")
+
+    raw_values = [line.strip().split(",", 1)[0].strip()
+                  for line in output.splitlines() if line.strip()]
+    timestamps = [_optional_float(value) for value in raw_values]
+    expected_interval = 1.0 / expected_fps
+    # FFprobe's default timestamp formatting is microsecond precision.
+    tolerance = max(2e-6, expected_interval * 1e-5)
+    non_monotonic = 0
+    cfr_mismatches = 0
+    previous: Optional[float] = None
+    for current in timestamps:
+        if previous is not None and current is not None:
+            interval = current - previous
+            if interval <= 0:
+                non_monotonic += 1
+            elif abs(interval - expected_interval) > tolerance:
+                cfr_mismatches += 1
+        previous = current
+
+    valid = [value for value in timestamps if value is not None]
+    return FrameTimestampInfo(
+        frame_count=len(timestamps),
+        missing_timestamp_count=len(timestamps) - len(valid),
+        non_monotonic_count=non_monotonic,
+        cfr_interval_mismatch_count=cfr_mismatches,
+        first_timestamp_s=valid[0] if valid else None,
+        last_timestamp_s=valid[-1] if valid else None,
     )
 
 
