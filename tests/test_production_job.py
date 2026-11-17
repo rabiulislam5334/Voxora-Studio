@@ -13,6 +13,7 @@ from app.audio.mixer import build_mix_args
 from app.audio.probe import FrameTimestampInfo, MediaInfo, StreamInfo, StructuredMediaInfo
 from app.cache.manager import NarrationCache
 from app.cache.video_cache import VideoCache
+from app.cache import temp_cleanup
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError, ProductionError
 from app.studio.models import MusicTrack, SceneVideo, StudioState
 from app.studio.previews import make_thumbnail, make_waveform, render_mix_preview
@@ -834,3 +835,65 @@ def test_windows_crossfade_command_limit_fails_before_launch(env, tmp_path, monk
         )
 
     assert launches == []
+
+
+
+def test_cached_segment_validation_requires_renderer_codec_rate_and_pixel_format(env, tmp_path, monkeypatch):
+    from app.audio.probe import StreamInfo, StructuredMediaInfo
+
+    _, job, _ = env()
+    valid_stream = StreamInfo(
+        index=0, codec_type="video", codec_name="h264",
+        duration_s=1.0, start_time_s=0.0, time_base="1/15360",
+        avg_frame_rate="15/1", real_frame_rate="15/1",
+        width=640, height=360, sample_rate=None, channels=None,
+        pix_fmt="yuv420p", packet_count=15,
+    )
+
+    def inspect(streams):
+        monkeypatch.setattr(
+            job._ffmpeg, "probe_structured",
+            lambda path, *, count_frames=False, count_packets=False, cancel=None:
+                StructuredMediaInfo("mov,mp4", 1.0, 0.0, tuple(streams)),
+        )
+        return job._cached_segment_is_valid(
+            tmp_path / "cached.mp4", width=640, height=360,
+            frame_count=15, duration_s=1.0, fps=15, cancel=CancelToken(),
+        )
+
+    assert inspect([valid_stream])
+    assert not inspect([__import__("dataclasses").replace(valid_stream, codec_name="hevc")])
+    assert not inspect([__import__("dataclasses").replace(valid_stream, pix_fmt="yuv444p")])
+    assert not inspect([__import__("dataclasses").replace(valid_stream, avg_frame_rate="30/1")])
+    assert not inspect([valid_stream, StreamInfo(
+        index=1, codec_type="audio", codec_name="aac", duration_s=1.0,
+        start_time_s=0.0, time_base="1/48000", avg_frame_rate=None,
+        real_frame_rate=None, width=None, height=None, sample_rate=48000,
+        channels=2,
+    )])
+
+
+def test_stale_production_cleanup_removes_only_dead_owned_or_legacy_old_dirs(tmp_path, monkeypatch):
+    import time
+
+    root = tmp_path / "temp"
+    root.mkdir()
+    stale_dead = root / "production-dead"
+    stale_dead.mkdir()
+    (stale_dead / ".voxora-owner").write_text(f"99999999 {time.time() - 90000}", encoding="ascii")
+    (stale_dead / "render.part").write_bytes(b"partial")
+
+    active = root / "production-active"
+    active.mkdir()
+    (active / ".voxora-owner").write_text(f"12345 {time.time() - 90000}", encoding="ascii")
+
+    legacy_recent = root / "production-legacy"
+    legacy_recent.mkdir()
+
+    monkeypatch.setattr(temp_cleanup, "_pid_is_alive", lambda pid: pid == 12345)
+    removed = temp_cleanup.cleanup_stale_production_dirs(root)
+
+    assert removed == 1
+    assert not stale_dead.exists()
+    assert active.exists()
+    assert legacy_recent.exists()

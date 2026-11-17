@@ -52,6 +52,7 @@ class StreamInfo:
     height: Optional[int]
     sample_rate: Optional[int]
     channels: Optional[int]
+    pix_fmt: Optional[str] = None
     decoded_frame_count: Optional[int] = None
     packet_count: Optional[int] = None
 
@@ -130,6 +131,7 @@ def parse_ffprobe_json(payload: str) -> StructuredMediaInfo:
             height=_optional_int(raw.get("height")),
             sample_rate=_optional_int(raw.get("sample_rate")),
             channels=_optional_int(raw.get("channels")),
+            pix_fmt=_optional_text(raw.get("pix_fmt")),
             decoded_frame_count=_optional_int(raw.get("nb_read_frames")),
             packet_count=_optional_int(raw.get("nb_read_packets")),
         ))
