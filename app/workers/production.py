@@ -406,6 +406,7 @@ class ProductionJob:
                 or actual_duration is None
                 or abs(actual_duration - total_s) > duration_tolerance
                 or not frame_count_valid
+                or not timestamp_continuity_valid
                 or not video_stream_duration_valid
                 or not audio_stream_duration_valid
                 or not stream_start_aligned
