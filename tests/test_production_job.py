@@ -878,16 +878,16 @@ def test_stale_production_cleanup_removes_only_dead_owned_or_legacy_old_dirs(tmp
 
     root = tmp_path / "temp"
     root.mkdir()
-    stale_dead = root / "production-dead"
+    stale_dead = root / "production_dead"
     stale_dead.mkdir()
     (stale_dead / ".voxora-owner").write_text(f"99999999 {time.time() - 90000}", encoding="ascii")
     (stale_dead / "render.part").write_bytes(b"partial")
 
-    active = root / "production-active"
+    active = root / "production_active"
     active.mkdir()
     (active / ".voxora-owner").write_text(f"12345 {time.time() - 90000}", encoding="ascii")
 
-    legacy_recent = root / "production-legacy"
+    legacy_recent = root / "production_legacy"
     legacy_recent.mkdir()
 
     monkeypatch.setattr(temp_cleanup, "_pid_is_alive", lambda pid: pid == 12345)
