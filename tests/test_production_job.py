@@ -328,6 +328,59 @@ def test_final_video_rejects_unaligned_or_unknown_stream_start_times(
 
 
 @pytest.mark.parametrize(
+    ("video_start", "audio_start", "message"),
+    [
+        (
+            0.1, 0.1,
+            "video stream does not start at the zero-based timeline origin",
+        ),
+        (
+            0.03, 0.03,
+            "audio stream does not start at the zero-based timeline origin",
+        ),
+    ],
+)
+def test_final_video_rejects_streams_aligned_away_from_zero_origin(
+    env, media, tmp_path, monkeypatch, video_start, audio_start, message
+):
+    _, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "nonzero-stream-origin.mp4"
+
+    def structured_probe(path, *, count_frames=False, count_packets=False, cancel=None):
+        assert count_frames is False
+        return StructuredMediaInfo(
+            format_name="mov,mp4",
+            format_duration_s=2.6,
+            format_start_time_s=0.0,
+            streams=(
+                StreamInfo(
+                    index=0, codec_type="video", codec_name="h264",
+                    duration_s=2.6, start_time_s=video_start,
+                    time_base="1/15360", avg_frame_rate="15/1",
+                    real_frame_rate="15/1", width=640, height=360,
+                    sample_rate=None, channels=None, decoded_frame_count=39,
+                ),
+                StreamInfo(
+                    index=1, codec_type="audio", codec_name="aac",
+                    duration_s=2.6, start_time_s=audio_start,
+                    time_base="1/48000", avg_frame_rate=None,
+                    real_frame_rate=None, width=None, height=None,
+                    sample_rate=48000, channels=2,
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(job._ffmpeg, "probe_structured", structured_probe)
+
+    with pytest.raises(ProductionError, match=re.escape(message)):
+        run(job, st, ProductionOptions(render_video=True, video_output=out))
+
+    assert not out.exists()
+    assert not out.with_name(out.name + ".part").exists()
+
+
+@pytest.mark.parametrize(
     ("non_monotonic", "cfr_mismatches", "message"),
     [
         (1, 0, "video presentation timestamps are not strictly monotonic"),
