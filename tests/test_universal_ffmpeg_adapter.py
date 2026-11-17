@@ -4,7 +4,8 @@ import pytest
 
 from app.universal.adapters.ffmpeg import FFmpegSegmentAdapter
 from app.universal.models import AssetRef, EngineChoice, ScenePlan
-from app.universal.production_bridge import build_production_render_request\nfrom app.universal.engines import (
+from app.universal.production_bridge import build_production_render_request
+from app.universal.engines import (
     EngineCompatibilityError,
     EngineRegistry,
 )
