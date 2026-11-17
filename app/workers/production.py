@@ -293,11 +293,12 @@ class ProductionJob:
                 length_ticks=segment_ticks, frame_count=segment_frames,
             )
             key = self._cache.segment_key(spec)
+            part = self._cache.part_path(key)
             try:
                 _plan, render_request = build_production_render_request(
                     scene.scene_id,
                     spec,
-                    self._cache.part_path(key),
+                    part,
                     scene.visual_plan,
                 )
             except (ProductionPlanError, TypeError, ValueError) as exc:
@@ -328,7 +329,6 @@ class ProductionJob:
             else:
                 # Never pass a non-empty but invalid cache entry to concat/xfade.
                 cached_path.unlink(missing_ok=True)
-                part = self._cache.part_path(key)
                 try:
                     self._ffmpeg_adapter.render_request(
                         render_request,
