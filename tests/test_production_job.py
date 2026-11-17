@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.audio.mixer import build_mix_args
-from app.audio.probe import MediaInfo
+from app.audio.probe import MediaInfo, StreamInfo, StructuredMediaInfo
 from app.cache.manager import NarrationCache
 from app.cache.video_cache import VideoCache
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError, ProductionError
@@ -208,6 +208,54 @@ def test_final_video_rejects_muxed_file_without_audio_stream(env, media, tmp_pat
     )
 
     with pytest.raises(ProductionError, match="missing audio stream"):
+        run(job, st, ProductionOptions(render_video=True, video_output=out))
+
+    assert not out.exists()
+    assert not out.with_name(out.name + ".part").exists()
+
+
+@pytest.mark.parametrize(
+    ("decoded_frames", "message"),
+    [
+        (1, "decoded frame count mismatch (expected 39, got 1)"),
+        (None, "could not determine decoded video frame count"),
+    ],
+)
+def test_final_video_rejects_invalid_decoded_frame_count(
+    env, media, tmp_path, monkeypatch, decoded_frames, message
+):
+    _, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "bad-frame-count.mp4"
+
+    def structured_probe(path, *, count_frames=False):
+        assert count_frames is True
+        return StructuredMediaInfo(
+            format_name="mov,mp4",
+            format_duration_s=2.6,
+            format_start_time_s=0.0,
+            streams=(
+                StreamInfo(
+                    index=0,
+                    codec_type="video",
+                    codec_name="h264",
+                    duration_s=2.6,
+                    start_time_s=0.0,
+                    time_base="1/15360",
+                    avg_frame_rate="15/1",
+                    real_frame_rate="15/1",
+                    width=640,
+                    height=360,
+                    sample_rate=None,
+                    channels=None,
+                    decoded_frame_count=decoded_frames,
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(job._ffmpeg, "probe_structured", structured_probe)
+
+    with pytest.raises(ProductionError, match=message):
         run(job, st, ProductionOptions(render_video=True, video_output=out))
 
     assert not out.exists()
