@@ -336,7 +336,8 @@ class ProductionJob:
             if not part_video.is_file() or part_video.stat().st_size == 0:
                 raise ProductionError("The video file was not created.")
             rendered_info = self._ffmpeg.probe(part_video)
-            structured_info = self._ffmpeg.probe_structured(part_video, count_frames=True)
+            structured_info = self._ffmpeg.probe_structured(part_video)
+            frame_timestamps = self._ffmpeg.probe_frame_timestamps(part_video, video.fps)
             video_streams = [
                 stream for stream in structured_info.streams if stream.codec_type == "video"
             ]
@@ -345,7 +346,7 @@ class ProductionJob:
             ]
             video_stream = video_streams[0] if video_streams else None
             audio_stream = audio_streams[0] if audio_streams else None
-            decoded_frames = video_stream.decoded_frame_count if video_stream else None
+            decoded_frames = frame_timestamps.frame_count or None
 
             # The video stream is frame-quantized. AAC duration can differ by
             # one encoded access unit because AAC-LC encodes 1024 samples per
@@ -358,7 +359,16 @@ class ProductionJob:
 
             actual_duration = rendered_info.duration_s
             duration_tolerance = (1.0 / video.fps) + 0.03  # container tolerance: one frame plus AAC packet
-            frame_count_valid = decoded_frames == total_frames
+            frame_count_valid = (
+                decoded_frames == total_frames
+                and frame_timestamps.missing_timestamp_count == 0
+            )
+            timestamp_continuity_valid = (
+                frame_timestamps.frame_count > 0
+                and frame_timestamps.missing_timestamp_count == 0
+                and frame_timestamps.non_monotonic_count == 0
+                and frame_timestamps.cfr_interval_mismatch_count == 0
+            )
             video_stream_duration = video_stream.duration_s if video_stream else None
             audio_stream_duration = audio_stream.duration_s if audio_stream else None
             video_stream_duration_valid = (
@@ -396,6 +406,7 @@ class ProductionJob:
                 or actual_duration is None
                 or abs(actual_duration - total_s) > duration_tolerance
                 or not frame_count_valid
+                or not timestamp_continuity_valid
                 or not video_stream_duration_valid
                 or not audio_stream_duration_valid
                 or not stream_start_aligned
@@ -417,6 +428,24 @@ class ProductionJob:
                     problems.append(
                         "decoded frame count mismatch "
                         f"(expected {total_frames}, got {decoded_frames})"
+                    )
+                if frame_timestamps.frame_count == 0:
+                    problems.append("could not determine decoded video frame count")
+                elif frame_timestamps.missing_timestamp_count:
+                    problems.append(
+                        "could not determine presentation timestamps for "
+                        f"{frame_timestamps.missing_timestamp_count} decoded video frames"
+                    )
+                if frame_timestamps.non_monotonic_count:
+                    problems.append(
+                        "video presentation timestamps are not strictly monotonic "
+                        f"({frame_timestamps.non_monotonic_count} non-increasing intervals)"
+                    )
+                if frame_timestamps.cfr_interval_mismatch_count:
+                    problems.append(
+                        "video frame intervals are not constant at "
+                        f"{video.fps} FPS "
+                        f"({frame_timestamps.cfr_interval_mismatch_count} intervals outside tolerance)"
                     )
                 if video_stream_duration is None:
                     problems.append("could not determine video stream duration")

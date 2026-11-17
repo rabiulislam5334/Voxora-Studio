@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional
 
-from app.audio.probe import MediaInfo, StructuredMediaInfo, parse_ffprobe_json, parse_probe_output
+from app.audio.probe import (FrameTimestampInfo, MediaInfo, StructuredMediaInfo,
+                             parse_ffprobe_json, parse_frame_timestamp_json, parse_probe_output)
 from app.core.exceptions import FFmpegError, GenerationCancelled, MediaError
 from app.core.logger import get_logger
 from app.core.settings_store import SettingsStore
@@ -186,6 +187,34 @@ class FFmpegTool:
             raise MediaError(f"FFprobe could not inspect '{path.name}': {detail}")
         output = (proc.stdout or b"").decode("utf-8", errors="replace")
         return parse_ffprobe_json(output)
+
+    def probe_frame_timestamps(self, path: Path, expected_fps: int) -> FrameTimestampInfo:
+        """Decode video frames and inspect presentation timestamps for CFR continuity."""
+        path = Path(path)
+        if not path.is_file():
+            raise MediaError(f"File not found: {path}")
+        if expected_fps <= 0:
+            raise ValueError("expected_fps must be positive")
+        ffprobe = self._find_ffprobe()
+        args = [
+            str(ffprobe), "-v", "error", "-select_streams", "v:0",
+            "-show_frames", "-show_entries", "frame=best_effort_timestamp_time",
+            "-of", "json", str(path),
+        ]
+        try:
+            proc = subprocess.run(
+                args,
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                creationflags=_NO_WINDOW, timeout=3600,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise MediaError(f"Could not inspect frame timestamps in '{path.name}': {exc}") from exc
+        stderr = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        if proc.returncode != 0:
+            detail = stderr or f"FFprobe exited with code {proc.returncode}"
+            raise MediaError(f"FFprobe could not inspect frame timestamps in '{path.name}': {detail}")
+        output = (proc.stdout or b"").decode("utf-8", errors="replace")
+        return parse_frame_timestamp_json(output, expected_fps)
 
     def _find_ffprobe(self) -> Path:
         """Find FFprobe beside the selected FFmpeg, then on PATH."""

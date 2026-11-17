@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.audio.probe import parse_ffprobe_json
+from app.audio.probe import parse_ffprobe_json, parse_frame_timestamp_json, parse_frame_timestamp_output
 from app.core.exceptions import MediaError
 
 
@@ -82,6 +82,97 @@ def test_parse_ffprobe_json_keeps_missing_or_unavailable_values_as_none():
 def test_parse_ffprobe_json_rejects_malformed_documents(payload):
     with pytest.raises(MediaError):
         parse_ffprobe_json(payload)
+
+
+def test_parse_frame_timestamp_output_accepts_constant_frame_rate():
+    info = parse_frame_timestamp_output("0.000000\n0.040000\n0.080000\n", expected_fps=25)
+
+    assert info.frame_count == 3
+    assert info.missing_timestamp_count == 0
+    assert info.non_monotonic_count == 0
+    assert info.cfr_interval_mismatch_count == 0
+    assert info.first_timestamp_s == pytest.approx(0.0)
+    assert info.last_timestamp_s == pytest.approx(0.08)
+
+
+def test_parse_frame_timestamp_output_detects_vfr_intervals():
+    info = parse_frame_timestamp_output("0.000000\n0.040000\n0.120000\n", expected_fps=25)
+
+    assert info.frame_count == 3
+    assert info.cfr_interval_mismatch_count == 1
+
+
+def test_parse_frame_timestamp_output_detects_non_monotonic_and_missing_timestamps():
+    non_monotonic = parse_frame_timestamp_output("0.000000\n0.040000\n0.020000\n", expected_fps=25)
+    missing = parse_frame_timestamp_output("0.000000\nN/A\n0.080000\n", expected_fps=25)
+
+    assert non_monotonic.non_monotonic_count == 1
+    assert missing.frame_count == 3
+    assert missing.missing_timestamp_count == 1
+
+
+def test_parse_frame_timestamp_output_requires_positive_fps():
+    with pytest.raises(ValueError, match="expected_fps"):
+        parse_frame_timestamp_output("0.0\n", expected_fps=0)
+
+
+
+def test_parse_frame_timestamp_json_ignores_nested_side_data():
+    payload = json.dumps({
+        "frames": [
+            {"best_effort_timestamp_time": "0.000000",
+             "side_data_list": [{"side_data_type": "H.26[45] User Data Unregistered SEI message"}]},
+            {"best_effort_timestamp_time": "0.040000"},
+            {"best_effort_timestamp_time": "0.080000"},
+        ]
+    })
+
+    info = parse_frame_timestamp_json(payload, expected_fps=25)
+
+    assert info.frame_count == 3
+    assert info.missing_timestamp_count == 0
+    assert info.non_monotonic_count == 0
+    assert info.cfr_interval_mismatch_count == 0
+
+
+def test_parse_frame_timestamp_json_counts_only_actual_frame_objects():
+    info = parse_frame_timestamp_json(
+        '{"frames":[{"best_effort_timestamp_time":"0.000000"},'
+        '{"side_data_list":[{"side_data_type":"metadata"}]},'
+        '{"best_effort_timestamp_time":"0.080000"}]}',
+        expected_fps=25,
+    )
+
+    assert info.frame_count == 3
+    assert info.missing_timestamp_count == 1
+    assert info.cfr_interval_mismatch_count == 0
+
+
+def test_parse_frame_timestamp_json_detects_vfr_and_non_monotonic():
+    vfr = parse_frame_timestamp_json(
+        '{"frames":[{"best_effort_timestamp_time":"0.000000"},'
+        '{"best_effort_timestamp_time":"0.040000"},'
+        '{"best_effort_timestamp_time":"0.120000"}]}',
+        expected_fps=25,
+    )
+    non_monotonic = parse_frame_timestamp_json(
+        '{"frames":[{"best_effort_timestamp_time":"0.000000"},'
+        '{"best_effort_timestamp_time":"0.040000"},'
+        '{"best_effort_timestamp_time":"0.020000"}]}',
+        expected_fps=25,
+    )
+
+    assert vfr.cfr_interval_mismatch_count == 1
+    assert non_monotonic.non_monotonic_count == 1
+
+
+def test_real_ffprobe_inspects_decoded_video_timestamps(real_ffmpeg, media):
+    info = real_ffmpeg.probe_frame_timestamps(media / "clip.mp4", expected_fps=25)
+
+    assert info.frame_count == 25
+    assert info.missing_timestamp_count == 0
+    assert info.non_monotonic_count == 0
+    assert info.cfr_interval_mismatch_count == 0
 
 
 def test_real_ffprobe_inspection_exposes_stream_metadata(real_ffmpeg, media):
