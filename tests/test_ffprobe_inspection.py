@@ -85,7 +85,7 @@ def test_parse_ffprobe_json_rejects_malformed_documents(payload):
 
 
 def test_parse_frame_timestamp_output_accepts_constant_frame_rate():
-    info = parse_frame_timestamp_output("0.000000\\n0.040000\\n0.080000\\n", expected_fps=25)
+    info = parse_frame_timestamp_output("0.000000\n0.040000\n0.080000\n", expected_fps=25)
 
     assert info.frame_count == 3
     assert info.missing_timestamp_count == 0
@@ -96,15 +96,15 @@ def test_parse_frame_timestamp_output_accepts_constant_frame_rate():
 
 
 def test_parse_frame_timestamp_output_detects_vfr_intervals():
-    info = parse_frame_timestamp_output("0.000000\\n0.040000\\n0.120000\\n", expected_fps=25)
+    info = parse_frame_timestamp_output("0.000000\n0.040000\n0.120000\n", expected_fps=25)
 
     assert info.frame_count == 3
     assert info.cfr_interval_mismatch_count == 1
 
 
 def test_parse_frame_timestamp_output_detects_non_monotonic_and_missing_timestamps():
-    non_monotonic = parse_frame_timestamp_output("0.000000\\n0.040000\\n0.020000\\n", expected_fps=25)
-    missing = parse_frame_timestamp_output("0.000000\\nN/A\\n0.080000\\n", expected_fps=25)
+    non_monotonic = parse_frame_timestamp_output("0.000000\n0.040000\n0.020000\n", expected_fps=25)
+    missing = parse_frame_timestamp_output("0.000000\nN/A\n0.080000\n", expected_fps=25)
 
     assert non_monotonic.non_monotonic_count == 1
     assert missing.frame_count == 3
@@ -113,7 +113,7 @@ def test_parse_frame_timestamp_output_detects_non_monotonic_and_missing_timestam
 
 def test_parse_frame_timestamp_output_requires_positive_fps():
     with pytest.raises(ValueError, match="expected_fps"):
-        parse_frame_timestamp_output("0.0\\n", expected_fps=0)
+        parse_frame_timestamp_output("0.0\n", expected_fps=0)
 
 
 def test_real_ffprobe_inspects_decoded_video_timestamps(real_ffmpeg, media):
