@@ -369,6 +369,27 @@ class ProductionJob:
                 audio_stream_duration is not None
                 and abs(audio_stream_duration - total_s) <= audio_stream_tolerance
             )
+
+            # Compare stream presentation start times independently of the
+            # container start time. AAC may carry encoder priming/padding, so
+            # allow one AAC access unit plus one sample; other codecs use the
+            # existing conservative frame-based tolerance.
+            video_stream_start = video_stream.start_time_s if video_stream else None
+            audio_stream_start = audio_stream.start_time_s if audio_stream else None
+            stream_start_tolerance = (
+                (1024 + 1) / audio_stream.sample_rate
+                if audio_stream and audio_stream.codec_name == "aac" and audio_stream.sample_rate
+                else (1.0 / video.fps) + 0.03
+            )
+            stream_start_offset = (
+                abs(audio_stream_start - video_stream_start)
+                if audio_stream_start is not None and video_stream_start is not None
+                else None
+            )
+            stream_start_aligned = (
+                stream_start_offset is not None
+                and stream_start_offset <= stream_start_tolerance
+            )
             if (
                 rendered_info.kind != "video"
                 or not rendered_info.has_audio
@@ -377,6 +398,7 @@ class ProductionJob:
                 or not frame_count_valid
                 or not video_stream_duration_valid
                 or not audio_stream_duration_valid
+                or not stream_start_aligned
             ):
                 actual_label = f"{actual_duration:.6f}s" if actual_duration is not None else "unknown"
                 problems = []
@@ -409,6 +431,21 @@ class ProductionJob:
                     problems.append(
                         "audio stream duration mismatch "
                         f"(expected {total_s:.6f}s, got {audio_stream_duration:.6f}s)"
+                    )
+                if video_stream_start is None:
+                    problems.append("could not determine video stream start time")
+                if audio_stream_start is None:
+                    problems.append("could not determine audio stream start time")
+                if (
+                    stream_start_offset is not None
+                    and stream_start_offset > stream_start_tolerance
+                ):
+                    problems.append(
+                        "audio/video stream start offset mismatch "
+                        f"(video starts at {video_stream_start:.6f}s, "
+                        f"audio starts at {audio_stream_start:.6f}s, "
+                        f"offset {stream_start_offset:.6f}s exceeds "
+                        f"{stream_start_tolerance:.6f}s)"
                     )
                 raise ProductionError(
                     "The rendered MP4 failed output validation: " + "; ".join(problems) + "."
