@@ -144,52 +144,44 @@ class FFmpegTool:
     def run_args(self, args: List[str], cancel: Optional[CancelToken] = None, timeout: float = 600.0) -> str:
         return self._run(args, cancel=cancel, timeout=timeout)
 
-    def probe(self, path: Path) -> MediaInfo:
+    def probe(self, path: Path, cancel: Optional[CancelToken] = None) -> MediaInfo:
         exe = self.require()
         path = Path(path)
         if not path.is_file():
             raise MediaError(f"File not found: {path}")
-        try:
-            proc = subprocess.run(
-                [str(exe), "-hide_banner", "-nostdin", "-i", str(path)],
-                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                creationflags=_NO_WINDOW, timeout=60,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise MediaError(f"Could not inspect '{path.name}': {exc}") from exc
-        return parse_probe_output(proc.stderr.decode("utf-8", errors="replace"))
+        _, stderr = self._run_probe_capture(
+            [str(exe), "-hide_banner", "-nostdin", "-i", str(path)],
+            path=path, operation="inspect", timeout=60.0, cancel=cancel, check_returncode=False,
+        )
+        return parse_probe_output(stderr.decode("utf-8", errors="replace"))
 
-    def probe_structured(self, path: Path, *, count_frames: bool = False) -> StructuredMediaInfo:
-        """Inspect container and stream metadata with the companion FFprobe binary.
+    def probe_structured(
+        self, path: Path, *, count_frames: bool = False,
+        cancel: Optional[CancelToken] = None,
+    ) -> StructuredMediaInfo:
+        """Inspect container and stream metadata with cancellable FFprobe execution.
 
         This is intentionally separate from probe(), which retains its legacy
-        FFmpeg-banner behavior for existing callers.
+        FFmpeg-banner parsing behavior for existing callers.
         """
         path = Path(path)
         if not path.is_file():
             raise MediaError(f"File not found: {path}")
         ffprobe = self._find_ffprobe()
-        try:
-            args = [str(ffprobe), "-v", "error"]
-            if count_frames:
-                args.append("-count_frames")
-            args.extend(["-show_format", "-show_streams", "-of", "json", str(path)])
-            proc = subprocess.run(
-                args,
-                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                creationflags=_NO_WINDOW, timeout=(3600 if count_frames else 60),
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise MediaError(f"Could not inspect '{path.name}' with FFprobe: {exc}") from exc
-        stderr = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
-        if proc.returncode != 0:
-            detail = stderr or f"FFprobe exited with code {proc.returncode}"
-            raise MediaError(f"FFprobe could not inspect '{path.name}': {detail}")
-        output = (proc.stdout or b"").decode("utf-8", errors="replace")
-        return parse_ffprobe_json(output)
+        args = [str(ffprobe), "-v", "error"]
+        if count_frames:
+            args.append("-count_frames")
+        args.extend(["-show_format", "-show_streams", "-of", "json", str(path)])
+        stdout, _ = self._run_probe_capture(
+            args, path=path, operation="inspect with FFprobe",
+            timeout=(3600.0 if count_frames else 60.0), cancel=cancel,
+        )
+        return parse_ffprobe_json(stdout.decode("utf-8", errors="replace"))
 
-    def probe_frame_timestamps(self, path: Path, expected_fps: int) -> FrameTimestampInfo:
-        """Decode video frames and inspect presentation timestamps for CFR continuity."""
+    def probe_frame_timestamps(
+        self, path: Path, expected_fps: int, cancel: Optional[CancelToken] = None
+    ) -> FrameTimestampInfo:
+        """Decode video frames and inspect CFR timestamps with cancellable FFprobe."""
         path = Path(path)
         if not path.is_file():
             raise MediaError(f"File not found: {path}")
@@ -201,20 +193,66 @@ class FFmpegTool:
             "-show_frames", "-show_entries", "frame=best_effort_timestamp_time",
             "-of", "json", str(path),
         ]
+        stdout, _ = self._run_probe_capture(
+            args, path=path, operation="inspect frame timestamps in",
+            timeout=3600.0, cancel=cancel,
+        )
+        return parse_frame_timestamp_json(stdout.decode("utf-8", errors="replace"), expected_fps)
+
+    def _run_probe_capture(
+        self,
+        args: List[str],
+        *,
+        path: Path,
+        operation: str,
+        timeout: float,
+        cancel: Optional[CancelToken],
+        check_returncode: bool = True,
+    ) -> tuple[bytes, bytes]:
+        """Run a media-inspection subprocess with bounded polling and cancellation."""
+        if cancel is not None:
+            cancel.raise_if_cancelled()
         try:
-            proc = subprocess.run(
-                args,
-                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                creationflags=_NO_WINDOW, timeout=3600,
+            proc = subprocess.Popen(
+                args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, creationflags=_NO_WINDOW,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise MediaError(f"Could not inspect frame timestamps in '{path.name}': {exc}") from exc
-        stderr = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
-        if proc.returncode != 0:
-            detail = stderr or f"FFprobe exited with code {proc.returncode}"
-            raise MediaError(f"FFprobe could not inspect frame timestamps in '{path.name}': {detail}")
-        output = (proc.stdout or b"").decode("utf-8", errors="replace")
-        return parse_frame_timestamp_json(output, expected_fps)
+        except OSError as exc:
+            raise MediaError(f"Could not start FFprobe to {operation} '{path.name}': {exc}") from exc
+
+        started = time.monotonic()
+        try:
+            while True:
+                if cancel is not None and cancel.cancelled:
+                    raise GenerationCancelled("Generation cancelled.")
+                remaining = timeout - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise MediaError(
+                        f"Could not {operation} '{path.name}': inspection timed out after {int(timeout)} seconds."
+                    )
+                try:
+                    stdout, stderr = proc.communicate(timeout=min(0.2, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+            if cancel is not None:
+                cancel.raise_if_cancelled()
+            if check_returncode and proc.returncode != 0:
+                detail = (stderr or b"").decode("utf-8", errors="replace").strip()
+                detail = detail or f"FFprobe exited with code {proc.returncode}"
+                raise MediaError(f"FFprobe could not {operation} '{path.name}': {detail}")
+            return stdout or b"", stderr or b""
+        except BaseException:
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+            try:
+                proc.communicate()
+            except (OSError, ValueError):
+                pass
+            raise
 
     def _find_ffprobe(self) -> Path:
         """Find FFprobe beside the selected FFmpeg, then on PATH."""

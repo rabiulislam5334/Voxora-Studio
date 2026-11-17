@@ -335,9 +335,15 @@ class ProductionJob:
             )
             if not part_video.is_file() or part_video.stat().st_size == 0:
                 raise ProductionError("The video file was not created.")
-            rendered_info = self._ffmpeg.probe(part_video)
-            structured_info = self._ffmpeg.probe_structured(part_video)
-            frame_timestamps = self._ffmpeg.probe_frame_timestamps(part_video, video.fps)
+            cancel.raise_if_cancelled()
+            rendered_info = self._ffmpeg.probe(part_video, cancel=cancel)
+            cancel.raise_if_cancelled()
+            structured_info = self._ffmpeg.probe_structured(part_video, cancel=cancel)
+            cancel.raise_if_cancelled()
+            frame_timestamps = self._ffmpeg.probe_frame_timestamps(
+                part_video, video.fps, cancel=cancel
+            )
+            cancel.raise_if_cancelled()
             video_streams = [
                 stream for stream in structured_info.streams if stream.codec_type == "video"
             ]
@@ -479,6 +485,8 @@ class ProductionJob:
                 raise ProductionError(
                     "The rendered MP4 failed output validation: " + "; ".join(problems) + "."
                 )
+            # Cancellation may arrive after validation succeeds but before publication.
+            cancel.raise_if_cancelled()
             os.replace(part_video, video_path)
         except BaseException:
             part_video.unlink(missing_ok=True)

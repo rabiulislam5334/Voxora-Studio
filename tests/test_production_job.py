@@ -210,7 +210,7 @@ def test_final_video_rejects_muxed_file_without_audio_stream(env, media, tmp_pat
     monkeypatch.setattr(
         job._ffmpeg,
         "probe",
-        lambda path: MediaInfo(
+        lambda path, cancel=None: MediaInfo(
             duration_s=2.6,
             has_video=True,
             has_audio=False,
@@ -246,7 +246,7 @@ def test_final_video_rejects_invalid_per_stream_duration(
     video_duration = stream_duration if stream_type == "video" else 2.6
     audio_duration = stream_duration if stream_type == "audio" else 2.6
 
-    def structured_probe(path, *, count_frames=False):
+    def structured_probe(path, *, count_frames=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -294,7 +294,7 @@ def test_final_video_rejects_unaligned_or_unknown_stream_start_times(
     st = studio_with(media)
     out = tmp_path / "bad-stream-start.mp4"
 
-    def structured_probe(path, *, count_frames=False):
+    def structured_probe(path, *, count_frames=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -350,7 +350,7 @@ def test_final_video_rejects_non_monotonic_or_vfr_frame_timestamps(
     )
     monkeypatch.setattr(
         job._ffmpeg, "probe_frame_timestamps",
-        lambda path, expected_fps: frame_info,
+        lambda path, expected_fps, cancel=None: frame_info,
     )
 
     with pytest.raises(ProductionError, match=re.escape(message)):
@@ -374,7 +374,7 @@ def test_final_video_rejects_invalid_decoded_frame_count(
     st = studio_with(media)
     out = tmp_path / "bad-frame-count.mp4"
 
-    def structured_probe(path, *, count_frames=False):
+    def structured_probe(path, *, count_frames=False, cancel=None):
         assert count_frames is False
         return StructuredMediaInfo(
             format_name="mov,mp4",
@@ -424,7 +424,7 @@ def test_final_video_rejects_invalid_decoded_frame_count(
     )
     monkeypatch.setattr(
         job._ffmpeg, "probe_frame_timestamps",
-        lambda path, expected_fps: timestamp_result,
+        lambda path, expected_fps, cancel=None: timestamp_result,
     )
 
     with pytest.raises(ProductionError, match=re.escape(message)):
@@ -620,3 +620,37 @@ def test_unrelated_ffmpeg_errors_are_not_mistaken_for_an_option_problem(env, med
     with pytest.raises(FFmpegError, match="No space"):
         run(job, studio_with(media, transition="crossfade"), ProductionOptions(render_video=True, video_output=tmp_path / "x.mp4"))
     assert attempts == ["-/filter_complex"]                                  # no pointless retry
+
+
+def test_cancel_during_final_frame_inspection_prevents_video_publish(
+    env, media, tmp_path, monkeypatch
+):
+    _, job, _ = env()
+    st = studio_with(media)
+    out = tmp_path / "cancel-during-validation.mp4"
+    token = CancelToken()
+
+    def cancel_during_inspection(path, expected_fps, cancel=None):
+        assert cancel is token
+        token.cancel()
+        return FrameTimestampInfo(
+            frame_count=39,
+            missing_timestamp_count=0,
+            non_monotonic_count=0,
+            cfr_interval_mismatch_count=0,
+            first_timestamp_s=0.0,
+            last_timestamp_s=2.533333,
+        )
+
+    monkeypatch.setattr(job._ffmpeg, "probe_frame_timestamps", cancel_during_inspection)
+
+    with pytest.raises(GenerationCancelled):
+        run(
+            job, st,
+            ProductionOptions(render_video=True, video_output=out),
+            cancel=token,
+        )
+
+    assert token.cancelled
+    assert not out.exists()
+    assert not out.with_name(out.name + ".part").exists()
