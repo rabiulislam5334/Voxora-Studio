@@ -40,7 +40,7 @@ def test_parse_ffprobe_json_preserves_container_and_stream_timing_fields():
             {
                 "index": 1, "codec_type": "audio", "codec_name": "aac",
                 "start_time": "0.021333", "duration": "0.978667",
-                "time_base": "1/48000", "sample_rate": "48000", "channels": 2,
+                "time_base": "1/48000", "sample_rate": "48000", "channels": 2, "nb_read_frames": "25",
             },
         ],
     }
@@ -54,6 +54,7 @@ def test_parse_ffprobe_json_preserves_container_and_stream_timing_fields():
     video, audio = info.streams
     assert (video.codec_type, video.codec_name) == ("video", "h264")
     assert (video.width, video.height) == (320, 240)
+    assert video.decoded_frame_count == 25
     assert video.time_base == "1/12800"
     assert video.avg_frame_rate == "25/1" and video.real_frame_rate == "25/1"
     assert audio.start_time_s == pytest.approx(0.021333)
@@ -64,7 +65,7 @@ def test_parse_ffprobe_json_preserves_container_and_stream_timing_fields():
 def test_parse_ffprobe_json_keeps_missing_or_unavailable_values_as_none():
     info = parse_ffprobe_json(
         '{"streams":[{"index":"N/A","codec_type":"audio","duration":"N/A",'
-        '"start_time":null,"sample_rate":"N/A","channels":2}]}'
+        '"start_time":null,"sample_rate":"N/A","channels":2,"nb_read_frames":"N/A"}]}'
     )
 
     stream = info.streams[0]
@@ -73,6 +74,7 @@ def test_parse_ffprobe_json_keeps_missing_or_unavailable_values_as_none():
     assert stream.start_time_s is None
     assert stream.sample_rate is None
     assert stream.channels == 2
+    assert stream.decoded_frame_count is None
     assert info.format_duration_s is None
 
 
@@ -91,6 +93,13 @@ def test_real_ffprobe_inspection_exposes_stream_metadata(real_ffmpeg, media):
     assert (video.width, video.height) == (320, 240)
     assert video.time_base
     assert video.avg_frame_rate
+
+
+def test_real_ffprobe_can_count_decoded_video_frames(real_ffmpeg, media):
+    info = real_ffmpeg.probe_structured(media / "clip.mp4", count_frames=True)
+
+    video = next(stream for stream in info.streams if stream.codec_type == "video")
+    assert video.decoded_frame_count == 25
 
 
 def test_real_ffprobe_inspection_exposes_audio_metadata(real_ffmpeg, media):
