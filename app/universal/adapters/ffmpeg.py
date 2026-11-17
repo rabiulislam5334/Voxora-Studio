@@ -67,6 +67,70 @@ class FFmpegSegmentAdapter:
         if spec.fit not in ("fit", "fill"):
             raise ValueError(f"unsupported segment fit mode: {spec.fit!r}")
 
+    def render_request(
+        self,
+        request,
+        *,
+        on_progress: Optional[Callable[[float], None]] = None,
+        cancel: Optional[CancelToken] = None,
+    ) -> Path:
+        """Render an immutable Universal request through the existing segment renderer.
+
+        This production bridge intentionally returns the already-normalized
+        silent MP4 segment. It avoids a second encode through SegmentNormalizer
+        while retaining the legacy renderer's exact output and timing behavior.
+        """
+        from app.universal.requests import EngineRenderRequest
+
+        if not isinstance(request, EngineRenderRequest):
+            raise TypeError("request must be an EngineRenderRequest")
+        if request.output_format != "mp4":
+            raise ValueError("FFmpeg production adapter only supports mp4 output")
+        allowed_params = {"motion", "fit", "length_ticks", "frame_count"}
+        unknown_params = set(request.engine_params) - allowed_params
+        if unknown_params:
+            raise ValueError(
+                "unsupported FFmpeg request parameters: " + ", ".join(sorted(unknown_params))
+            )
+
+        if request.scene_kind == "blank":
+            if request.asset_refs:
+                raise ValueError("blank scene requests must not contain asset references")
+            media = None
+        elif request.scene_kind in ("image", "video"):
+            if len(request.asset_refs) != 1:
+                raise ValueError(
+                    f"{request.scene_kind} scene requests require exactly one asset reference"
+                )
+            asset = request.asset_refs[0]
+            if asset.kind != request.scene_kind or not asset.path:
+                raise ValueError(
+                    f"{request.scene_kind} scene request requires one matching asset path"
+                )
+            media = asset.path
+        else:
+            raise ValueError(f"unsupported FFmpeg scene kind: {request.scene_kind!r}")
+
+        params = request.engine_params
+        spec = SegmentSpec(
+            kind=request.scene_kind,
+            media=media,
+            length_s=request.output_spec.duration_s,
+            width=request.output_spec.width,
+            height=request.output_spec.height,
+            fps=request.output_spec.fps,
+            motion=params.get("motion", "none"),
+            fit=params.get("fit", "fill"),
+            length_ticks=params.get("length_ticks"),
+            frame_count=params.get("frame_count"),
+        )
+        return self.render_segment(
+            spec,
+            request.destination,
+            on_progress=on_progress,
+            cancel=cancel,
+        )
+
     def render_segment(
         self,
         spec: SegmentSpec,
