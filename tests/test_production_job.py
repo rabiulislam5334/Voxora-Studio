@@ -483,6 +483,21 @@ def test_corrupt_nonempty_cached_segment_is_invalidated_and_rerendered(env, medi
     assert second.segments_cached == 2
     assert (tmp_path / "cache-repair.mp4").is_file()
 
+
+def test_video_render_preserves_another_jobs_active_part_file(env, media, tmp_path):
+    _, job, cache = env()
+    active_part = cache.segments_dir / "another-active-render.12345678.part"
+    active_part.write_bytes(b"active render output")
+
+    run(
+        job,
+        studio_with(media),
+        ProductionOptions(render_video=True, video_output=tmp_path / "preserve-part.mp4"),
+    )
+
+    assert active_part.read_bytes() == b"active render output"
+
+
 def test_narration_longer_than_configured_duration_extends_scene(env, media, tmp_path):
     tts, job, _ = env()
     st = studio_with(media)

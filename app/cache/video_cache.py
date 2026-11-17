@@ -89,10 +89,3 @@ class VideoCache:
                 total -= size
             except OSError as exc:
                 logger.warning("Could not prune %s: %s", old.name, exc)
-
-    def remove_stale_parts(self) -> None:
-        for part in list(self.segments_dir.glob("*.part")):
-            try:
-                part.unlink()
-            except OSError:
-                pass
