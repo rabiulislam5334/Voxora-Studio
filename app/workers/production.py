@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import time
 import uuid
+from fractions import Fraction
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional, Sequence
@@ -12,6 +14,7 @@ from app.audio.assembler import WavBuilder
 from app.audio.ffmpeg_tool import FFmpegTool
 from app.audio.mixer import build_mix_args, has_mixing_work
 from app.cache.video_cache import VideoCache
+from app.cache.temp_cleanup import cleanup_stale_production_dirs
 from app.core import constants
 from app.core.exceptions import FFmpegError, MediaError, ProductionError
 from app.core.logger import get_logger
@@ -139,7 +142,12 @@ class ProductionJob:
         try:
             await asyncio.to_thread(self._ffmpeg.require)
             await asyncio.to_thread(self._preflight, requests, scenes, studio, options)
+            self._temp_dir.mkdir(parents=True, exist_ok=True)
+            cleanup_stale_production_dirs(self._temp_dir)
             work.mkdir(parents=True, exist_ok=True)
+            (work / ".voxora-owner").write_text(
+                f"{os.getpid()} {time.time():.6f}", encoding="ascii"
+            )
             narration = await self._narration.run(
                 requests, output_dir=work, basename=basename, cancel=cancel,
                 on_progress=lambda ev: emit(ProductionProgress(ev.fraction * narration_share, "Narration", ev.message)),
@@ -217,13 +225,28 @@ class ProductionJob:
             info = self._ffmpeg.probe_structured(path, count_packets=True, cancel=cancel)
         except MediaError:
             return False
+        # Scene segments are deliberately silent, single-stream H.264 MP4s.
+        # Reject extra streams as well as codecs/pixel formats that the renderer
+        # does not produce, rather than trusting a merely non-empty MP4.
+        if len(info.streams) != 1:
+            return False
         video_streams = [stream for stream in info.streams if stream.codec_type == "video"]
         if len(video_streams) != 1:
             return False
         stream = video_streams[0]
+        try:
+            expected_rate = Fraction(fps, 1)
+            avg_rate = Fraction(stream.avg_frame_rate) if stream.avg_frame_rate else None
+            real_rate = Fraction(stream.real_frame_rate) if stream.real_frame_rate else None
+        except (ValueError, ZeroDivisionError):
+            return False
         tolerance = (1.0 / fps) + 0.03
         return (
-            stream.width == width and stream.height == height
+            stream.codec_name == "h264"
+            and stream.pix_fmt == "yuv420p"
+            and avg_rate == expected_rate
+            and real_rate == expected_rate
+            and stream.width == width and stream.height == height
             and stream.packet_count == frame_count
             and stream.duration_s is not None
             and abs(stream.duration_s - duration_s) <= tolerance
