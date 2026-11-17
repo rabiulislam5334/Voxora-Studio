@@ -115,7 +115,7 @@ class VideoCache:
         """
         budget = max(0, int(max_bytes))
         current_time = time.time() if now is None else float(now)
-        cutoff_ns = int((current_time - max(0.0, grace_seconds)) * 1_000_000_000
+        cutoff_ns = int((current_time - max(0.0, grace_seconds)) * 1_000_000_000)
         candidates = []
         try:
             for path in directory.glob(pattern):
