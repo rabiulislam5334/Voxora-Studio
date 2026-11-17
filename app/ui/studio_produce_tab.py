@@ -22,6 +22,7 @@ from app.core.logger import get_logger
 from app.studio.validation import ERROR, INFO, WARNING, ValidationIssue, has_errors, validate_production
 from app.ui.studio_context import StudioContext, fmt_seconds
 from app.workers.cancel import CancelToken
+from app.universal.models import UniversalState
 from app.workers.production import (
     ProductionJob,
     ProductionOptions,
@@ -189,7 +190,11 @@ class ProduceTab(ttk.Frame):
         except ConfigurationError as exc:
             self._message.configure(text=str(exc))
             return
-        infos = [SceneInfo(s.id, s.title, s.text) for s in scenes]
+        universal_state = UniversalState.from_project_settings(self._ctx.project().settings)
+        infos = [
+            SceneInfo(s.id, s.title, s.text, universal_state.scene_plans.get(s.id))
+            for s in scenes
+        ]
         job = ProductionJob(self._ctx.voice.narration_job, self._ctx.ffmpeg, self._ctx.video_cache, self._ctx.config.temp_dir)
         options = ProductionOptions(
             render_video=self._video_var.get(), export_audio=self._audio_var.get(),

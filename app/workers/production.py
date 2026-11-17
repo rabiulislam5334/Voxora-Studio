@@ -21,6 +21,9 @@ from app.studio.timing import SceneTimingInput, VideoTimeline, compute_timeline
 from app.core.timebase import frames_to_ticks, ticks_to_frames, ticks_to_samples, ticks_to_seconds
 from app.universal.adapters.ffmpeg import FFmpegSegmentAdapter
 from app.universal.engines import EngineRegistry
+from app.universal.models import ScenePlan
+from app.universal.plan_resolver import EnginePlanResolver, EnginePlanStatus
+from app.universal.production_bridge import ProductionPlanError, build_production_render_request
 from app.video.render import (
     FILTER_SCRIPT_OPTIONS,
     SegmentSpec,
@@ -52,6 +55,7 @@ class SceneInfo:
     scene_id: str
     title: str
     text: str
+    visual_plan: Optional[ScenePlan] = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +106,7 @@ class ProductionJob:
         self._temp_dir = Path(temp_dir)
         self._ffmpeg_adapter = FFmpegSegmentAdapter(ffmpeg)
         self._engine_registry = EngineRegistry((self._ffmpeg_adapter.descriptor,))
+        self._plan_resolver = EnginePlanResolver(self._engine_registry)
         self._script_options = list(FILTER_SCRIPT_OPTIONS)  # best-working option first; reordered once learned
 
     async def run(
@@ -287,14 +292,28 @@ class ProductionJob:
                 scene, segment_s, studio, width, height,
                 length_ticks=segment_ticks, frame_count=segment_frames,
             )
-            asset_kinds = (spec.kind,) if spec.kind in ("image", "video") else ()
-            self._engine_registry.resolve(
-                self._ffmpeg_adapter.engine_id,
-                scene_kind=spec.kind,
-                asset_kinds=asset_kinds,
-                output_format="mp4",
-            )
             key = self._cache.segment_key(spec)
+            part = self._cache.part_path(key)
+            try:
+                _plan, render_request = build_production_render_request(
+                    scene.scene_id,
+                    spec,
+                    part,
+                    scene.visual_plan,
+                )
+            except (ProductionPlanError, TypeError, ValueError) as exc:
+                raise ProductionError(
+                    f"Scene '{scene.title}' has an invalid visual plan: {exc}"
+                ) from exc
+            resolution = self._plan_resolver.resolve(_plan)
+            if (
+                resolution.status is not EnginePlanStatus.COMPATIBLE
+                or resolution.selected_descriptor is None
+            ):
+                detail = "; ".join(resolution.diagnostics) or resolution.status.value
+                raise ProductionError(
+                    f"Scene '{scene.title}' cannot use its visual plan: {detail}"
+                )
             label = f"Scene '{scene.title}'"
             lo = seg_lo + (seg_hi - seg_lo) * done_time / total_seg_time
             hi = seg_lo + (seg_hi - seg_lo) * (done_time + segment_s) / total_seg_time
@@ -310,11 +329,9 @@ class ProductionJob:
             else:
                 # Never pass a non-empty but invalid cache entry to concat/xfade.
                 cached_path.unlink(missing_ok=True)
-                part = self._cache.part_path(key)
                 try:
-                    self._ffmpeg_adapter.render_segment(
-                        spec,
-                        part,
+                    self._ffmpeg_adapter.render_request(
+                        render_request,
                         on_progress=lambda f, lbl=label, rep=report: rep(f, f"Rendering {lbl}"),
                         cancel=cancel,
                     )
