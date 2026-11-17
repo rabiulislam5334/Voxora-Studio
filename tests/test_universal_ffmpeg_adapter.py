@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from app.universal.adapters.ffmpeg import FFmpegSegmentAdapter
-from app.universal.engines import (
+from app.universal.models import AssetRef, EngineChoice, ScenePlan\nfrom app.universal.production_bridge import build_production_render_request\nfrom app.universal.engines import (
     EngineCompatibilityError,
     EngineRegistry,
 )
@@ -54,6 +54,52 @@ def test_adapter_delegates_to_existing_segment_argument_builder(spec, tmp_path):
     assert total_s == spec.length_s
     assert progress is None
     assert cancel is None
+
+
+def test_adapter_renders_immutable_production_request_without_changing_segment_args(tmp_path):
+    ffmpeg = FakeFFmpeg()
+    adapter = FFmpegSegmentAdapter(ffmpeg)
+    source = tmp_path / "scene.png"
+    destination = tmp_path / "scene.part"
+    spec = SegmentSpec("image", str(source), 2.0, 640, 360, 24, "zoom_in", "fit")
+    plan = ScenePlan(
+        scene_id="scene-1",
+        kind="image",
+        requirements={"output_format": "mp4"},
+        engine_choice=EngineChoice("ffmpeg"),
+        asset_refs=[AssetRef("asset-1", "image", path=str(source))],
+    )
+    _plan, request = build_production_render_request(
+        "scene-1", spec, destination, plan
+    )
+
+    result = adapter.render_request(request)
+
+    assert result == destination
+    assert len(ffmpeg.calls) == 1
+    args, total_s, progress, cancel = ffmpeg.calls[0]
+    assert args == build_segment_args(Path("ffmpeg.exe"), spec, destination)
+    assert total_s == spec.length_s
+    assert progress is None
+    assert cancel is None
+
+
+def test_adapter_rejects_unsupported_request_parameters(tmp_path):
+    from app.universal.normalizer import SegmentOutputSpec
+    from app.universal.requests import EngineRenderRequest
+
+    adapter = FFmpegSegmentAdapter(FakeFFmpeg())
+    request = EngineRenderRequest(
+        scene_id="scene-1",
+        scene_kind="blank",
+        output_format="mp4",
+        output_spec=SegmentOutputSpec(1.0, 320, 180, 15),
+        destination=tmp_path / "out.part",
+        engine_params={"unreviewed": True},
+    )
+
+    with pytest.raises(ValueError, match="unsupported FFmpeg request parameters"):
+        adapter.render_request(request)
 
 
 def test_adapter_passes_progress_and_cancel_through_unchanged(tmp_path):
