@@ -176,7 +176,7 @@ class FFmpegTool:
             proc = subprocess.run(
                 args,
                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                creationflags=_NO_WINDOW, timeout=60,
+                creationflags=_NO_WINDOW, timeout=(3600 if count_frames else 60),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise MediaError(f"Could not inspect '{path.name}' with FFprobe: {exc}") from exc
