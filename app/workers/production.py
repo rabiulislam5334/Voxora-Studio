@@ -357,6 +357,7 @@ class ProductionJob:
                 audio_stream_tolerance = (1.0 / video.fps) + 0.03
 
             actual_duration = rendered_info.duration_s
+            duration_tolerance = (1.0 / video.fps) + 0.03  # container tolerance: one frame plus AAC packet
             frame_count_valid = decoded_frames == total_frames
             video_stream_duration = video_stream.duration_s if video_stream else None
             audio_stream_duration = audio_stream.duration_s if audio_stream else None
