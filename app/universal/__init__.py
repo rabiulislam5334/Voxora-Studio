@@ -33,6 +33,11 @@ from app.universal.models import (
     ScenePlan,
     UniversalState,
 )
+from app.universal.profile_authoring import (
+    ProfiledScenePlanProposal,
+    apply_profiled_scene_plan_proposal,
+    build_profiled_scene_plan_proposal,
+)
 from app.universal.requests import EngineRenderRequest, RawEngineOutput
 from app.universal.runtime import (
     EngineAdapter,
@@ -67,6 +72,7 @@ __all__ = [
     "MultiSceneExecutionRequest",
     "MultiSceneExecutionResult",
     "NormalizedSegment",
+    "ProfiledScenePlanProposal",
     "RawEngineOutput",
     "SceneEngineExecutionError",
     "SceneExecutionContext",
@@ -81,4 +87,6 @@ __all__ = [
     "SegmentOutputSpec",
     "UnknownEngineError",
     "UniversalState",
+    "apply_profiled_scene_plan_proposal",
+    "build_profiled_scene_plan_proposal",
 ]
