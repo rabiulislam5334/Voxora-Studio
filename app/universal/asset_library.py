@@ -333,8 +333,12 @@ class VisualAssetLibrary:
             raise AssetImportError("asset must be a VisualAsset")
         with self._lock:
             catalog = self.load_catalog()
-            if not any(item.asset_id == asset.asset_id for item in catalog.assets):
+            existing = next((item for item in catalog.assets if item.asset_id == asset.asset_id), None)
+            if existing is None:
                 raise AssetImportError(f"Unknown asset ID: {asset.asset_id}")
+            immutable_fields = ("location", "content_sha256", "media_type", "width", "height")
+            if any(getattr(existing, name) != getattr(asset, name) for name in immutable_fields):
+                raise AssetImportError("Asset file identity and inspected dimensions are immutable.")
             updated = VisualAssetCatalog(
                 catalog_id=catalog.catalog_id,
                 assets=tuple(asset if item.asset_id == asset.asset_id else item for item in catalog.assets),
