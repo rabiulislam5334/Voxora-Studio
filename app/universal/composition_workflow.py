@@ -227,6 +227,10 @@ def apply_scene_composition(
         raise SceneCompositionWorkflowError(
             "explicit approval is required before persisting a scene composition"
         )
+    if not isinstance(project, Project):
+        raise SceneCompositionWorkflowError("project must be a Project")
+    if not isinstance(composition, SceneComposition):
+        raise SceneCompositionWorkflowError("composition must be a SceneComposition")
     if not isinstance(preview, SceneCompositionPreview):
         raise SceneCompositionWorkflowError("preview must be a SceneCompositionPreview")
     if not preview.is_valid:
@@ -257,7 +261,11 @@ def apply_scene_composition(
         if not isinstance(existing, dict):
             raise SceneCompositionWorkflowError("stored scene composition entry is malformed")
         version = existing.get("storage_version", SCENE_COMPOSITION_STORAGE_VERSION)
-        if version != SCENE_COMPOSITION_STORAGE_VERSION:
+        if (
+            isinstance(version, bool)
+            or not isinstance(version, int)
+            or version != SCENE_COMPOSITION_STORAGE_VERSION
+        ):
             raise SceneCompositionWorkflowError("stored scene composition uses an unsupported storage version")
         existing_payload = existing.get("composition")
         if not isinstance(existing_payload, dict):
