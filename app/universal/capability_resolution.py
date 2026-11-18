@@ -187,7 +187,7 @@ class EngineCapabilityResolver:
         except EngineCompatibilityError as exc:
             descriptor = self._registry.get(engine_id)
             diagnostics = self._compatibility_diagnostics(
-                descriptor, scene_kind, style_tags, asset_kinds, output_format, str(exc)
+                descriptor, scene_kind, query["style_tags"], query["asset_kinds"], output_format, str(exc)
             )
             resource = self._assess_resources(descriptor, resource_context)
             return EngineCapabilityResolution(
