@@ -7,6 +7,7 @@ joining, audio mixing, muxing, caching, or timeline calculation.
 from __future__ import annotations
 
 import math
+import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -66,6 +67,62 @@ class FFmpegSegmentAdapter:
             raise ValueError(f"unsupported segment motion: {spec.motion!r}")
         if spec.fit not in ("fit", "fill"):
             raise ValueError(f"unsupported segment fit mode: {spec.fit!r}")
+
+    def render(
+        self,
+        request,
+        *,
+        on_progress: Optional[Callable[[float], None]] = None,
+        cancel: Optional[CancelToken] = None,
+    ):
+        """Render through the runtime contract into an isolated raw artifact.
+
+        The legacy request.destination is the normalized pipeline destination.
+        FFmpeg must not write there directly: the shared normalizer owns that
+        destination. A unique sibling MP4 keeps concurrent attempts isolated
+        and prevents an engine render from overwriting an existing final file.
+        """
+        from app.universal.requests import EngineRenderRequest, RawEngineOutput
+
+        if not isinstance(request, EngineRenderRequest):
+            raise TypeError("request must be an EngineRenderRequest")
+
+        destination = request.destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        raw_path = destination.with_name(
+            f"{destination.stem}.{uuid.uuid4().hex}.engine-raw.mp4"
+        )
+        if raw_path.resolve() == destination.resolve():
+            raise ValueError("FFmpeg raw output must differ from normalized destination")
+
+        raw_request = EngineRenderRequest(
+            scene_id=request.scene_id,
+            scene_kind=request.scene_kind,
+            output_format=request.output_format,
+            output_spec=request.output_spec,
+            destination=raw_path,
+            style_tags=request.style_tags,
+            asset_refs=request.asset_refs,
+            engine_params=request.engine_params,
+        )
+        try:
+            self.render_request(
+                raw_request, on_progress=on_progress, cancel=cancel
+            )
+        except BaseException:
+            raw_path.unlink(missing_ok=True)
+            raise
+
+        return RawEngineOutput(
+            path=raw_path,
+            metadata={
+                "engine_id": self.descriptor.engine_id,
+                "engine_version": self.descriptor.version,
+                "container": "mp4",
+                "output_format": request.output_format,
+                "normalization_required": True,
+            },
+        )
 
     def render_request(
         self,
