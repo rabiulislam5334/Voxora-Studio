@@ -154,7 +154,14 @@ def test_camera_rotation_is_applied_to_final_composition(tmp_path):
 def test_sequence_renders_all_frames_and_publishes_numbered_pngs(tmp_path):
     source = _save(tmp_path / "hero.png")
     composition = _composition(box_width=0.25, box_height=0.25)
-    motion = _motion(_track("x", 0.0, 0.5), duration=3)
+    short_track = MotionTrack(
+        track_id="element-x",
+        target_type="element",
+        target_id="hero",
+        property_name="x",
+        keyframes=(MotionKeyframe(0, 0.0), MotionKeyframe(2, 0.5)),
+    )
+    motion = _motion(short_track, duration=3)
     progress = []
 
     result = MotionRasterRenderer().render_sequence(
