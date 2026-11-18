@@ -27,7 +27,7 @@ def test_binding_preview_explains_clean_preview_requires_review():
         target_fingerprint="a" * 64, diagnostics=(),
     )
     assert "No binding conflicts detected" in format_binding_preview(preview)
-    assert "review the selection" in format_binding_preview(preview)
+    assert "Review the selection" in format_binding_preview(preview)
 
 
 def test_continuity_report_includes_diagnostics_reuse_and_character_groups():
