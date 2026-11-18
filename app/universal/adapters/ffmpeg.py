@@ -22,10 +22,11 @@ class FFmpegSegmentAdapter:
 
     engine_id = "ffmpeg"
 
-    def __init__(self, ffmpeg) -> None:
-        self._ffmpeg = ffmpeg
-        self.descriptor = EngineDescriptor(
-            engine_id=self.engine_id,
+    @classmethod
+    def build_descriptor(cls) -> EngineDescriptor:
+        """Return stable FFmpeg metadata without constructing an adapter."""
+        return EngineDescriptor(
+            engine_id=cls.engine_id,
             display_name="FFmpeg Segment Renderer",
             version=f"pipeline-{constants.VIDEO_PIPELINE_VERSION}",
             capabilities=EngineCapabilities(
@@ -38,6 +39,9 @@ class FFmpegSegmentAdapter:
             ),
         )
 
+    def __init__(self, ffmpeg) -> None:
+        self._ffmpeg = ffmpeg
+        self.descriptor = self.build_descriptor()
     @staticmethod
     def validate_spec(spec: SegmentSpec) -> None:
         """Reject unsupported or malformed requests rather than guessing a mode."""
