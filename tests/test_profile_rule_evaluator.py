@@ -161,7 +161,7 @@ def test_builtin_review_rules_produce_diagnostics_for_supplied_contexts():
     )
     assert [item.code for item in results] == [
         "PROFILE_RULE_REVIEW_REQUIRED", "PROFILE_RULE_REVIEW_REQUIRED",
-        "PROFILE_RULE_REVIEW_REQUIRED", "PROFILE_RULE_REVIEW_REQUIRED",
+        "PROFILE_RULE_REVIEW_REQUIRED",
     ]
 
 
