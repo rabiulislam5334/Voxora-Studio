@@ -14,7 +14,7 @@ from fractions import Fraction
 from dataclasses import dataclass, field
 from typing import Literal, Sequence
 
-from app.core.timebase import seconds_to_ticks
+from app.core.timebase import TICKS_PER_SECOND, seconds_to_ticks
 from app.models.project import Project
 from app.models.scene import Scene
 from app.text.wordcount import DEFAULT_WORDS_PER_MINUTE, count_words
@@ -297,6 +297,8 @@ def apply_scene_plan_proposal(project: Project, proposal: ScenePlanProposal) -> 
         "existing_scenes", "paragraphs", "explicit_marker", "manual"
     ):
         raise ValueError("proposal split strategy is unsupported")
+    if isinstance(proposal.words_per_minute, bool) or not isinstance(proposal.words_per_minute, int) or proposal.words_per_minute <= 0:
+        raise ValueError("proposal words_per_minute must be a positive integer")
     if not isinstance(proposal.scenes, list) or not proposal.scenes:
         raise ValueError("proposal must contain at least one scene")
 
@@ -338,6 +340,12 @@ def apply_scene_plan_proposal(project: Project, proposal: ScenePlanProposal) -> 
             raise ValueError(f"scene {draft.scene_id} has an invalid ScenePlan: {exc}") from exc
         plan.plan_status = "approved"
         plan.script_hash = hashlib.sha256(draft.text.encode("utf-8")).hexdigest()
+        plan.extra["authoring_estimate"] = {
+            "word_count": draft.word_count,
+            "estimated_duration_ticks": draft.estimated_duration_ticks,
+            "words_per_minute": proposal.words_per_minute,
+            "ticks_per_second": TICKS_PER_SECOND,
+        }
         accepted_plans[draft.scene_id] = plan
 
     settings = project.settings
@@ -364,11 +372,18 @@ def apply_scene_plan_proposal(project: Project, proposal: ScenePlanProposal) -> 
 
     ordered_drafts = sorted(drafts, key=lambda draft: draft.order)
     current_ids = [scene.id for scene in next_scenes]
+    if any(not isinstance(scene_id, str) or not scene_id.strip() for scene_id in current_ids):
+        raise ValueError("project contains an invalid scene ID")
     if len(current_ids) != len(set(current_ids)):
         raise ValueError("project contains duplicate scene IDs")
 
     if proposal.split_strategy == "existing_scenes":
-        if not proposal.source_scene_ids or len(proposal.source_scene_ids) != len(set(proposal.source_scene_ids)):
+        if (
+            not isinstance(proposal.source_scene_ids, list)
+            or not proposal.source_scene_ids
+            or any(not isinstance(scene_id, str) or not scene_id.strip() for scene_id in proposal.source_scene_ids)
+            or len(proposal.source_scene_ids) != len(set(proposal.source_scene_ids))
+        ):
             raise ValueError("existing-scenes proposal has invalid source scene IDs")
         if current_ids != proposal.source_scene_ids:
             raise ValueError("project scenes changed after this proposal was created; rebuild the proposal")

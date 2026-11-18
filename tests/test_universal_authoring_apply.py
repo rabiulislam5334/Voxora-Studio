@@ -34,6 +34,11 @@ def test_apply_appends_scenes_and_approved_plans_without_touching_legacy_setting
     assert all(plan.plan_status == "approved" for plan in state.scene_plans.values())
     assert all(plan.engine_choice.engine_id is None for plan in state.scene_plans.values())
     assert all(plan.asset_refs == [] for plan in state.scene_plans.values())
+    for draft in proposal.scenes:
+        estimate = state.scene_plans[draft.scene_id].extra["authoring_estimate"]
+        assert estimate["word_count"] == draft.word_count
+        assert estimate["estimated_duration_ticks"] == draft.estimated_duration_ticks
+        assert estimate["ticks_per_second"] > 0
     assert project.settings["studio"] == before_settings["studio"]
     assert project.settings["other"] == before_settings["other"]
     assert project.schema_version == 4
@@ -161,6 +166,7 @@ def test_applied_proposal_and_scene_plans_survive_voxora_save_and_reopen(tmp_pat
     for scene in reopened.current_project.scenes:
         plan = state.scene_plans[scene.id]
         assert plan.script_hash == hashlib.sha256(scene.text.encode("utf-8")).hexdigest()
+        assert plan.extra["authoring_estimate"]["estimated_duration_ticks"] >= 0
 
     with pytest.raises(ValueError, match="already been applied"):
         apply_scene_plan_proposal(reopened.current_project, proposal)
