@@ -117,6 +117,24 @@ class MotionTrack:
         positions = [item.frame for item in frames]
         if positions != sorted(positions) or len(positions) != len(set(positions)):
             raise MotionValidationError("track keyframes must be ordered by unique frame numbers")
+        for keyframe in frames:
+            value = keyframe.value
+            if self.target_type == "element":
+                if self.property_name in {"x", "y", "width", "height", "anchor_x", "anchor_y", "opacity"}:
+                    minimum = 0.0 if self.property_name in {"width", "height"} else 0.0
+                    if value < minimum or value > 1.0 or (self.property_name in {"width", "height"} and value == 0.0):
+                        raise MotionValidationError(
+                            f"element {self.property_name} motion values must be in the normalized range"
+                        )
+                elif not -360.0 <= value <= 360.0:
+                    raise MotionValidationError("element rotation_degrees must be between -360 and 360")
+            else:
+                if self.property_name == "zoom" and not 0.01 <= value <= 16.0:
+                    raise MotionValidationError("camera zoom must be between 0.01 and 16")
+                if self.property_name in {"pan_x", "pan_y"} and not -4.0 <= value <= 4.0:
+                    raise MotionValidationError("camera pan values must be between -4 and 4")
+                if self.property_name == "rotation_degrees" and not -360.0 <= value <= 360.0:
+                    raise MotionValidationError("camera rotation_degrees must be between -360 and 360")
         object.__setattr__(self, "keyframes", frames)
         if not isinstance(self.extra, Mapping):
             raise MotionValidationError("track.extra must be an object")
@@ -168,7 +186,11 @@ class SceneMotion:
         duration = _frame(self.duration_frames, "duration_frames")
         if duration <= 0:
             raise MotionValidationError("duration_frames must be greater than zero")
-        if isinstance(self.motion_version, bool) or self.motion_version != MOTION_VERSION:
+        if (
+            isinstance(self.motion_version, bool)
+            or not isinstance(self.motion_version, int)
+            or self.motion_version != MOTION_VERSION
+        ):
             raise MotionValidationError("unsupported scene motion version")
         tracks = tuple(self.tracks)
         if not all(isinstance(item, MotionTrack) for item in tracks):
