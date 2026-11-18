@@ -202,7 +202,9 @@ def test_audio_tab_add_music_edit_trim_waveform_and_mix_preview(studio, tmp_path
     assert pump(lambda: len(panel.ctx.state.audio.tracks) == 1)
     assert "junk.mp3" in tab._status["text"]                               # unreadable file reported, not added
     track = panel.ctx.state.audio.tracks[0]
-    assert pump(lambda: tab._wave_image is not None)                       # waveform drawn in the background
+    assert pump(lambda: tab._wave_image is not None), (                  # waveform drawn in the background
+        f"waveform generation failed; status={tab._wave_status['text']!r}"
+    )
     # trim using the playhead position
     tab._player.play(0.0)
     tab._player.seek(1.0)
