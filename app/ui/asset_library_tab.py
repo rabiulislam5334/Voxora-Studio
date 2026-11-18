@@ -71,7 +71,7 @@ class AssetLibraryTab(ttk.Frame):
 
     def _build(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
         ttk.Label(self, text="Visual Asset Library", style="PageTitle.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 4)
         )
@@ -509,6 +509,8 @@ class AssetLibraryTab(ttk.Frame):
     def _save_character(self):
         try:
             character_id = self.character_id_var.get().strip()
+            if self._selected_character_id and character_id != self._selected_character_id:
+                raise ValueError("Character IDs are stable and cannot be changed after creation.")
             name = self.character_name_var.get().strip()
             appearance_id = self.appearance_id_var.get().strip() or f"{character_id}-appearance-v1"
             description = self.character_description.get("1.0", "end-1c")
