@@ -27,8 +27,8 @@ def sample_source():
         source_id="narration-01",
         text=text,
         units=(
-            NarrationTextUnit("unit-01", 0, 16, TimingInterval(0, 1800, TimingBasis.MEASURED)),
-            NarrationTextUnit("unit-02", 17, len(text), TimingInterval(1800, 4200, TimingBasis.ESTIMATED)),
+            NarrationTextUnit("unit-01", 0, 15, TimingInterval(0, 1800, TimingBasis.MEASURED)),
+            NarrationTextUnit("unit-02", 16, len(text), TimingInterval(1800, 4200, TimingBasis.ESTIMATED)),
         ),
         language="en",
         total_duration_ms=4200,
