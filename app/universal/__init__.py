@@ -74,6 +74,13 @@ from app.universal.storyboard_builder import (
     StoryboardBuilderConfig,
     build_storyboard_proposal,
 )
+from app.universal.storyboard_apply import (
+    StoryboardApplyPreview,
+    StoryboardPreviewDiagnostic,
+    StoryboardScenePreview,
+    apply_storyboard_proposal,
+    preview_storyboard_apply,
+)
 from app.universal.storyboard import (
     ContinuityKind,
     ContinuityReference,
@@ -186,6 +193,11 @@ __all__ = [
     "diagnose_storyboard",
     "StoryboardBuilderConfig",
     "build_storyboard_proposal",
+    "StoryboardApplyPreview",
+    "StoryboardPreviewDiagnostic",
+    "StoryboardScenePreview",
+    "apply_storyboard_proposal",
+    "preview_storyboard_apply",
     "StoryboardProposal",
     "StoryboardValidationError",
     "TimingBasis",
