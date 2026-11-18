@@ -1,3 +1,5 @@
+import pytest
+
 from app.universal.composition import (
     CompositionElement,
     SceneComposition,
@@ -93,7 +95,7 @@ def test_composition_validation_rejects_missing_element_targets():
 
 
 def test_motion_rejects_duplicate_property_tracks_and_unsorted_keyframes():
-    with __import__("pytest").raises(MotionValidationError, match="only have one"):
+    with pytest.raises(MotionValidationError, match="only have one"):
         SceneMotion("scene-a", 11, (_track(), _track(track_id="duplicate")))
     with __import__("pytest").raises(MotionValidationError, match="ordered by unique"):
         _track(keyframes=(MotionKeyframe(5, 0), MotionKeyframe(3, 1)))
