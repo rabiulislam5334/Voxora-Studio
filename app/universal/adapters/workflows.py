@@ -53,6 +53,12 @@ class EngineBackedWorkflowAdapter(ABC):
             )
         self._runtime = runtime
         self.engine_id = engine_id
+        self._descriptor = descriptor
+
+    @property
+    def descriptor(self):
+        """Exact engine metadata this adapter was explicitly bound to."""
+        return self._descriptor
 
     def render(
         self,
