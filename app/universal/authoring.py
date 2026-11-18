@@ -372,7 +372,9 @@ def apply_scene_plan_proposal(project: Project, proposal: ScenePlanProposal) -> 
             raise ValueError("existing-scenes proposal has invalid source scene IDs")
         if current_ids != proposal.source_scene_ids:
             raise ValueError("project scenes changed after this proposal was created; rebuild the proposal")
-        source_segments = [
+        if any(not isinstance(scene.text, str) for scene in next_scenes):
+            raise ValueError("project scene text changed to an invalid value")
+        source_segments =
             (
                 scene.title if isinstance(scene.title, str) and scene.title.strip() else f"Scene {index + 1}",
                 scene.text.strip(),
