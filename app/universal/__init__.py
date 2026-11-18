@@ -65,7 +65,11 @@ from app.universal.narration_segmentation import (
     NarrationSegmentationConfig,
     segment_narration,
 )
-from app.universal.storyboard_builder import (\n    StoryboardBuilderConfig,\n    build_storyboard_proposal,\n)\nfrom app.universal.storyboard import (
+from app.universal.storyboard_builder import (
+    StoryboardBuilderConfig,
+    build_storyboard_proposal,
+)
+from app.universal.storyboard import (
     ContinuityKind,
     ContinuityReference,
     NarrationSource,
@@ -171,7 +175,9 @@ __all__ = [
     "NarrationSource",
     "NarrationTextUnit",
     "ProposalReviewStatus",
-    "StoryboardBeat",\n    "StoryboardBuilderConfig",\n    "build_storyboard_proposal",
+    "StoryboardBeat",
+    "StoryboardBuilderConfig",
+    "build_storyboard_proposal",
     "StoryboardProposal",
     "StoryboardValidationError",
     "TimingBasis",
