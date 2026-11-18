@@ -523,6 +523,8 @@ class AssetLibraryTab(ttk.Frame):
             styles = tuple(dict.fromkeys(
                 value.strip() for value in self.style_tags_var.get().split(",") if value.strip()
             ))
+            existing = self._characters.get(character_id)
+            existing_appearance = existing.appearance if existing else None
             character = CharacterDefinition(
                 character_id=character_id,
                 display_name=name,
@@ -533,7 +535,10 @@ class AssetLibraryTab(ttk.Frame):
                     reference_asset_ids=reference_ids,
                     style_tags=styles,
                     attributes=attributes,
+                    extra=existing_appearance.extra if existing_appearance else {},
                 ),
+                metadata=existing.metadata if existing else {},
+                extra=existing.extra if existing else {},
             )
             self.library.save_character(character)
             self._selected_character_id = character_id
