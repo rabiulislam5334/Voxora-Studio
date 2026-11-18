@@ -388,3 +388,21 @@ __all__ += [
     "assert_composition_timeline_plan_current",
     "build_composition_timeline_plan",
 ]
+
+from app.universal.composition_audio_mux import (
+    CompositionAudioMuxError,
+    CompositionAudioMuxResult,
+    CompositionAudioMuxer,
+    build_composition_audio_mix_args,
+    build_composition_video_mux_args,
+    composition_video_duration,
+)
+
+__all__ += [
+    "CompositionAudioMuxError",
+    "CompositionAudioMuxResult",
+    "CompositionAudioMuxer",
+    "build_composition_audio_mix_args",
+    "build_composition_video_mux_args",
+    "composition_video_duration",
+]
