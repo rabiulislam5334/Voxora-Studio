@@ -70,3 +70,7 @@ Contracts should be immutable where practical, validate inputs strictly, preserv
 - Preview is side-effect free; apply is explicit, stale-safe, and idempotent.
 - Existing .voxora fixtures and legacy rendering tests remain unchanged and pass.
 - No claim of full cartoon generation until a real visual asset/animation engine is implemented and verified.
+
+## Phase 3.3h.4 — Continuity and timing diagnostics
+
+The diagnostics layer is read-only and deterministic. It reports stable codes for timeline gaps and overlaps, narration units that are unmapped or reused across beats, source identity mismatches, beats extending beyond a declared narration duration, unused continuity declarations, and estimated beat timing that needs review. Structural violations already rejected by the immutable domain contracts remain construction-time validation errors. Diagnostics never repair or reorder beats, invent missing character/location/prop references, change review status, or mutate a proposal.
