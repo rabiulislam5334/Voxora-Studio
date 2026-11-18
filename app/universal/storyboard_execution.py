@@ -34,6 +34,7 @@ from app.universal.storyboard_apply import (
 from app.universal.workflow import (
     BUILTIN_WORKFLOW_REGISTRY,
     WorkflowRegistry,
+    UnknownWorkflowError,
     WorkflowResolutionStatus,
     WorkflowResolver,
 )
@@ -169,7 +170,7 @@ class StoryboardWorkflowExecutionCoordinator:
 
         try:
             workflow = self._workflows.get(workflow_id)
-        except (KeyError, ValueError) as exc:
+        except UnknownWorkflowError as exc:
             raise StoryboardExecutionReadinessError(
                 f"unknown workflow: {workflow_id}"
             ) from exc
