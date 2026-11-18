@@ -53,7 +53,7 @@ class SceneAssetBindingTab(ttk.Frame):
 
     def __init__(self, master, *, config, palette) -> None:
         super().__init__(master, style="App.TFrame", padding=18)
-        self.config = config
+        self.app_config = config
         self.palette = palette
         self.project_manager = ProjectManager()
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
@@ -68,7 +68,6 @@ class SceneAssetBindingTab(ttk.Frame):
 
     def _build(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
         ttk.Label(self, text="Scene Assets & Continuity", style="PageTitle.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 4))
         ttk.Label(self, text="Bind library images and reusable characters to a scene. "
@@ -193,7 +192,7 @@ class SceneAssetBindingTab(ttk.Frame):
                     messagebox.showerror("Project not saved", str(exc), parent=self)
                     return
         path = filedialog.askopenfilename(parent=self, title="Open Voxora project",
-            initialdir=str(self.config.projects_dir),
+            initialdir=str(self.app_config.projects_dir),
             filetypes=(("Voxora projects", "*.voxora"), ("All files", "*.*")))
         if not path:
             return
