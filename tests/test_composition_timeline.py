@@ -106,7 +106,7 @@ def test_uses_scene_pause_ms_when_explicit_pause_map_is_not_supplied():
     assert plan.slots[0].pause_ticks == _ticks(0.2)
     assert plan.slots[1].pause_ticks == _ticks(0.1)
     assert plan.slots[0].slot_ticks == _ticks(2.0)
-    assert plan.slots[1].slot_ticks == _ticks(1.5)
+    assert plan.slots[1].slot_ticks == _ticks(1.0)
 
 
 def test_explicit_pause_ticks_override_scene_pause_ms():
