@@ -9,6 +9,7 @@ import hashlib
 import json
 import re
 import uuid
+from fractions import Fraction
 from dataclasses import dataclass, field
 from typing import Literal, Sequence
 
@@ -167,6 +168,7 @@ def build_scene_plan_proposal(
         return proposal
 
     segments: list[tuple[str, str, str, str]] = []
+    source_ids: list[str] = []
     if selected.split_strategy == "existing_scenes":
         if existing_scenes is None:
             proposal.diagnostics.append(AuthoringDiagnostic(
@@ -203,15 +205,9 @@ def build_scene_plan_proposal(
                 scene.notes if isinstance(scene.notes, str) else "",
                 scene.visual_prompt if isinstance(scene.visual_prompt, str) else "",
             ))
-            # Preserve source IDs separately; existing scene proposals must retain identity.
-        source_ids = [
-            scene.id for scene in existing_scenes
-            if isinstance(scene, Scene) and isinstance(scene.id, str) and scene.id.strip()
-            and isinstance(scene.text, str) and scene.text.strip()
-        ]
-        if len(source_ids) != len(segments):
-            # Duplicate or invalid source scenes were already diagnosed; avoid misaligning IDs.
-            source_ids = []
+            source_ids.append(scene.id)
+        if any(item.severity == "error" for item in proposal.diagnostics):
+            return proposal
     else:
         if script is None:
             proposal.diagnostics.append(AuthoringDiagnostic(
@@ -233,7 +229,7 @@ def build_scene_plan_proposal(
         scene_id = source_ids[index] if source_ids else uuid.uuid4().hex[:12]
         words = count_words(text)
         # Fractional seconds are converted exactly to the canonical integer tick clock.
-        estimated_ticks = seconds_to_ticks(f"{words * 60}/{selected.words_per_minute}")
+        estimated_ticks = seconds_to_ticks(Fraction(words * 60, selected.words_per_minute))
         script_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
         visual_plan = ScenePlan(
             scene_id=scene_id,
