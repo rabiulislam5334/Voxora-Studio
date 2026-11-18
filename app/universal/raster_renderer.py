@@ -252,8 +252,10 @@ class RasterCompositionRenderer:
                 _check_cancel(cancel)
                 source = self._load_image(paths[element.asset_id])
                 transform = element.transform
-                box_width = max(1, round(transform.width * width))
-                box_height = max(1, round(transform.height * height))
+                left = round(transform.x * width)
+                top = round(transform.y * height)
+                box_width = min(max(1, round(transform.width * width)), width - left)
+                box_height = min(max(1, round(transform.height * height)), height - top)
                 fitted = self._fit(source, box_width, box_height, element.fit_mode)
                 source.close()
                 if transform.opacity < 1.0:
@@ -261,8 +263,6 @@ class RasterCompositionRenderer:
                     fitted.putalpha(alpha)
 
                 layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-                left = round(transform.x * width)
-                top = round(transform.y * height)
                 layer.alpha_composite(fitted, (left, top))
                 fitted.close()
 
@@ -294,12 +294,21 @@ class RasterCompositionRenderer:
                 os.fsync(stream.fileno())
             frame.close()
             _check_cancel(cancel)
-            if target.exists() and not overwrite:
-                raise RasterRenderError("Output appeared during rendering; refusing to overwrite it")
-            os.replace(temp_path, target)
-            temp_path = None
-            digest = hashlib.sha256(target.read_bytes()).hexdigest()
-            return RasterRenderResult(target, width, height, tuple(rendered_ids), digest)
+            if overwrite:
+                os.replace(temp_path, target)
+                temp_path = None
+            else:
+                try:
+                    os.link(temp_path, target)
+                except FileExistsError:
+                    raise RasterRenderError("Output appeared during rendering; refusing to overwrite it") from None
+                temp_path.unlink()
+                temp_path = None
+            digest = hashlib.sha256()
+            with target.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            return RasterRenderResult(target, width, height, tuple(rendered_ids), digest.hexdigest())
         except RasterRenderError:
             raise
         except Exception as exc:
