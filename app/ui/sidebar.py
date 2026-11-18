@@ -20,6 +20,7 @@ class Sidebar(ttk.Frame):
         "Engines",
         "Visual Assets",
         "Scene Assets",
+        "Composition",
     ]
 
     def __init__(self, master: tk.Widget, on_select: Callable[[str], None]):
