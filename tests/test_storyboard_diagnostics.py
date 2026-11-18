@@ -86,7 +86,7 @@ def test_reports_source_identity_mismatch_without_mutating_data():
     assert diagnostics[0].severity is StoryboardDiagnosticSeverity.ERROR
 
 
-def test_reports_unused_continuity_references_and_estimated_timing():
+def test_reports_unresolved_continuity_ids_against_supplied_catalog():\n    source = segment_narration("One.", source_id="s")\n    reference = ContinuityReference("character-01", ContinuityKind.CHARACTER, "A traveler")\n    proposal = build_storyboard_proposal(\n        source, continuity_references=(reference,),\n        continuity_reference_ids={"unit-0001": ("character-01",)},\n    )\n    diagnostics = diagnose_storyboard(\n        proposal, source, available_continuity_reference_ids=("known-character",)\n    )\n    unresolved = next(item for item in diagnostics\n                      if item.code == "CONTINUITY_REFERENCE_UNRESOLVED")\n    assert unresolved.subject_id == "character-01"\n    assert unresolved.severity is StoryboardDiagnosticSeverity.ERROR\n\n\ndef test_reports_unused_continuity_references_and_estimated_timing():
     source = segment_narration("One.", source_id="s")
     reference = ContinuityReference("unused-prop", ContinuityKind.PROP, "A brass key")
     proposal = build_storyboard_proposal(source, continuity_references=(reference,))
