@@ -7,7 +7,7 @@ rule evaluation is diagnostic-only and applying remains an explicit action.
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from app.universal.authoring import (
@@ -18,7 +18,6 @@ from app.universal.authoring import (
 )
 from app.universal.profiles.evaluator import ProfileDiagnostic, evaluate_profile_rules
 from app.universal.profiles.models import ChannelProfile, VisualDefaults
-from app.universal.models import ScenePlan
 
 
 @dataclass(frozen=True)
@@ -29,12 +28,28 @@ class ProfiledScenePlanProposal:
     profile_id: str | None = None
     selected_preset_id: str | None = None
     diagnostics: tuple[ProfileDiagnostic, ...] = ()
+    _profile: ChannelProfile | None = field(default=None, repr=False, compare=False)
+    _project_context: Any = field(default=None, repr=False, compare=False)
+    _completed_reviews: tuple[str, ...] = field(default=(), repr=False, compare=False)
+
+    def current_diagnostics(self) -> tuple[ProfileDiagnostic, ...]:
+        """Re-evaluate mutable proposal drafts before an approval/apply decision."""
+        if self._profile is None:
+            return self.diagnostics
+        return evaluate_profile_rules(
+            self._profile,
+            project=self._project_context,
+            scenes=self.proposal.scenes,
+            scene_plans=[draft.visual_plan for draft in self.proposal.scenes],
+            selected_preset_id=self.selected_preset_id,
+            completed_reviews=self._completed_reviews,
+        )
 
     @property
     def is_valid(self) -> bool:
-        """Errors from either authoring or profile rules prevent explicit apply."""
+        """Errors from current authoring data or profile rules prevent explicit apply."""
         return self.proposal.is_valid and not any(
-            item.severity == "error" for item in self.diagnostics
+            item.severity == "error" for item in self.current_diagnostics()
         )
 
 
@@ -130,11 +145,17 @@ def build_profiled_scene_plan_proposal(
         selected_preset_id=selected_preset_id,
         completed_reviews=completed_reviews,
     )
+    # Detach profile data so caller-side mutation cannot change the meaning
+    # of a proposal that is already under review.
+    profile_copy = ChannelProfile.from_dict(profile.to_dict())
     return ProfiledScenePlanProposal(
         proposal=proposal,
         profile_id=profile.profile_id,
         selected_preset_id=selected_preset_id,
         diagnostics=diagnostics,
+        _profile=profile_copy,
+        _project_context=project_context,
+        _completed_reviews=tuple(completed_reviews),
     )
 
 
@@ -142,9 +163,12 @@ def apply_profiled_scene_plan_proposal(project, profiled_proposal: ProfiledScene
     """Apply only after authoring validation and blocking profile diagnostics pass."""
     if not isinstance(profiled_proposal, ProfiledScenePlanProposal):
         raise ValueError("profiled_proposal must be a ProfiledScenePlanProposal")
-    if not profiled_proposal.is_valid:
+    current_diagnostics = profiled_proposal.current_diagnostics()
+    if not profiled_proposal.proposal.is_valid or any(
+        item.severity == "error" for item in current_diagnostics
+    ):
         blocking = [
-            item.code for item in profiled_proposal.diagnostics
+            item.code for item in current_diagnostics
             if item.severity == "error"
         ]
         if blocking:
