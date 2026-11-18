@@ -170,11 +170,19 @@ class CompositionEditorTab(ttk.Frame):
 
 
     def _save_project(self):
-        if self.project_manager.current_path is None:
-            messagebox.showinfo("No project path", "Open a saved .voxora project before saving.", parent=self)
-            return
+        from tkinter import filedialog
         try:
-            path = self.project_manager.save()
+            if self.project_manager.current_path is None:
+                save_path = filedialog.asksaveasfilename(
+                    parent=self, title="Save Voxora project",
+                    defaultextension=".voxora",
+                    filetypes=(("Voxora projects", "*.voxora"),),
+                )
+                if not save_path:
+                    return
+                path = self.project_manager.save(Path(save_path))
+            else:
+                path = self.project_manager.save()
             self._status.set(f"Project saved: {path}")
         except Exception as exc:
             messagebox.showerror("Project not saved", str(exc), parent=self)
@@ -201,6 +209,31 @@ class CompositionEditorTab(ttk.Frame):
 
     def _open_project(self):
         from tkinter import filedialog
+        if self.project_manager.dirty:
+            choice = messagebox.askyesnocancel(
+                "Unsaved composition changes",
+                "Save the current project before opening another one?\n\n"
+                "Yes = Save, No = Discard changes, Cancel = Stay here.",
+                parent=self,
+            )
+            if choice is None:
+                return
+            if choice:
+                try:
+                    if self.project_manager.current_path is None:
+                        save_path = filedialog.asksaveasfilename(
+                            parent=self, title="Save Voxora project",
+                            defaultextension=".voxora",
+                            filetypes=(("Voxora projects", "*.voxora"),),
+                        )
+                        if not save_path:
+                            return
+                        self.project_manager.save(Path(save_path))
+                    else:
+                        self.project_manager.save()
+                except Exception as exc:
+                    messagebox.showerror("Project not saved", str(exc), parent=self)
+                    return
         path = filedialog.askopenfilename(
             parent=self, title="Open Voxora project",
             initialdir=str(self.config.projects_dir),
