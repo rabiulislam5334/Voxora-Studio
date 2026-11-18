@@ -63,6 +63,8 @@ class CompositionEditorTab(ttk.Frame):
         self._photo_refs = []
         self._canvas_items = {}
         self._selected_element_id = None
+        self._composition_dirty = False
+        self._active_scene_id = None
         self._drag_origin = None
         self._drag_transform = None
         self._canvas_origin = (0, 0)
@@ -132,8 +134,8 @@ class CompositionEditorTab(ttk.Frame):
         layer_actions = ttk.Frame(left, style="App.TFrame")
         layer_actions.grid(row=5, column=0, sticky="ew", pady=(6, 0))
         ttk.Button(layer_actions, text="Remove", command=self._remove_element).pack(side="left", padx=(0, 4))
-        ttk.Button(layer_actions, text="Up", command=lambda: self._reorder(-1)).pack(side="left", padx=2)
-        ttk.Button(layer_actions, text="Down", command=lambda: self._reorder(1)).pack(side="left", padx=2)
+        ttk.Button(layer_actions, text="Up", command=lambda: self._reorder(1)).pack(side="left", padx=2)
+        ttk.Button(layer_actions, text="Down", command=lambda: self._reorder(-1)).pack(side="left", padx=2)
 
         center.columnconfigure(0, weight=1)
         center.rowconfigure(0, weight=1)
@@ -209,6 +211,12 @@ class CompositionEditorTab(ttk.Frame):
 
     def _open_project(self):
         from tkinter import filedialog
+        if self._composition_dirty and not messagebox.askyesno(
+            "Discard composition edits",
+            "The current composition has unapplied editor changes. Discard them and open another project?",
+            parent=self,
+        ):
+            return
         if self.project_manager.dirty:
             choice = messagebox.askyesnocancel(
                 "Unsaved composition changes",
@@ -253,6 +261,8 @@ class CompositionEditorTab(ttk.Frame):
             self.scene_var.set("")
             self.composition = None
             self.preview = None
+            self._composition_dirty = False
+            self._active_scene_id = None
             self._clear_canvas()
             self._status.set(f"Opened {Path(path).name}. Choose a scene.")
         except Exception as exc:
@@ -265,6 +275,19 @@ class CompositionEditorTab(ttk.Frame):
         if index < 0 or index >= len(self._scene_ids):
             return
         scene_id = self._scene_ids[index]
+        if (
+            self._composition_dirty
+            and self._active_scene_id is not None
+            and scene_id != self._active_scene_id
+        ):
+            if not messagebox.askyesno(
+                "Discard composition edits",
+                "Discard unapplied edits to the current scene composition?",
+                parent=self,
+            ):
+                previous = self._scene_ids.index(self._active_scene_id)
+                self.scene_combo.current(previous)
+                return
         project = self.project_manager.current_project
         state = UniversalState.from_project_settings(project.settings)
         if state.read_only:
@@ -300,6 +323,8 @@ class CompositionEditorTab(ttk.Frame):
             )
         self.preview = None
         self._selected_element_id = None
+        self._composition_dirty = False
+        self._active_scene_id = scene_id
         self._populate_layers()
         self._redraw()
         self._status.set(f"Loaded composition for scene {scene_id}. Add bound assets to begin.")
@@ -328,6 +353,7 @@ class CompositionEditorTab(ttk.Frame):
         ))
         self.composition = self._with_elements(elements)
         self.preview = None
+        self._composition_dirty = True
         self._populate_layers(select=element_id)
         self._redraw()
         self._status.set(f"Added {asset_id}. Drag it on the canvas to position.")
@@ -510,6 +536,7 @@ class CompositionEditorTab(ttk.Frame):
             ))
         self.composition = self._with_elements(elements)
         self.preview = None
+        self._composition_dirty = True
         self._redraw()
         self._update_properties()
 
@@ -573,6 +600,7 @@ class CompositionEditorTab(ttk.Frame):
         self.composition = self._with_elements(elements)
         self._selected_element_id = None
         self.preview = None
+        self._composition_dirty = True
         self._populate_layers()
         self._redraw()
 
@@ -596,6 +624,7 @@ class CompositionEditorTab(ttk.Frame):
             ) for value in elements
         ])
         self.preview = None
+        self._composition_dirty = True
         self._populate_layers(select=item.element_id)
         self._redraw()
 
@@ -638,7 +667,8 @@ class CompositionEditorTab(ttk.Frame):
                                     self.composition, self.preview, approved=True)
             self.project_manager.mark_dirty()
             self.preview = None
-            self._status.set("Composition applied in memory. Save the project from the project workflow to persist .voxora.")
+            self._composition_dirty = False
+            self._status.set("Composition applied in memory. Use Save Project to persist the .voxora file.")
         except Exception as exc:
             messagebox.showerror("Composition not applied", str(exc), parent=self)
 
