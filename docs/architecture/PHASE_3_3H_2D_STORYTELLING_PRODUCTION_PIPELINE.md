@@ -129,3 +129,43 @@ blank/image/video segment capabilities. A compatible visual engine and
 workflow adapter must be installed and explicitly selected before those
 workflows can run. No UI wiring, default renderer replacement, AI service,
 asset generation, project schema change, or legacy .voxora change is included.
+
+# Phase 3.4a — Visual Asset & Character Domain Contracts
+
+## Goal
+Introduce reusable, renderer-independent records for visual assets and recurring
+characters. These contracts are channel-agnostic and can be referenced by later
+2D, 2.5D, documentary, sketch, and other production engines.
+
+## Included contracts
+- `VisualAsset`: stable asset ID, open-ended kind, file/URI location, optional
+  SHA-256 content identity, media type, dimensions, tags, metadata, and provenance.
+- `AssetProvenance`: caller-supplied source, license, attribution, source URI,
+  and structured metadata. A license label is recorded as data, not interpreted
+  as legal clearance.
+- `CharacterAppearance`: stable appearance revision ID, canonical visual
+  description, reference asset IDs, style tags, and structured attributes.
+  Its deterministic SHA-256 fingerprint makes appearance changes detectable.
+- `CharacterDefinition`: stable character ID and reusable identity metadata.
+- `VisualAssetCatalog`: deterministic versioned collection with unique IDs
+  and validated character-to-asset references.
+
+## Safety and compatibility boundaries
+- Pure local data contracts; no file reads, image decoding, network calls,
+  model/provider access, artwork generation, or renderer integration.
+- Locations are stored as caller-provided strings; existence and content hashes
+  are not asserted unless verified by a later importer.
+- License/provenance fields are declarations only and do not imply permission
+  to use an asset.
+- Unknown metadata fields are preserved for forward compatibility.
+- No changes to Project, Scene, ScenePlan, .voxora serialization, project schema,
+  render cache, FFmpeg, TTS, or existing production workflow.
+- Future catalog versions are rejected by this writer rather than rewritten.
+
+## Acceptance criteria
+- Stable round-trip serialization for assets, provenance, characters, and catalog.
+- Duplicate asset/character IDs and unresolved character asset references fail.
+- Invalid hashes, dimensions, identifiers, and non-JSON metadata fail.
+- Appearance fingerprints are deterministic and change when canonical appearance
+  content changes.
+- Unit tests run without FFmpeg, TTS, network access, or external AI services.
