@@ -12,6 +12,7 @@ from app.tts.manager import TTSManager
 from app.ui.studio_audio_tab import AudioTab
 from app.ui.studio_context import StudioContext
 from app.ui.studio_produce_tab import ProduceTab
+from app.ui.channel_profile_tab import ChannelProfileTab
 from app.ui.studio_scenes_tab import ScenesTab
 from app.ui.studio_video_tab import VideoTab
 from app.ui.voice_panel import VoicePanel
@@ -73,15 +74,17 @@ class StudioPanel(ttk.Frame):
         self.scenes_tab = ScenesTab(self._notebook, self.ctx)
         self.video_tab = VideoTab(self._notebook, self.ctx)
         self.produce_tab = ProduceTab(self._notebook, self.ctx)
+        self.profile_tab = ChannelProfileTab(self._notebook, self.ctx)
         self.ctx.export_audio = self.produce_tab.export_audio_dialog
         self.ctx.refresh_scenes = self.scenes_tab.refresh
 
         self._tabs = {
             "voice": self.voice, "audio": self.audio_tab, "scenes": self.scenes_tab,
-            "video": self.video_tab, "produce": self.produce_tab,
+            "video": self.video_tab, "produce": self.produce_tab, "profiles": self.profile_tab,
         }
         for key, label in (("voice", "Voice & Narration"), ("audio", "Audio & Music"),
-                           ("scenes", "Scenes & Timeline"), ("video", "Video Settings"), ("produce", "Produce")):
+                           ("scenes", "Scenes & Timeline"), ("video", "Video Settings"), ("produce", "Produce"),
+                           ("profiles", "Channel Profile")):
             self._notebook.add(self._tabs[key], text=f"  {label}  ")
         self._notebook.bind("<<NotebookTabChanged>>", lambda _e: self._refresh_current())
         self._refresh_all()
@@ -104,7 +107,7 @@ class StudioPanel(ttk.Frame):
             refresh()
 
     def _refresh_all(self) -> None:
-        for key in ("audio", "scenes", "video", "produce"):
+        for key in ("audio", "scenes", "video", "produce", "profiles"):
             self._tabs[key].refresh()
 
     def _reload_if_project_changed(self) -> None:
