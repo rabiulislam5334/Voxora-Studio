@@ -49,6 +49,14 @@ from app.universal.models import (
     ScenePlan,
     UniversalState,
 )
+from app.universal.visual_assets import (
+    AssetProvenance,
+    CharacterAppearance,
+    CharacterDefinition,
+    VisualAsset,
+    VisualAssetCatalog,
+    VisualAssetValidationError,
+)
 from app.universal.profile_authoring import (
     ProfiledScenePlanProposal,
     apply_profiled_scene_plan_proposal,
@@ -122,6 +130,12 @@ from app.universal.runtime import (
 
 __all__ = [
     "AssetRef",
+    "AssetProvenance",
+    "CharacterAppearance",
+    "CharacterDefinition",
+    "VisualAsset",
+    "VisualAssetCatalog",
+    "VisualAssetValidationError",
     "DocumentaryWorkflowAdapter",
     "EngineBackedWorkflowAdapter",
     "WorkflowAdapterCompatibilityError",
