@@ -50,7 +50,7 @@ def test_availability_probe_failure_becomes_explicit_unavailable_reason():
         def detect(self):
             raise RuntimeError("verification process failed")
 
-    registry = build_builtin_engine_runtime_registry(BrokenFFmpeg())
+    registry = build_builtin_engine_runtime_registry(BrokenFFmpeg(), probe_availability=True)
     descriptor = registry.list_engines(include_unavailable=True)[0]
 
     assert descriptor.available is False
