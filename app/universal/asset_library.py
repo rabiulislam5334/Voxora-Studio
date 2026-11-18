@@ -307,6 +307,125 @@ class VisualAssetLibrary:
             raise AssetImportError("Asset has no verified SHA-256 identity")
         return self._hash_file(target) == asset.content_sha256
 
+
+    def resolve_asset_path(self, asset: VisualAsset) -> Path:
+        """Resolve an asset path without following symlinks or leaving the library."""
+        if not isinstance(asset, VisualAsset):
+            raise AssetImportError("asset must be a VisualAsset")
+        relative = _safe_relative_location(asset.location)
+        current = self.root
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                raise AssetImportError("Asset location traverses a symbolic link")
+        target = current.resolve()
+        try:
+            target.relative_to(self.root)
+        except ValueError:
+            raise AssetImportError("Asset location escapes the library root") from None
+        if not target.is_file():
+            raise AssetImportError("Asset file is missing or is not a regular file")
+        return target
+
+    def update_asset(self, asset: VisualAsset) -> VisualAsset:
+        """Replace editable catalog metadata for an existing asset; file bytes stay untouched."""
+        if not isinstance(asset, VisualAsset):
+            raise AssetImportError("asset must be a VisualAsset")
+        with self._lock:
+            catalog = self.load_catalog()
+            if not any(item.asset_id == asset.asset_id for item in catalog.assets):
+                raise AssetImportError(f"Unknown asset ID: {asset.asset_id}")
+            updated = VisualAssetCatalog(
+                catalog_id=catalog.catalog_id,
+                assets=tuple(asset if item.asset_id == asset.asset_id else item for item in catalog.assets),
+                characters=catalog.characters,
+                catalog_version=catalog.catalog_version,
+                metadata=catalog.metadata,
+                extra=catalog.extra,
+            )
+            self._write_catalog(updated)
+            return asset
+
+    def remove_asset(self, asset_id: str) -> VisualAsset:
+        """Remove an asset from the catalog, retaining its content-addressed file on disk."""
+        if not isinstance(asset_id, str) or not asset_id.strip():
+            raise AssetImportError("asset_id must be a non-empty string")
+        with self._lock:
+            catalog = self.load_catalog()
+            asset = next((item for item in catalog.assets if item.asset_id == asset_id), None)
+            if asset is None:
+                raise AssetImportError(f"Unknown asset ID: {asset_id}")
+            references = [
+                character.character_id for character in catalog.characters
+                if asset_id in character.appearance.reference_asset_ids
+            ]
+            if references:
+                raise AssetImportError(
+                    "Asset is referenced by characters: " + ", ".join(sorted(references))
+                )
+            updated = VisualAssetCatalog(
+                catalog_id=catalog.catalog_id,
+                assets=tuple(item for item in catalog.assets if item.asset_id != asset_id),
+                characters=catalog.characters,
+                catalog_version=catalog.catalog_version,
+                metadata=catalog.metadata,
+                extra=catalog.extra,
+            )
+            self._write_catalog(updated)
+            return asset
+
+    def save_character(self, character) :
+        """Insert or replace a character while validating all reference asset IDs."""
+        from app.universal.visual_assets import CharacterDefinition
+
+        if not isinstance(character, CharacterDefinition):
+            raise AssetImportError("character must be a CharacterDefinition")
+        with self._lock:
+            catalog = self.load_catalog()
+            existing = any(item.character_id == character.character_id for item in catalog.characters)
+            characters = (
+                tuple(character if item.character_id == character.character_id else item
+                      for item in catalog.characters)
+                if existing else catalog.characters + (character,)
+            )
+            try:
+                updated = VisualAssetCatalog(
+                    catalog_id=catalog.catalog_id,
+                    assets=catalog.assets,
+                    characters=characters,
+                    catalog_version=catalog.catalog_version,
+                    metadata=catalog.metadata,
+                    extra=catalog.extra,
+                )
+            except VisualAssetValidationError as exc:
+                raise AssetImportError(str(exc)) from exc
+            self._write_catalog(updated)
+            return character
+
+    def remove_character(self, character_id: str):
+        """Remove a character definition without changing any scene/project references."""
+        if not isinstance(character_id, str) or not character_id.strip():
+            raise AssetImportError("character_id must be a non-empty string")
+        with self._lock:
+            catalog = self.load_catalog()
+            character = next(
+                (item for item in catalog.characters if item.character_id == character_id), None
+            )
+            if character is None:
+                raise AssetImportError(f"Unknown character ID: {character_id}")
+            updated = VisualAssetCatalog(
+                catalog_id=catalog.catalog_id,
+                assets=catalog.assets,
+                characters=tuple(
+                    item for item in catalog.characters if item.character_id != character_id
+                ),
+                catalog_version=catalog.catalog_version,
+                metadata=catalog.metadata,
+                extra=catalog.extra,
+            )
+            self._write_catalog(updated)
+            return character
+
     def _write_catalog(self, catalog: VisualAssetCatalog) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(catalog.to_dict(), ensure_ascii=False, sort_keys=True, indent=2) + "\n"
