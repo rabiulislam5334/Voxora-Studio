@@ -1,5 +1,12 @@
 from app.universal.builtins import BUILTIN_ENGINE_IDS, build_builtin_engine_runtime_registry
-from app.universal.adapters.workflows import (\n    DocumentaryWorkflowAdapter,\n    EngineBackedWorkflowAdapter,\n    WorkflowAdapterCompatibilityError,\n    WorkflowAdapterError,\n    TwoDStorytellingAdapter,\n)\nfrom app.universal.capability_resolution import (
+from app.universal.adapters.workflows import (
+    DocumentaryWorkflowAdapter,
+    EngineBackedWorkflowAdapter,
+    WorkflowAdapterCompatibilityError,
+    WorkflowAdapterError,
+    TwoDStorytellingAdapter,
+)
+from app.universal.capability_resolution import (
     DiagnosticSeverity,
     EngineCapabilityResolution,
     EngineCapabilityResolver,
@@ -76,7 +83,12 @@ from app.universal.runtime import (
 )
 
 __all__ = [
-    "AssetRef",\n    "DocumentaryWorkflowAdapter",\n    "EngineBackedWorkflowAdapter",\n    "WorkflowAdapterCompatibilityError",\n    "WorkflowAdapterError",\n    "TwoDStorytellingAdapter",
+    "AssetRef",
+    "DocumentaryWorkflowAdapter",
+    "EngineBackedWorkflowAdapter",
+    "WorkflowAdapterCompatibilityError",
+    "WorkflowAdapterError",
+    "TwoDStorytellingAdapter",
     "BUILTIN_WORKFLOW_DESCRIPTORS",
     "BUILTIN_WORKFLOW_REGISTRY",
     "BUILTIN_ENGINE_IDS",
