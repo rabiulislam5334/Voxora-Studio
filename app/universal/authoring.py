@@ -213,6 +213,11 @@ def build_scene_plan_proposal(
             source_ids.append(scene.id)
         if any(item.severity == "error" for item in proposal.diagnostics):
             return proposal
+        if not segments:
+            proposal.diagnostics.append(AuthoringDiagnostic(
+                "no_scenes", "No non-empty existing scenes were supplied"
+            ))
+            return proposal
     else:
         if script is None:
             proposal.diagnostics.append(AuthoringDiagnostic(
