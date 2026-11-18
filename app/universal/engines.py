@@ -40,9 +40,10 @@ class EngineCapabilities:
     supports_draft_render: bool = False
     max_concurrent_jobs: Optional[int] = None
     estimated_memory_mb: Optional[int] = None
+    workflow_families: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        for field_name in ("scene_kinds", "style_tags", "asset_kinds", "output_formats"):
+        for field_name in ("scene_kinds", "style_tags", "workflow_families", "asset_kinds", "output_formats"):
             object.__setattr__(
                 self, field_name, _normalise_values(field_name, getattr(self, field_name))
             )

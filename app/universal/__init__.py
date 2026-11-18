@@ -54,6 +54,18 @@ from app.universal.profile_preference_resolution import (
     ProfilePreferenceResolver,
 )
 from app.universal.requests import EngineRenderRequest, RawEngineOutput
+from app.universal.workflow import (
+    BUILTIN_WORKFLOW_DESCRIPTORS,
+    BUILTIN_WORKFLOW_REGISTRY,
+    UnknownWorkflowError,
+    WorkflowAdapter,
+    WorkflowDescriptor,
+    WorkflowFamily,
+    WorkflowRegistry,
+    WorkflowResolution,
+    WorkflowResolutionStatus,
+    WorkflowResolver,
+)
 from app.universal.runtime import (
     EngineAdapter,
     EngineBindingError,
@@ -65,6 +77,8 @@ from app.universal.runtime import (
 
 __all__ = [
     "AssetRef",
+    "BUILTIN_WORKFLOW_DESCRIPTORS",
+    "BUILTIN_WORKFLOW_REGISTRY",
     "BUILTIN_ENGINE_IDS",
     "build_builtin_engine_runtime_registry",
     "DiagnosticSeverity",
@@ -114,6 +128,14 @@ __all__ = [
     "SegmentOutputSpec",
     "UnknownEngineError",
     "UniversalState",
+    "UnknownWorkflowError",
+    "WorkflowAdapter",
+    "WorkflowDescriptor",
+    "WorkflowFamily",
+    "WorkflowRegistry",
+    "WorkflowResolution",
+    "WorkflowResolutionStatus",
+    "WorkflowResolver",
     "apply_profiled_scene_plan_proposal",
     "build_profiled_scene_plan_proposal",
 ]
