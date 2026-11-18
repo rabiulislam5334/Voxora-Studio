@@ -14,12 +14,12 @@ from app.universal.authoring import (
 
 def test_paragraph_split_is_ordered_and_creates_proposed_plans():
     proposal = build_scene_plan_proposal(
-        "First scene has four words.\n\nSecond scene has three.",
+        "First scene has four.\n\nSecond scene has three.",
         options=SceneAuthoringOptions(words_per_minute=60),
     )
     assert proposal.is_valid
     assert [item.text for item in proposal.scenes] == [
-        "First scene has four words.", "Second scene has three."
+        "First scene has four.", "Second scene has three."
     ]
     assert [item.order for item in proposal.scenes] == [0, 1]
     assert all(item.visual_plan.plan_status == "proposed" for item in proposal.scenes)
