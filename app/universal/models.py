@@ -208,12 +208,13 @@ class UniversalState:
     """Project-level Universal Core payload with safe forward-version handling."""
 
     profile_id: Optional[str] = None
-    profile_snapshot: Optional[ProfileSnapshot] = None
     scene_plans: Dict[str, ScenePlan] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
     format_version: int = UNIVERSAL_FORMAT_VERSION
     read_only: bool = False
     raw_payload: Any = None
+    # Appended to preserve the positional constructor order of the existing contract.
+    profile_snapshot: Optional[ProfileSnapshot] = None
 
     def to_dict(self) -> Dict[str, Any]:
         if self.read_only:
