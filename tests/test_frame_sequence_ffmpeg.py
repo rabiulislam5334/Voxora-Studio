@@ -136,3 +136,23 @@ def test_ffmpeg_encoder_creates_verified_h264_mp4(tmp_path):
     assert len(result.output_sha256) == 64
     assert destination.is_file() and destination.stat().st_size > 0
     assert progress[0] == 0.0 and progress[-1] == 1.0
+
+def test_frame_sequence_adapter_declares_cpu_mp4_encoding_contract():
+    from app.universal.frame_sequence import (
+        BUILTIN_FRAME_SEQUENCE_ENCODER_IDS,
+        FFmpegFrameSequenceAdapter,
+        build_builtin_frame_sequence_encoder,
+    )
+
+    class FakeEncoder:
+        def encode(self, sequence, destination, **kwargs):
+            return (sequence, destination, kwargs)
+
+    adapter = FFmpegFrameSequenceAdapter(FakeEncoder())
+    assert adapter.engine_id == "ffmpeg-frame-sequence"
+    assert adapter.descriptor.capabilities.output_formats == ("mp4",)
+    assert adapter.descriptor.capabilities.requires_gpu is False
+    assert BUILTIN_FRAME_SEQUENCE_ENCODER_IDS == ("ffmpeg-frame-sequence",)
+    registry = build_builtin_frame_sequence_encoder(FakeEncoder())
+    assert tuple(registry) == BUILTIN_FRAME_SEQUENCE_ENCODER_IDS
+    assert registry["ffmpeg-frame-sequence"].encoder.__class__ is FakeEncoder
