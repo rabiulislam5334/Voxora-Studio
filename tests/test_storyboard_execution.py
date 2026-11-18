@@ -186,7 +186,7 @@ def test_execution_requires_adapter_engine_to_match_explicit_selection(tmp_path)
     args = execute_args(tmp_path, descriptor, adapter)
     args["selected_engine_id"] = "some-other-engine"
 
-    with pytest.raises(StoryboardExecutionReadinessError, match="different engine"):
+    with pytest.raises(StoryboardExecutionReadinessError, match="descriptor does not match"):
         coordinator.execute(project, proposal, source, preview, **args)
     assert engine.calls == []
 
