@@ -43,7 +43,7 @@ from app.universal.multi_execution import (
 )
 from app.universal.normalizer import NormalizedSegment, SegmentNormalizer, SegmentOutputSpec
 from app.universal.plan_resolver import EnginePlanResolution, EnginePlanResolver, EnginePlanStatus
-from app.universal.models import (
+from app.universal.composition import (\n    COMPOSITION_FIT_MODES,\n    CompositionCanvas,\n    CompositionElement,\n    CompositionValidationError,\n    SceneComposition,\n    VisualTransform,\n)\nfrom app.universal.models import (
     AssetRef,
     EngineChoice,
     ScenePlan,
@@ -130,7 +130,7 @@ from app.universal.runtime import (
 )
 
 __all__ = [
-    "AssetImportError",
+    "COMPOSITION_FIT_MODES",\n    "CompositionCanvas",\n    "CompositionElement",\n    "CompositionValidationError",\n    "SceneComposition",\n    "VisualTransform",\n    "AssetImportError",
     "VisualAssetLibrary",
     "SceneAssetBinding",
     "SceneBindingError",
