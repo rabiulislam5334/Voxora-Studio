@@ -17,6 +17,7 @@ from app.ui.script_panel import ScriptPanel
 from app.ui.studio_panel import StudioPanel
 from app.ui.engine_catalog_tab import EngineCatalogTab
 from app.ui.asset_library_tab import AssetLibraryTab
+from app.ui.scene_asset_binding_tab import SceneAssetBindingTab
 
 logger = get_logger("ui.main_window")
 
@@ -108,6 +109,7 @@ class MainWindow:
             self._pages[name] = self._build_placeholder_page(name, description)
         self._pages["Engines"] = self._build_engine_catalog_page()
         self._pages["Visual Assets"] = self._build_asset_library_page()
+        self._pages["Scene Assets"] = self._build_scene_asset_binding_page()
         # Script first: the studio workspace reads scenes from it.
         self._pages["Script"] = self._build_script_page()
         # One workspace (tabs) behind five sidebar entries: Voice, Audio,
@@ -118,6 +120,11 @@ class MainWindow:
 
     def _build_asset_library_page(self) -> AssetLibraryTab:
         page = AssetLibraryTab(self.content, config=self.config, palette=self.palette)
+        page.grid(row=0, column=0, sticky="nsew")
+        return page
+
+    def _build_scene_asset_binding_page(self) -> SceneAssetBindingTab:
+        page = SceneAssetBindingTab(self.content, config=self.config, palette=self.palette)
         page.grid(row=0, column=0, sticky="nsew")
         return page
 

@@ -304,3 +304,23 @@ The workspace remains independent of project serialization and rendering.
 - Tests cover explicit approval, stale-preview rejection, additive ScenePlan
   mutation, catalog reference validation, cross-scene reuse, character
   appearance drift, missing references, and read-only future-version behavior.
+
+
+# Phase 3.4h — Scene Asset Preview & Visual Binding UI
+
+- Adds a dedicated Scene Assets workspace alongside the Visual Assets library.
+- Loads an existing `.voxora` project explicitly through ProjectManager and lists
+  its scenes without changing the currently open Script/Studio workspace.
+- Displays the selected scene's narration and existing asset/character bindings.
+- Allows multi-selecting library assets and characters, assigning a visual role,
+  and previewing image assets with the same bounded optional-Pillow/native-Tk
+  strategy used by the library UI.
+- Binding preview is read-only and shows conflicts before the user separately
+  confirms Apply. Apply marks the selected project dirty; Save Project persists
+  it through the existing repository's atomic save and conflict-check path.
+- Continuity analysis is read-only and reports diagnostics, asset reuse, and
+  character appearance groups in the workspace.
+- Does not automatically choose assets, update character appearances, repair
+  continuity, or silently save a project. No Project/Scene/.voxora schema,
+  renderer, FFmpeg, TTS, cache, audio, or timeline changes.
+- UI summary helpers are covered by display-server-independent tests.
