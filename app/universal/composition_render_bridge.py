@@ -131,15 +131,10 @@ class CompositionRenderBridge:
             return CompositionRenderResolution(
                 engine_id, False, reason="Adapter does not implement render_composition()."
             )
-        if not (
-            capabilities.supports_layers
-            and capabilities.supports_transforms
-            and capabilities.supports_opacity
-            and capabilities.supports_rotation
-        ):
+        if not capabilities.supports_layers or not capabilities.supports_transforms:
             return CompositionRenderResolution(
                 engine_id, False,
-                reason="Adapter must support layers, transforms, opacity, and rotation."
+                reason="Adapter must support layered composition and element transforms."
             )
         return CompositionRenderResolution(
             engine_id, True, capabilities.output_formats,
