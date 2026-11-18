@@ -287,6 +287,11 @@ class CompositionEditorTab(ttk.Frame):
                 previous = self._scene_ids.index(self._active_scene_id)
                 self.scene_combo.current(previous)
                 return
+            self._composition_dirty = False
+        self.composition = None
+        self.preview = None
+        self._selected_element_id = None
+        self._clear_canvas()
         project = self.project_manager.current_project
         state = UniversalState.from_project_settings(project.settings)
         if state.read_only:
