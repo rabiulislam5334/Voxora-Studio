@@ -1,3 +1,4 @@
+from app.universal.builtins import BUILTIN_ENGINE_IDS, build_builtin_engine_runtime_registry
 """Universal Core domain contracts."""
 
 from app.universal.execution import (
@@ -50,6 +51,8 @@ from app.universal.runtime import (
 
 __all__ = [
     "AssetRef",
+    "BUILTIN_ENGINE_IDS",
+    "build_builtin_engine_runtime_registry",
     "EngineAdapter",
     "EngineBindingError",
     "EngineCapabilities",
