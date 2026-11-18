@@ -261,18 +261,25 @@ class StoryboardWorkflowExecutionCoordinator:
                 "execution would overwrite existing output files: "
                 + ", ".join(existing_outputs)
             )
-        for item in preview.scenes:
+        for item, beat in zip(preview.scenes, proposal.beats):
             scene = project.get_scene(item.scene_id)
             persisted = state.scene_plans.get(item.scene_id)
             if scene is None or persisted is None:
                 raise StoryboardExecutionReadinessError(
                     f"applied storyboard scene or ScenePlan is missing: {item.scene_id}"
                 )
+            storyboard_metadata = persisted.requirements.get("storyboard")
             if (
-                scene.text != item.narration_text
+                scene.title != item.title
+                or scene.text != item.narration_text
                 or scene.visual_prompt != item.visual_prompt
                 or scene.notes != item.notes
                 or persisted.plan_status != "approved"
+                or not isinstance(storyboard_metadata, dict)
+                or storyboard_metadata.get("proposal_id") != proposal.proposal_id
+                or storyboard_metadata.get("beat_id") != beat.beat_id
+                or storyboard_metadata.get("narration_unit_ids") != list(beat.narration_unit_ids)
+                or storyboard_metadata.get("continuity_reference_ids") != list(beat.continuity_reference_ids)
             ):
                 raise StoryboardExecutionReadinessError(
                     f"applied storyboard scene changed after review: {item.scene_id}"
