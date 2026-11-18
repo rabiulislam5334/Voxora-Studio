@@ -5,7 +5,10 @@ from pathlib import Path
 import pytest
 
 from app.models.project import Project
-from app.universal.adapters.workflows import TwoDStorytellingAdapter
+from app.universal.adapters.workflows import (
+    DocumentaryWorkflowAdapter,
+    TwoDStorytellingAdapter,
+)
 from app.universal.engines import EngineCapabilities, EngineDescriptor
 from app.universal.models import UniversalState
 from app.universal.normalizer import NormalizedSegment
@@ -87,7 +90,10 @@ def make_coordinator(tmp_path, *, family="2d"):
     engine = FakeEngine(descriptor, tmp_path)
     inner_runtime = EngineRuntimeRegistry()
     inner_runtime.register(descriptor, engine)
-    adapter = TwoDStorytellingAdapter(inner_runtime, descriptor.engine_id)
+    adapter_type = (
+        TwoDStorytellingAdapter if family == "2d" else DocumentaryWorkflowAdapter
+    )
+    adapter = adapter_type(inner_runtime, descriptor.engine_id)
     normalizer = FakeNormalizer()
     coordinator = StoryboardWorkflowExecutionCoordinator(normalizer=normalizer)
     return coordinator, descriptor, adapter, engine, normalizer
