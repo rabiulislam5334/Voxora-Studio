@@ -304,3 +304,25 @@ __all__ += [
     "CompositionRenderResolution",
     "CompositionRenderUnsupportedError",
 ]
+
+from app.universal.raster_renderer import (
+    RASTER_RENDERER_VERSION,
+    RasterCompositionRenderer,
+    RasterRenderCancelledError,
+    RasterRenderError,
+    RasterRenderLimits,
+    RasterRenderResult,
+    render_bound_scene_composition,
+    resolve_scene_composition_assets,
+)
+
+__all__ += [
+    "RASTER_RENDERER_VERSION",
+    "RasterCompositionRenderer",
+    "RasterRenderCancelledError",
+    "RasterRenderError",
+    "RasterRenderLimits",
+    "RasterRenderResult",
+    "render_bound_scene_composition",
+    "resolve_scene_composition_assets",
+]
