@@ -90,12 +90,14 @@ class CompositionEditorTab(ttk.Frame):
             toolbar.columnconfigure(column, weight=0)
         ttk.Button(toolbar, text="Open Project…", style="Primary.TButton",
                    command=self._open_project).grid(row=0, column=0, padx=(0, 6))
+        ttk.Button(toolbar, text="Save Project", style="Secondary.TButton",
+                   command=self._save_project).grid(row=0, column=1, padx=6)
         ttk.Button(toolbar, text="Refresh Library", style="Secondary.TButton",
-                   command=self._load_catalog).grid(row=0, column=1, padx=6)
-        ttk.Label(toolbar, text="Scene", style="Muted.TLabel").grid(row=0, column=2, padx=(12, 4))
+                   command=self._load_catalog).grid(row=0, column=2, padx=6)
+        ttk.Label(toolbar, text="Scene", style="Muted.TLabel").grid(row=0, column=3, padx=(12, 4))
         self.scene_var = tk.StringVar()
         self.scene_combo = ttk.Combobox(toolbar, textvariable=self.scene_var, state="readonly", width=28)
-        self.scene_combo.grid(row=0, column=3, padx=4)
+        self.scene_combo.grid(row=0, column=4, padx=4)
         self.scene_combo.bind("<<ComboboxSelected>>", self._load_scene)
 
         body = ttk.Panedwindow(self, orient="horizontal")
@@ -161,8 +163,33 @@ class CompositionEditorTab(ttk.Frame):
                    command=self._preview).pack(side="left", padx=(0, 6))
         ttk.Button(actions, text="Apply Composition…", style="Secondary.TButton",
                    command=self._apply).pack(side="left", padx=6)
+        ttk.Button(actions, text="Check Render Support", style="Secondary.TButton",
+                   command=self._check_render_support).pack(side="left", padx=6)
         ttk.Label(self, textvariable=self._status, style="Muted.TLabel").grid(
             row=5, column=0, sticky="w", pady=(4, 0))
+
+
+    def _save_project(self):
+        if self.project_manager.current_path is None:
+            messagebox.showinfo("No project path", "Open a saved .voxora project before saving.", parent=self)
+            return
+        try:
+            path = self.project_manager.save()
+            self._status.set(f"Project saved: {path}")
+        except Exception as exc:
+            messagebox.showerror("Project not saved", str(exc), parent=self)
+
+    def _check_render_support(self):
+        from app.universal.composition_render_bridge import CompositionRenderBridge
+        resolution = CompositionRenderBridge().inspect("ffmpeg")
+        self._status.set("Composition render unavailable: " + resolution.reason)
+        messagebox.showinfo(
+            "Composition render capability",
+            "The current FFmpeg segment adapter does not declare layered composition support. "
+            "Voxora will not flatten layers or silently drop transforms. A renderer with an explicit "
+            "render_composition() contract is required before composition export can be enabled.",
+            parent=self,
+        )
 
     def _load_catalog(self):
         try:
