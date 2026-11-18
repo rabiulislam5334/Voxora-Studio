@@ -272,3 +272,35 @@ The workspace remains independent of project serialization and rendering.
 - Preview decoding is capped at 16 megapixels to avoid unexpectedly large
   temporary image allocations on low-memory machines; unsupported or larger
   files remain available for metadata inspection and integrity verification.
+
+
+# Phase 3.4f–3.4g — Scene Asset Binding & Cross-Scene Continuity
+
+## Phase 3.4f — Scene-to-asset and character binding
+- Bind selected library assets and reusable character identities to an existing
+  Project Scene through an immutable preview and a separate explicit approval.
+- Store visual assets in the existing Universal ScenePlan.asset_refs contract,
+  including stable asset ID, relative library path, content hash, and declared
+  role metadata. Store character ID, appearance revision, fingerprint,
+  reference assets, and style tags in the ScenePlan requirements extension.
+- Preserve existing ScenePlan notes, style tags, engine choice, requirements,
+  asset references, project settings, and all other scenes.
+- Refuse unknown catalog IDs, duplicate bindings, malformed/future Universal
+  payloads, stale previews, and missing target scenes.
+- No Project/Scene/.voxora schema migration; binding writes remain inside the
+  existing Universal settings envelope. Applying is explicit and atomic.
+
+## Phase 3.4g — Asset continuity and reuse analysis
+- Provide a deterministic, read-only analyzer across all project ScenePlans.
+- Detect missing bound assets/characters, changed asset content identity,
+  changed character appearance since binding, inconsistent appearance
+  fingerprints for the same character across scenes, malformed bindings,
+  orphaned ScenePlans, and missing character reference assets.
+- Report asset reuse groups when the same asset ID is used in multiple scenes
+  and when distinct catalog IDs share the same verified content hash.
+- Report character usage groups and appearance fingerprints to support
+  continuity review. Suggestions are informational; no automatic replacement,
+  rebinding, catalog mutation, file deletion, or project repair occurs.
+- Tests cover explicit approval, stale-preview rejection, additive ScenePlan
+  mutation, catalog reference validation, cross-scene reuse, character
+  appearance drift, missing references, and read-only future-version behavior.
