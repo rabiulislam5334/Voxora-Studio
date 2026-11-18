@@ -152,8 +152,8 @@ class CompositionEditorTab(ttk.Frame):
         ttk.Label(right, text="Selected Element", style="SectionTitle.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 8))
         self.property_text = tk.Text(right, width=28, height=13, wrap="word", state="disabled",
-                                     background=palette["field_bg"], foreground=palette["fg"],
-                                     insertbackground=palette["fg"], relief="flat")
+                                     background=self.palette["field_bg"], foreground=self.palette["fg"],
+                                     insertbackground=self.palette["fg"], relief="flat")
         self.property_text.grid(row=1, column=0, sticky="nsew")
         ttk.Label(right, text="Double-click canvas to reset position/size. "
                   "Mouse wheel changes selected element size.", style="Muted.TLabel",
