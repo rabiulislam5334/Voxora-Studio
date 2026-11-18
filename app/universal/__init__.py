@@ -268,3 +268,21 @@ from app.universal.asset_continuity import (
     AssetContinuityDiagnostic, AssetContinuityReport, AssetReuseGroup,
     CharacterContinuityGroup, analyze_asset_continuity,
 )
+
+from app.universal.composition_workflow import (
+    CompositionDiagnostic,
+    CompositionElementPreview,
+    SceneCompositionPreview,
+    SceneCompositionWorkflowError,
+    apply_scene_composition,
+    preview_scene_composition,
+)
+
+__all__ += [
+    "CompositionDiagnostic",
+    "CompositionElementPreview",
+    "SceneCompositionPreview",
+    "SceneCompositionWorkflowError",
+    "apply_scene_composition",
+    "preview_scene_composition",
+]
