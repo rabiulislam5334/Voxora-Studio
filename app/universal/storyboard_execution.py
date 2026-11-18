@@ -9,6 +9,7 @@ import copy
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
+from app.models.project import Project
 from app.universal.adapters.workflows import EngineBackedWorkflowAdapter
 from app.universal.engines import EngineDescriptor, EngineRegistry
 from app.universal.execution import SceneExecutionContext, SceneExecutionCoordinator
@@ -144,7 +145,7 @@ class StoryboardWorkflowExecutionCoordinator:
             raise StoryboardExecutionReadinessError(
                 "preview does not belong to the supplied storyboard proposal"
             )
-        if not getattr(project, "id", None) or not isinstance(getattr(project, "settings", None), dict):
+        if not isinstance(project, Project) or not isinstance(project.settings, dict):
             raise TypeError("project must be a valid Project")
 
         regenerated_preview = preview_storyboard_apply(project, proposal, source)
@@ -280,6 +281,11 @@ class StoryboardWorkflowExecutionCoordinator:
                 or storyboard_metadata.get("beat_id") != beat.beat_id
                 or storyboard_metadata.get("narration_unit_ids") != list(beat.narration_unit_ids)
                 or storyboard_metadata.get("continuity_reference_ids") != list(beat.continuity_reference_ids)
+                or storyboard_metadata.get("timing") != {
+                    "start_ms": beat.timing.start_ms,
+                    "end_ms": beat.timing.end_ms,
+                    "basis": beat.timing.basis.value,
+                }
             ):
                 raise StoryboardExecutionReadinessError(
                     f"applied storyboard scene changed after review: {item.scene_id}"
