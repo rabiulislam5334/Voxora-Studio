@@ -338,3 +338,29 @@ __all__ += [
     "BUILTIN_COMPOSITION_RENDERER_IDS",
     "build_builtin_composition_render_bridge",
 ]
+
+from app.universal.frame_sequence import (
+    BUILTIN_FRAME_SEQUENCE_ENCODER_IDS,
+    FFmpegFrameSequenceAdapter,
+    FFmpegFrameSequenceEncoder,
+    FrameSequence,
+    FrameSequenceCancelledError,
+    FrameSequenceEncodeResult,
+    FrameSequenceError,
+    FrameSequenceLimits,
+    build_builtin_frame_sequence_encoder,
+    build_frame_sequence_encode_args,
+)
+
+__all__ += [
+    "BUILTIN_FRAME_SEQUENCE_ENCODER_IDS",
+    "FFmpegFrameSequenceAdapter",
+    "FFmpegFrameSequenceEncoder",
+    "FrameSequence",
+    "FrameSequenceCancelledError",
+    "FrameSequenceEncodeResult",
+    "FrameSequenceError",
+    "FrameSequenceLimits",
+    "build_builtin_frame_sequence_encoder",
+    "build_frame_sequence_encode_args",
+]
