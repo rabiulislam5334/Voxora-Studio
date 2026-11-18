@@ -388,8 +388,10 @@ class AssetLibraryTab(ttk.Frame):
             try:
                 from PIL import Image, ImageTk  # optional enhancement only
                 with Image.open(path) as source:
+                    if source.width * source.height > 16_000_000:
+                        raise ValueError("Preview is limited to 16 megapixels to protect memory.")
+                    source.thumbnail((640, 360))
                     image = source.copy()
-                image.thumbnail((640, 360))
                 self._preview_image = ImageTk.PhotoImage(image)
             except ImportError:
                 if (asset.width or 0) * (asset.height or 0) > 16_000_000:
