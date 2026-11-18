@@ -80,9 +80,9 @@ class AssetLibraryTab(ttk.Frame):
             text="Manage local images and reusable character appearances. "
                  "Imported files stay on this device; no AI or network service is used.",
             style="Muted.TLabel", wraplength=1000, justify="left",
-        ).grid(row=0, column=0, sticky="w", pady=(30, 12))
+        ).grid(row=1, column=0, sticky="w", pady=(0, 12))
         self.notebook = ttk.Notebook(self)
-        self.notebook.grid(row=1, column=0, sticky="nsew")
+        self.notebook.grid(row=2, column=0, sticky="nsew")
         self.assets_page = ttk.Frame(self.notebook, style="App.TFrame", padding=10)
         self.characters_page = ttk.Frame(self.notebook, style="App.TFrame", padding=10)
         self.notebook.add(self.assets_page, text="Assets")
@@ -90,7 +90,7 @@ class AssetLibraryTab(ttk.Frame):
         self._build_assets_page()
         self._build_characters_page()
         ttk.Label(self, textvariable=self._status, style="Muted.TLabel").grid(
-            row=2, column=0, sticky="w", pady=(8, 0)
+            row=3, column=0, sticky="w", pady=(8, 0)
         )
 
     def _build_assets_page(self):
@@ -267,8 +267,17 @@ class AssetLibraryTab(ttk.Frame):
                                    command=self.reference_list.yview)
         ref_scroll.pack(side="right", fill="y")
         self.reference_list.configure(yscrollcommand=ref_scroll.set)
+        ttk.Label(editor, text="Appearance Inspection", style="Muted.TLabel").grid(
+            row=9, column=0, sticky="nw", padx=(0, 8), pady=3
+        )
+        self.character_inspection = tk.Text(
+            editor, height=5, wrap="word", state="disabled",
+            background=self._palette["field_bg"], foreground=self._palette["fg"],
+            relief="flat", padx=8, pady=6,
+        )
+        self.character_inspection.grid(row=9, column=1, sticky="ew", pady=3)
         actions = ttk.Frame(editor, style="App.TFrame")
-        actions.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        actions.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         ttk.Button(actions, text="Save Character", style="Primary.TButton",
                    command=self._save_character).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Delete Character", style="Secondary.TButton",
@@ -471,6 +480,7 @@ class AssetLibraryTab(ttk.Frame):
         self.character_attributes.delete("1.0", "end")
         self.character_attributes.insert("1.0", "{}")
         self._populate_reference_assets()
+        self._set_text(self.character_inspection, "")
 
     def _on_character_select(self, _event=None):
         selection = self.character_tree.selection()
@@ -494,6 +504,7 @@ class AssetLibraryTab(ttk.Frame):
             "1.0", json.dumps(dict(appearance.attributes), ensure_ascii=False, indent=2)
         )
         self._populate_reference_assets(appearance.reference_asset_ids)
+        self._set_text(self.character_inspection, format_character_inspection(character))
 
     def _save_character(self):
         try:
@@ -565,4 +576,7 @@ class AssetLibraryTab(ttk.Frame):
         self.reference_list.configure(
             background=palette["field_bg"], foreground=palette["fg"],
             selectbackground=palette["accent"],
+        )
+        self.character_inspection.configure(
+            background=palette["field_bg"], foreground=palette["fg"],
         )
