@@ -161,3 +161,7 @@ def test_applied_proposal_and_scene_plans_survive_voxora_save_and_reopen(tmp_pat
     for scene in reopened.current_project.scenes:
         plan = state.scene_plans[scene.id]
         assert plan.script_hash == hashlib.sha256(scene.text.encode("utf-8")).hexdigest()
+
+    with pytest.raises(ValueError, match="already been applied"):
+        apply_scene_plan_proposal(reopened.current_project, proposal)
+    assert len(reopened.current_project.scenes) == 2
