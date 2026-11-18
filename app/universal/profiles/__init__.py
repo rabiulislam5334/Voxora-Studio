@@ -9,6 +9,7 @@ from app.universal.profiles.models import (
     ProfileValidationError,
     VisualDefaults,
 )
+from app.universal.profiles.snapshot import PROFILE_SNAPSHOT_VERSION, ProfileSnapshot
 from app.universal.profiles.registry import (
     BUILTIN_PROFILE_REGISTRY,
     BuiltinProfileRegistry,
@@ -18,6 +19,8 @@ from app.universal.profiles.registry import (
 
 __all__ = [
     "PROFILE_SCHEMA_VERSION",
+    "PROFILE_SNAPSHOT_VERSION",
+    "ProfileSnapshot",
     "BUILTIN_PROFILE_REGISTRY",
     "BuiltinProfileRegistry",
     "ChannelProfile",
