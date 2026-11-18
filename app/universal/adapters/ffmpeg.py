@@ -131,11 +131,11 @@ class FFmpegSegmentAdapter:
         on_progress: Optional[Callable[[float], None]] = None,
         cancel: Optional[CancelToken] = None,
     ) -> Path:
-        """Render an immutable Universal request through the existing segment renderer.
+        """Render an immutable Universal request to the supplied destination.
 
-        This production bridge intentionally returns the already-normalized
-        silent MP4 segment. It avoids a second encode through SegmentNormalizer
-        while retaining the legacy renderer's exact output and timing behavior.
+        Direct callers retain the legacy silent-MP4 segment behavior and exact
+        timing. Runtime callers use render(), which supplies a separate raw
+        destination and lets the shared normalizer publish the final segment.
         """
         from app.universal.requests import EngineRenderRequest
 
