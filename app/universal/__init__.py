@@ -61,6 +61,10 @@ from app.universal.profile_preference_resolution import (
     ProfilePreferenceResolver,
 )
 from app.universal.requests import EngineRenderRequest, RawEngineOutput
+from app.universal.narration_segmentation import (
+    NarrationSegmentationConfig,
+    segment_narration,
+)
 from app.universal.storyboard import (
     ContinuityKind,
     ContinuityReference,
@@ -160,6 +164,8 @@ __all__ = [
     "WorkflowResolution",
     "WorkflowResolutionStatus",
     "WorkflowResolver",
+    "NarrationSegmentationConfig",
+    "segment_narration",
     "ContinuityKind",
     "ContinuityReference",
     "NarrationSource",
