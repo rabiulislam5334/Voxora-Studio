@@ -790,6 +790,63 @@ def test_scene_preflight_rejects_missing_media_before_tts(env, media, tmp_path):
     assert not (tmp_path / "preflight.mp4").exists()
 
 
+
+@pytest.mark.skipif(__import__("os").name != "nt", reason="Windows-only: verify real Windows file-sharing semantics")
+def test_locked_existing_mp4_is_preserved_when_final_render_cannot_replace_it(env, media, tmp_path):
+    """Hold the destination without FILE_SHARE_DELETE, as a player may on Windows."""
+    import ctypes
+    from ctypes import wintypes
+
+    _, job, _ = env()
+    output = tmp_path / "locked-existing.mp4"
+    original = b"previous validated render must survive"
+    output.write_bytes(original)
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = (
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+        wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+    )
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+
+    GENERIC_READ = 0x80000000
+    FILE_SHARE_READ = 0x00000001
+    FILE_SHARE_WRITE = 0x00000002
+    OPEN_EXISTING = 3
+    FILE_ATTRIBUTE_NORMAL = 0x00000080
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    # Deliberately omit FILE_SHARE_DELETE. Windows must reject replacement
+    # while this real OS handle remains open.
+    handle = create_file(
+        str(output), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+        None, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, None,
+    )
+    if handle == INVALID_HANDLE_VALUE:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    try:
+        with pytest.raises(
+            ProductionError,
+            match="Could not access or update production files",
+        ) as error:
+            run(
+                job,
+                studio_with(media),
+                ProductionOptions(render_video=True, video_output=output),
+            )
+
+        assert isinstance(error.value.__cause__, PermissionError)
+        assert output.read_bytes() == original
+        assert not output.with_name(output.name + ".part").exists()
+    finally:
+        if not close_handle(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
 def test_production_filesystem_errors_are_reported_as_production_errors(env, media, tmp_path, monkeypatch):
     from app.workers.production import ProductionJob
 
