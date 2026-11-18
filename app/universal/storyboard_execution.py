@@ -27,7 +27,10 @@ from app.universal.storyboard import (
     StoryboardProposal,
     StoryboardValidationError,
 )
-from app.universal.storyboard_apply import StoryboardApplyPreview
+from app.universal.storyboard_apply import (
+    StoryboardApplyPreview,
+    preview_storyboard_apply,
+)
 from app.universal.workflow import (
     BUILTIN_WORKFLOW_REGISTRY,
     WorkflowRegistry,
@@ -135,12 +138,19 @@ class StoryboardWorkflowExecutionCoordinator:
             preview.proposal_id != proposal.proposal_id
             or preview.source_id != proposal.source_id
             or preview.source_fingerprint != proposal.source_fingerprint
+            or preview.project_id != getattr(project, "id", None)
         ):
             raise StoryboardExecutionReadinessError(
                 "preview does not belong to the supplied storyboard proposal"
             )
         if not getattr(project, "id", None) or not isinstance(getattr(project, "settings", None), dict):
             raise TypeError("project must be a valid Project")
+
+        regenerated_preview = preview_storyboard_apply(project, proposal, source)
+        if regenerated_preview.scenes != preview.scenes:
+            raise StoryboardExecutionReadinessError(
+                "preview scene content does not match the applied proposal"
+            )
 
         state = UniversalState.from_project_settings(project.settings)
         if state.read_only:
@@ -177,6 +187,10 @@ class StoryboardWorkflowExecutionCoordinator:
             )
         if not isinstance(workflow_adapter, EngineBackedWorkflowAdapter):
             raise TypeError("workflow_adapter must be an EngineBackedWorkflowAdapter")
+        if workflow_adapter.descriptor != engine_descriptor:
+            raise StoryboardExecutionReadinessError(
+                "workflow adapter descriptor does not match the supplied engine descriptor"
+            )
         if workflow_adapter.engine_id != selected_engine_id:
             raise StoryboardExecutionReadinessError(
                 "workflow adapter is bound to a different engine than the explicit selection"
@@ -237,6 +251,15 @@ class StoryboardWorkflowExecutionCoordinator:
 
         plans = []
         contexts = {}
+        destinations = [
+            destination_root / f"{item.scene_id}.mp4" for item in preview.scenes
+        ]
+        existing_outputs = [str(path) for path in destinations if path.exists()]
+        if existing_outputs:
+            raise StoryboardExecutionReadinessError(
+                "execution would overwrite existing output files: "
+                + ", ".join(existing_outputs)
+            )
         for item in preview.scenes:
             scene = project.get_scene(item.scene_id)
             persisted = state.scene_plans.get(item.scene_id)
@@ -268,8 +291,7 @@ class StoryboardWorkflowExecutionCoordinator:
             destination = destination_root / f"{item.scene_id}.mp4"
             contexts[item.scene_id] = SceneExecutionContext(
                 output_spec=SegmentOutputSpec(
-                    duration_s=item.end_ms - item.start_ms and
-                    (item.end_ms - item.start_ms) / 1000.0,
+                    duration_s=(item.end_ms - item.start_ms) / 1000.0,
                     width=width,
                     height=height,
                     fps=fps,
