@@ -42,6 +42,7 @@ class FFmpegSegmentAdapter:
     def __init__(self, ffmpeg) -> None:
         self._ffmpeg = ffmpeg
         self.descriptor = self.build_descriptor()
+
     @staticmethod
     def validate_spec(spec: SegmentSpec) -> None:
         """Reject unsupported or malformed requests rather than guessing a mode."""
