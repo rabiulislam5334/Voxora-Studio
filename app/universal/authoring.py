@@ -31,9 +31,9 @@ class SceneAuthoringOptions:
 
     def validate(self) -> tuple[str, ...]:
         errors: list[str] = []
-        if self.split_strategy not in {
+        if self.split_strategy not in (
             "existing_scenes", "paragraphs", "explicit_marker", "manual"
-        }:
+        ):
             errors.append("split_strategy must be existing_scenes, paragraphs, explicit_marker, or manual")
         if self.split_strategy == "explicit_marker":
             if not isinstance(self.explicit_marker, str) or not self.explicit_marker:
@@ -173,6 +173,11 @@ def build_scene_plan_proposal(
         if existing_scenes is None:
             proposal.diagnostics.append(AuthoringDiagnostic(
                 "missing_existing_scenes", "existing_scenes strategy requires existing_scenes input"
+            ))
+            return proposal
+        if not isinstance(existing_scenes, Sequence) or isinstance(existing_scenes, (str, bytes)):
+            proposal.diagnostics.append(AuthoringDiagnostic(
+                "invalid_existing_scenes", "existing_scenes must be a sequence of Scene objects"
             ))
             return proposal
         seen_ids: set[str] = set()
