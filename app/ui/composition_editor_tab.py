@@ -447,9 +447,10 @@ class CompositionEditorTab(ttk.Frame):
             t = item.transform
             x1, y1 = ox + round(t.x * width), oy + round(t.y * height)
             x2, y2 = ox + round((t.x + t.width) * width), oy + round((t.y + t.height) * height)
-            image = self._load_preview_image(item.asset_id, max(1, x2-x1), max(1, y2-y1))
+            image = self._load_preview_image(item.asset_id, max(1, x2-x1), max(1, y2-y1),
+                                             item.fit_mode, t.opacity, t.rotation_degrees)
             if image is not None:
-                image_id = self.canvas.create_image(x1, y1, anchor="nw", image=image)
+                image_id = self.canvas.create_image((x1+x2)//2, (y1+y2)//2, anchor="center", image=image)
                 self._photo_refs.append(image)
             else:
                 image_id = self.canvas.create_rectangle(x1, y1, x2, y2, fill="#435268", outline="#d2d9e3")
@@ -463,7 +464,7 @@ class CompositionEditorTab(ttk.Frame):
         self.canvas.create_text(ox + 6, oy + 6, anchor="nw", fill="#dce4ef",
                                 text=f"{self.composition.canvas.width} × {self.composition.canvas.height}")
 
-    def _load_preview_image(self, asset_id, width, height):
+    def _load_preview_image(self, asset_id, width, height, fit_mode="contain", opacity=1.0, rotation=0.0):
         asset = self._assets.get(asset_id)
         if asset is None:
             return None
@@ -471,11 +472,27 @@ class CompositionEditorTab(ttk.Frame):
             return None
         try:
             path = self.library.resolve_asset_path(asset)
-            from PIL import Image, ImageTk
+            from PIL import Image, ImageOps, ImageTk
+            target = (max(1, min(width, 800)), max(1, min(height, 600)))
             with Image.open(path) as source:
-                source.thumbnail((max(1, min(width, 800)), max(1, min(height, 600))))
-                photo = ImageTk.PhotoImage(source.copy())
-            return photo
+                source = source.convert("RGBA")
+                if fit_mode == "cover":
+                    image = ImageOps.fit(source, target, method=Image.Resampling.LANCZOS)
+                elif fit_mode == "stretch":
+                    image = source.resize(target, Image.Resampling.LANCZOS)
+                else:
+                    contained = ImageOps.contain(source, target, method=Image.Resampling.LANCZOS)
+                    image = Image.new("RGBA", target, (0, 0, 0, 0))
+                    image.alpha_composite(contained, (
+                        (target[0] - contained.width) // 2,
+                        (target[1] - contained.height) // 2,
+                    ))
+                if rotation:
+                    image = image.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=False)
+                if opacity < 1.0:
+                    alpha = image.getchannel("A").point(lambda value: round(value * opacity))
+                    image.putalpha(alpha)
+                return ImageTk.PhotoImage(image)
         except Exception:
             return None
 
