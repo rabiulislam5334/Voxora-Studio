@@ -65,7 +65,12 @@ from app.universal.narration_segmentation import (
     NarrationSegmentationConfig,
     segment_narration,
 )
-from app.universal.storyboard_diagnostics import (\n    StoryboardDiagnostic,\n    StoryboardDiagnosticSeverity,\n    diagnose_storyboard,\n)\nfrom app.universal.storyboard_builder import (
+from app.universal.storyboard_diagnostics import (
+    StoryboardDiagnostic,
+    StoryboardDiagnosticSeverity,
+    diagnose_storyboard,
+)
+from app.universal.storyboard_builder import (
     StoryboardBuilderConfig,
     build_storyboard_proposal,
 )
@@ -176,7 +181,10 @@ __all__ = [
     "NarrationTextUnit",
     "ProposalReviewStatus",
     "StoryboardBeat",
-    "StoryboardDiagnostic",\n    "StoryboardDiagnosticSeverity",\n    "diagnose_storyboard",\n    "StoryboardBuilderConfig",
+    "StoryboardDiagnostic",
+    "StoryboardDiagnosticSeverity",
+    "diagnose_storyboard",
+    "StoryboardBuilderConfig",
     "build_storyboard_proposal",
     "StoryboardProposal",
     "StoryboardValidationError",
