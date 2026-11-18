@@ -135,6 +135,13 @@ def preview_storyboard_apply(
             item.code, item.severity.value, item.message, item.subject_id
         ))
 
+    if not proposal.beats:
+        diagnostics.append(StoryboardPreviewDiagnostic(
+            "EMPTY_STORYBOARD", "error",
+            "An empty storyboard cannot be applied to a Project.",
+            proposal.proposal_id,
+        ))
+
     state = UniversalState.from_project_settings(project.settings)
     if state.read_only:
         diagnostics.append(StoryboardPreviewDiagnostic(
