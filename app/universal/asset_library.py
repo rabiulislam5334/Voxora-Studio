@@ -128,6 +128,8 @@ class VisualAssetLibrary:
         self._lock = threading.RLock()
 
     def load_catalog(self) -> VisualAssetCatalog:
+        if self.catalog_path.is_symlink():
+            raise AssetImportError("Catalog path must not be a symbolic link")
         if not self.catalog_path.exists():
             return VisualAssetCatalog(catalog_id="voxora-visual-library")
         try:
@@ -162,6 +164,9 @@ class VisualAssetLibrary:
                 raise AssetImportError("asset_id must be a non-empty string or null")
             if provenance is not None and not isinstance(provenance, AssetProvenance):
                 raise AssetImportError("provenance must be AssetProvenance or null")
+            if isinstance(tags, (str, bytes)):
+                raise AssetImportError("tags must be a sequence of strings")
+            tags = tuple(tags)
         except OSError as exc:
             raise AssetImportError(f"Cannot access source file: {exc}") from exc
 
@@ -204,6 +209,13 @@ class VisualAssetLibrary:
                 relative = Path("assets") / content_hash[:2] / f"{content_hash}{extension}"
                 stored_path = self.root / relative
                 stored_path.parent.mkdir(parents=True, exist_ok=True)
+                for directory in (self.root / "assets", stored_path.parent):
+                    if directory.is_symlink():
+                        raise AssetImportError("Refusing to write through a symbolic-link directory")
+                try:
+                    stored_path.parent.resolve().relative_to(self.root)
+                except ValueError:
+                    raise AssetImportError("Asset destination escapes the library root") from None
                 if stored_path.is_symlink():
                     raise AssetImportError("Refusing to write through a symbolic link")
                 if stored_path.exists():
@@ -275,12 +287,18 @@ class VisualAssetLibrary:
         if not isinstance(asset, VisualAsset):
             raise AssetImportError("asset must be a VisualAsset")
         relative = _safe_relative_location(asset.location)
-        target = (self.root / relative).resolve()
+        unresolved_target = self.root / relative
+        current = self.root
+        for part in relative.parts:
+            current = current / part
+            if current.is_symlink():
+                raise AssetImportError("Asset location traverses a symbolic link")
+        target = unresolved_target.resolve()
         try:
             target.relative_to(self.root)
         except ValueError:
             raise AssetImportError("Asset location escapes the library root") from None
-        if target.is_symlink() or not target.is_file():
+        if not target.is_file():
             raise AssetImportError("Asset file is missing or is not a regular file")
         if asset.content_sha256 is None:
             raise AssetImportError("Asset has no verified SHA-256 identity")
