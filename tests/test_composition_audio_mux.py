@@ -6,6 +6,7 @@ import pytest
 
 from app.core import constants
 from app.core.timebase import TICKS_PER_SECOND
+from app.core.exceptions import ProductionError
 from app.studio.models import AudioSettings, MusicTrack
 from app.universal.composition_timeline import (
     CompositionTimelinePlan,
@@ -73,7 +74,7 @@ def test_mux_command_copies_video_and_encodes_aac_with_exact_frame_limit(tmp_pat
     assert args[args.index("-c:v") + 1] == "copy"
     assert args[args.index("-c:a") + 1] == "aac"
     assert args[args.index("-frames:v") + 1] == "241"
-    assert args[args.index("-t") + 1] == "10.042"
+    assert float(args[args.index("-t") + 1]) == pytest.approx(241 / 24)
     assert args[-1].endswith("final.mp4")
 
 
@@ -92,7 +93,7 @@ def test_invalid_timeline_blocks_audio_mix_and_mux():
 
 def test_audio_mix_requires_explicit_track_duration_for_music(tmp_path: Path):
     audio = AudioSettings(tracks=[MusicTrack(path="music.mp3", id="missing")])
-    with pytest.raises(Exception, match="could not be read"):
+    with pytest.raises(ProductionError, match="could not be read"):
         build_composition_audio_mix_args(
             Path("ffmpeg"), Path("narration.wav"), _plan(), audio, {},
             tmp_path / "mixed.wav",
