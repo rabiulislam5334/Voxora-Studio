@@ -35,7 +35,11 @@ def test_channel_profile_tab_preview_and_explicit_apply(tmp_path, monkeypatch):
         tab._preset_var.set("Islamic Documentary")
         tab._render_preview()
         assert "respectful_documentary_illustration" in tab._defaults.cget("text")
-        assert "No current rule diagnostics" in tab._diagnostics.get("1.0", "end")
+        diagnostics = tab._diagnostics.get("1.0", "end")
+        # The Islamic Documentary preset intentionally requires source verification.
+        assert "PROFILE_RULE_REVIEW_REQUIRED" in diagnostics
+        assert "Verify Quran references, Hadith authenticity, and historical claims" in diagnostics
+        assert "Complete source verification before approving the documentary" in diagnostics
 
         asked = []
         import app.ui.channel_profile_tab as module
