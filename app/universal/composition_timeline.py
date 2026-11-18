@@ -171,7 +171,8 @@ def _project_input_fingerprint(
             {
                 "id": scene.id, "title": scene.title, "text": scene.text,
                 "notes": scene.notes, "visual_prompt": scene.visual_prompt,
-                "order": scene.order,
+                "order": scene.order, "pause_ms": scene.pause_ms,
+                "scene_pause_ms": scene.scene_pause_ms,
             }
             for scene in sorted(project.scenes, key=lambda item: (item.order, item.id))
         ],
