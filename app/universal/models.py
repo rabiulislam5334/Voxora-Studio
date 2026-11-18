@@ -11,6 +11,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from app.universal.profiles.snapshot import ProfileSnapshot
+
 UNIVERSAL_SETTINGS_KEY = "universal"
 UNIVERSAL_FORMAT_VERSION = 1
 
@@ -206,6 +208,7 @@ class UniversalState:
     """Project-level Universal Core payload with safe forward-version handling."""
 
     profile_id: Optional[str] = None
+    profile_snapshot: Optional[ProfileSnapshot] = None
     scene_plans: Dict[str, ScenePlan] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
     format_version: int = UNIVERSAL_FORMAT_VERSION
@@ -215,11 +218,14 @@ class UniversalState:
     def to_dict(self) -> Dict[str, Any]:
         if self.read_only:
             return copy.deepcopy(self.raw_payload)
-        return _merge_extra({
+        payload = {
             "format_version": UNIVERSAL_FORMAT_VERSION,
             "profile_id": self.profile_id,
             "scene_plans": {key: plan.to_dict() for key, plan in self.scene_plans.items()},
-        }, self.extra)
+        }
+        if self.profile_snapshot is not None:
+            payload["profile_snapshot"] = self.profile_snapshot.to_dict()
+        return _merge_extra(payload, self.extra)
 
     @classmethod
     def from_dict(cls, data: Any) -> "UniversalState":
@@ -234,6 +240,7 @@ class UniversalState:
             return cls(format_version=version, read_only=True, raw_payload=copy.deepcopy(data))
         profile_id = data.get("profile_id")
         plans_data = data.get("scene_plans", {})
+        snapshot_data = data.get("profile_snapshot")
         if profile_id is not None and not isinstance(profile_id, str):
             return cls(format_version=version, read_only=True, raw_payload=copy.deepcopy(data))
         if not isinstance(plans_data, dict):
@@ -243,12 +250,16 @@ class UniversalState:
                      if isinstance(key, str) and key.strip()}
             if len(plans) != len(plans_data):
                 raise ValueError("scene_plans keys must be non-empty strings")
+            snapshot = ProfileSnapshot.from_dict(snapshot_data) if snapshot_data is not None else None
+            if snapshot is not None and (snapshot.read_only or profile_id != snapshot.profile_id):
+                raise ValueError("profile snapshot is unsupported or does not match profile_id")
         except (TypeError, ValueError, OverflowError):
             return cls(format_version=version, read_only=True, raw_payload=copy.deepcopy(data))
         return cls(
             profile_id=profile_id,
+            profile_snapshot=snapshot,
             scene_plans=plans,
-            extra=_copy_unknown(data, frozenset({"format_version", "profile_id", "scene_plans"})),
+            extra=_copy_unknown(data, frozenset({"format_version", "profile_id", "profile_snapshot", "scene_plans"})),
             format_version=version,
         )
 
@@ -257,6 +268,16 @@ class UniversalState:
         if not isinstance(settings, dict):
             return cls()
         return cls.from_dict(settings.get(UNIVERSAL_SETTINGS_KEY))
+
+    def set_profile_snapshot(self, profile, selected_preset_id: Optional[str] = None) -> None:
+        """Attach a validated project-local profile copy; this never rewrites scenes."""
+        if self.read_only:
+            raise ValueError("cannot modify a read-only UniversalState")
+        snapshot = ProfileSnapshot.from_profile(profile, selected_preset_id=selected_preset_id)
+        if self.profile_id is not None and self.profile_id != snapshot.profile_id:
+            raise ValueError("snapshot profile ID must match the selected profile_id")
+        self.profile_id = snapshot.profile_id
+        self.profile_snapshot = snapshot
 
     def prune_scenes(self, valid_scene_ids) -> None:
         """Remove plans for scenes that no longer exist in the owning project."""
