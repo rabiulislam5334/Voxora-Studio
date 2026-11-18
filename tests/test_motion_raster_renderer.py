@@ -116,7 +116,7 @@ def test_camera_pan_moves_the_rendered_canvas_and_exposes_transparency(tmp_path)
 
 def test_camera_zoom_is_applied_around_canvas_center(tmp_path):
     source = _save(tmp_path / "background.png", (20, 40, 220, 255), size=(16, 16))
-    composition = _composition()
+    composition = _composition(x=0.375, y=0.375, box_width=0.25, box_height=0.25)
     motion = _motion(_track(
         "zoom", 1.0, 2.0, target_type="camera", target_id="camera",
     ))
