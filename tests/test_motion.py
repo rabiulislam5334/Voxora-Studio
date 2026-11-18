@@ -45,10 +45,10 @@ def test_easing_and_hold_interpolation_are_applied_from_left_keyframe():
         MotionKeyframe(0, 0.0, "ease_in"),
         MotionKeyframe(10, 1.0),
     )),))
-    hold = SceneMotion("scene-a", 11, (_track(keyframes=(
-        MotionKeyframe(0, 2.0, "hold"),
-        MotionKeyframe(10, 8.0),
-    )),))
+    hold = SceneMotion("scene-a", 11, (_track(
+        property_name="rotation_degrees",
+        keyframes=(MotionKeyframe(0, 2.0, "hold"), MotionKeyframe(10, 8.0)),
+    ),))
 
     assert evaluate_scene_motion(ease, 5).values[0].value == 0.25
     assert evaluate_scene_motion(hold, 9).values[0].value == 2.0
@@ -56,10 +56,10 @@ def test_easing_and_hold_interpolation_are_applied_from_left_keyframe():
 
 
 def test_motion_holds_first_and_last_values_outside_keyframe_range():
-    motion = SceneMotion("scene-a", 20, (_track(keyframes=(
-        MotionKeyframe(4, 3.0),
-        MotionKeyframe(8, 7.0),
-    )),))
+    motion = SceneMotion("scene-a", 20, (_track(
+        property_name="rotation_degrees",
+        keyframes=(MotionKeyframe(4, 3.0), MotionKeyframe(8, 7.0)),
+    ),))
 
     assert evaluate_scene_motion(motion, 0).values[0].value == 3.0
     assert evaluate_scene_motion(motion, 19).values[0].value == 7.0
@@ -97,18 +97,18 @@ def test_composition_validation_rejects_missing_element_targets():
 def test_motion_rejects_duplicate_property_tracks_and_unsorted_keyframes():
     with pytest.raises(MotionValidationError, match="only have one"):
         SceneMotion("scene-a", 11, (_track(), _track(track_id="duplicate")))
-    with __import__("pytest").raises(MotionValidationError, match="ordered by unique"):
+    with pytest.raises(MotionValidationError, match="ordered by unique"):
         _track(keyframes=(MotionKeyframe(5, 0), MotionKeyframe(3, 1)))
 
 
 def test_motion_rejects_invalid_frames_values_and_unknown_properties():
-    with __import__("pytest").raises(MotionValidationError, match="non-negative"):
+    with pytest.raises(MotionValidationError, match="non-negative"):
         MotionKeyframe(-1, 0)
-    with __import__("pytest").raises(MotionValidationError, match="finite"):
+    with pytest.raises(MotionValidationError, match="finite"):
         MotionKeyframe(0, float("nan"))
-    with __import__("pytest").raises(MotionValidationError, match="unsupported"):
+    with pytest.raises(MotionValidationError, match="unsupported"):
         _track(property_name="execute_python")
-    with __import__("pytest").raises(MotionValidationError, match="inside the scene duration"):
+    with pytest.raises(MotionValidationError, match="inside the scene duration"):
         SceneMotion("scene-a", 10, (_track(),))
 
 
@@ -127,7 +127,17 @@ def test_evaluation_rejects_frame_outside_duration_and_wrong_scene():
     motion = SceneMotion("scene-a", 11, (_track(),))
     composition = SceneComposition(composition_id="comp-b", scene_id="scene-b")
 
-    with __import__("pytest").raises(MotionValidationError, match="inside"):
+    with pytest.raises(MotionValidationError, match="inside"):
         evaluate_scene_motion(motion, 11)
-    with __import__("pytest").raises(MotionValidationError, match="scene IDs"):
+    with pytest.raises(MotionValidationError, match="scene IDs"):
         evaluate_scene_motion(motion, 0, composition=composition)
+
+
+def test_motion_rejects_out_of_range_element_and_camera_values():
+    with pytest.raises(MotionValidationError, match="normalized range"):
+        _track(keyframes=(MotionKeyframe(0, 0.0), MotionKeyframe(10, 1.5)))
+    with pytest.raises(MotionValidationError, match="camera zoom"):
+        _track(
+            target_type="camera", target_id="camera", property_name="zoom",
+            keyframes=(MotionKeyframe(0, 1.0), MotionKeyframe(10, 0.0)),
+        )
