@@ -268,3 +268,7 @@ The workspace remains independent of project serialization and rendering.
   writer. Unknown catalog metadata remains preserved.
 - Tests cover catalog mutations, reference integrity, and inspection helpers
   without requiring a display server, Pillow, FFmpeg, or TTS.
+
+- Preview decoding is capped at 16 megapixels to avoid unexpectedly large
+  temporary image allocations on low-memory machines; unsupported or larger
+  files remain available for metadata inspection and integrity verification.
