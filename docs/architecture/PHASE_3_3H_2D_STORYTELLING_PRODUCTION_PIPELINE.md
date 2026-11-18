@@ -98,3 +98,34 @@ continuity references, and timing provenance. The timing values are planning
 metadata only; they do not change the project's render clock or audio timeline.
 No proposal is silently approved, no engine is selected, and no image,
 character, animation, or other visual asset is generated.
+
+## Phase 3.3h.6 — Opt-in workflow execution integration
+
+The execution coordinator accepts only a storyboard proposal that has already
+been applied to the target Project, its original source, and the reviewed
+preview. A separate `approved=True` argument is required to start execution.
+Before invoking any adapter it verifies the applied-proposal marker, preview
+identity and scene content, each persisted Scene and ScenePlan, and the
+selected workflow/engine compatibility.
+
+The caller explicitly supplies the workflow ID, engine ID, matching engine
+descriptor, already-bound workflow adapter, scene kind, style tags, output
+format, output directory, dimensions, and frame rate. The selected engine must
+be the exact engine bound to the adapter and must declare the requested
+workflow family and render capabilities. No automatic selection, fallback,
+or adapter initialization is performed by this coordinator.
+
+Runtime-only ScenePlan copies receive the explicit engine choice and render
+requirements; persisted Project ScenePlans are not modified. Scenes execute
+sequentially through the existing SceneExecutionCoordinator,
+MultiSceneExecutionCoordinator, EngineRuntimeRegistry, and SegmentNormalizer.
+Progress and cancellation are forwarded. Existing normalized output files are
+not overwritten.
+
+This is an execution integration boundary, not a claim that current built-in
+engines generate 2D artwork or animation. The existing FFmpeg adapter does not
+declare a 2D/documentary workflow family and remains limited to its declared
+blank/image/video segment capabilities. A compatible visual engine and
+workflow adapter must be installed and explicitly selected before those
+workflows can run. No UI wiring, default renderer replacement, AI service,
+asset generation, project schema change, or legacy .voxora change is included.

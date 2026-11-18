@@ -81,6 +81,12 @@ from app.universal.storyboard_apply import (
     apply_storyboard_proposal,
     preview_storyboard_apply,
 )
+from app.universal.storyboard_execution import (
+    StoryboardExecutionApprovalError,
+    StoryboardExecutionError,
+    StoryboardExecutionReadinessError,
+    StoryboardWorkflowExecutionCoordinator,
+)
 from app.universal.storyboard import (
     ContinuityKind,
     ContinuityReference,
@@ -198,6 +204,10 @@ __all__ = [
     "StoryboardScenePreview",
     "apply_storyboard_proposal",
     "preview_storyboard_apply",
+    "StoryboardExecutionApprovalError",
+    "StoryboardExecutionError",
+    "StoryboardExecutionReadinessError",
+    "StoryboardWorkflowExecutionCoordinator",
     "StoryboardProposal",
     "StoryboardValidationError",
     "TimingBasis",
