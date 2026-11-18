@@ -6,7 +6,6 @@ it does not render a video or modify legacy Scene records.
 """
 from __future__ import annotations
 
-import copy
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -304,7 +303,11 @@ class CompositionEditorTab(ttk.Frame):
         options = sorted(bound)
         self.asset_combo["values"] = options
         self.asset_var.set(options[0] if options else "")
-        raw = state.extra.get("scene_compositions", {}).get(scene_id)
+        stored_compositions = state.extra.get("scene_compositions", {})
+        if not isinstance(stored_compositions, dict):
+            messagebox.showerror("Composition unavailable", "Stored scene compositions data is malformed.", parent=self)
+            return
+        raw = stored_compositions.get(scene_id)
         if raw is not None:
             if not isinstance(raw, dict) or not isinstance(raw.get("composition"), dict):
                 messagebox.showerror("Composition unavailable", "Stored composition entry is malformed.", parent=self)
@@ -464,6 +467,8 @@ class CompositionEditorTab(ttk.Frame):
         asset = self._assets.get(asset_id)
         if asset is None:
             return None
+        if (asset.width or 0) * (asset.height or 0) > 16_000_000:
+            return None
         try:
             path = self.library.resolve_asset_path(asset)
             from PIL import Image, ImageTk
@@ -561,6 +566,7 @@ class CompositionEditorTab(ttk.Frame):
                 elements.append(value)
         self.composition = self._with_elements(elements)
         self.preview = None
+        self._composition_dirty = True
         self._redraw()
         self._update_properties()
 
@@ -589,6 +595,7 @@ class CompositionEditorTab(ttk.Frame):
                 elements.append(value)
         self.composition = self._with_elements(elements)
         self.preview = None
+        self._composition_dirty = True
         self._redraw()
         self._update_properties()
 
