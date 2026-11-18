@@ -74,3 +74,27 @@ Contracts should be immutable where practical, validate inputs strictly, preserv
 ## Phase 3.3h.4 — Continuity and timing diagnostics
 
 The diagnostics layer is read-only and deterministic. It reports stable codes for timeline gaps and overlaps, narration units that are unmapped or reused across beats, source identity mismatches, beats extending beyond a declared narration duration, unused continuity declarations, and estimated beat timing that needs review. Structural violations already rejected by the immutable domain contracts remain construction-time validation errors. Diagnostics never repair or reorder beats, invent missing character/location/prop references, change review status, or mutate a proposal.
+
+## Phase 3.3h.5 — Preview and explicit apply
+
+The preview/apply adapter converts a reviewed storyboard proposal into additive
+Project Scene and Universal ScenePlan records. Preview is deterministic and
+read-only. Each proposed scene shows its stable derived ID, exact narration
+slice, visual description, action/continuity notes, integer-millisecond timing,
+and measured/estimated timing provenance.
+
+Applying requires a separate explicit approval argument and a previously
+reviewed preview. Immediately before mutation, the adapter revalidates the
+proposal against the supplied narration source and recomputes both source and
+target fingerprints. Any source mismatch, target Project edit, malformed or
+future read-only Universal payload, duplicate proposal application, or scene
+ID collision blocks the operation. The operation builds detached scene,
+settings, and UniversalState copies, then commits them together only after all
+validation succeeds.
+
+Existing Project scenes and unrelated Universal settings are preserved.
+Storyboard-derived ScenePlans record beat identity, narration-unit IDs,
+continuity references, and timing provenance. The timing values are planning
+metadata only; they do not change the project's render clock or audio timeline.
+No proposal is silently approved, no engine is selected, and no image,
+character, animation, or other visual asset is generated.
