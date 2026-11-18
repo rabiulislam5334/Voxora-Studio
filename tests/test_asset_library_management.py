@@ -89,3 +89,16 @@ def test_remove_unknown_character_and_asset_raise_clear_errors(tmp_path):
         library.remove_character("missing")
     with pytest.raises(AssetImportError, match="Unknown asset"):
         library.remove_asset("missing")
+
+
+def test_asset_file_identity_cannot_be_changed_through_metadata_api(tmp_path):
+    from dataclasses import replace
+
+    source = tmp_path / "image.png"
+    source.write_bytes(_png())
+    library = VisualAssetLibrary(tmp_path / "library")
+    asset = library.import_file(source)
+    tampered = replace(asset, content_sha256="b" * 64)
+    with pytest.raises(AssetImportError, match="identity.*immutable"):
+        library.update_asset(tampered)
+    assert library.load_catalog().assets == (asset,)
