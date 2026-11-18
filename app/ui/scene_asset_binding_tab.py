@@ -137,6 +137,8 @@ class SceneAssetBindingTab(ttk.Frame):
             background=self.palette["field_bg"], foreground=self.palette["fg"],
             selectbackground=self.palette["accent"])
         self.character_list.grid(row=0, column=0, sticky="nsew")
+        self.character_list.bind("<<ListboxSelect>>", self._invalidate_preview)
+        self.role_var.trace_add("write", self._invalidate_preview)
 
         actions = ttk.Frame(right, style="App.TFrame")
         actions.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 8))
@@ -175,6 +177,21 @@ class SceneAssetBindingTab(ttk.Frame):
             self._status.set(f"Library unavailable: {exc}")
 
     def _open_project(self):
+        if self.project_manager.dirty:
+            choice = messagebox.askyesnocancel(
+                "Unsaved project changes",
+                "Save the current project before opening another one?\n\n"
+                "Yes = Save, No = Discard changes, Cancel = Stay here.",
+                parent=self,
+            )
+            if choice is None:
+                return
+            if choice:
+                try:
+                    self.project_manager.save()
+                except Exception as exc:
+                    messagebox.showerror("Project not saved", str(exc), parent=self)
+                    return
         path = filedialog.askopenfilename(parent=self, title="Open Voxora project",
             initialdir=str(self.config.projects_dir),
             filetypes=(("Voxora projects", "*.voxora"), ("All files", "*.*")))
@@ -229,7 +246,13 @@ class SceneAssetBindingTab(ttk.Frame):
         selected = self.scene_tree.selection()
         return selected[0] if selected else None
 
+    def _invalidate_preview(self, *_args):
+        if self._preview is not None:
+            self._preview = None
+            self._set_report("Selection changed. Create a new binding preview before applying.")
+
     def _on_asset_select(self, _event=None):
+        self._invalidate_preview()
         self._preview_image = None
         selected = self.asset_list.curselection()
         if not selected or self.catalog is None:
