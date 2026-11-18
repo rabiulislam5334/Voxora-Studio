@@ -326,3 +326,15 @@ __all__ += [
     "render_bound_scene_composition",
     "resolve_scene_composition_assets",
 ]
+
+from app.universal.adapters.raster import RasterCompositionAdapter
+from app.universal.composition_builtins import (
+    BUILTIN_COMPOSITION_RENDERER_IDS,
+    build_builtin_composition_render_bridge,
+)
+
+__all__ += [
+    "RasterCompositionAdapter",
+    "BUILTIN_COMPOSITION_RENDERER_IDS",
+    "build_builtin_composition_render_bridge",
+]
