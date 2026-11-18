@@ -286,3 +286,21 @@ __all__ += [
     "apply_scene_composition",
     "preview_scene_composition",
 ]
+
+from app.universal.composition_render_bridge import (
+    CompositionRenderApprovalError,
+    CompositionRenderBridge,
+    CompositionRenderBridgeError,
+    CompositionRenderCapabilities,
+    CompositionRenderResolution,
+    CompositionRenderUnsupportedError,
+)
+
+__all__ += [
+    "CompositionRenderApprovalError",
+    "CompositionRenderBridge",
+    "CompositionRenderBridgeError",
+    "CompositionRenderCapabilities",
+    "CompositionRenderResolution",
+    "CompositionRenderUnsupportedError",
+]
