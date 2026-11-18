@@ -61,6 +61,18 @@ from app.universal.profile_preference_resolution import (
     ProfilePreferenceResolver,
 )
 from app.universal.requests import EngineRenderRequest, RawEngineOutput
+from app.universal.storyboard import (
+    ContinuityKind,
+    ContinuityReference,
+    NarrationSource,
+    NarrationTextUnit,
+    ProposalReviewStatus,
+    StoryboardBeat,
+    StoryboardProposal,
+    StoryboardValidationError,
+    TimingBasis,
+    TimingInterval,
+)
 from app.universal.workflow import (
     BUILTIN_WORKFLOW_DESCRIPTORS,
     BUILTIN_WORKFLOW_REGISTRY,
@@ -148,6 +160,16 @@ __all__ = [
     "WorkflowResolution",
     "WorkflowResolutionStatus",
     "WorkflowResolver",
+    "ContinuityKind",
+    "ContinuityReference",
+    "NarrationSource",
+    "NarrationTextUnit",
+    "ProposalReviewStatus",
+    "StoryboardBeat",
+    "StoryboardProposal",
+    "StoryboardValidationError",
+    "TimingBasis",
+    "TimingInterval",
     "apply_profiled_scene_plan_proposal",
     "build_profiled_scene_plan_proposal",
 ]
