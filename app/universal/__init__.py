@@ -49,6 +49,7 @@ from app.universal.models import (
     ScenePlan,
     UniversalState,
 )
+from app.universal.asset_library import AssetImportError, VisualAssetLibrary
 from app.universal.visual_assets import (
     AssetProvenance,
     CharacterAppearance,
@@ -129,6 +130,8 @@ from app.universal.runtime import (
 )
 
 __all__ = [
+    "AssetImportError",
+    "VisualAssetLibrary",
     "AssetRef",
     "AssetProvenance",
     "CharacterAppearance",

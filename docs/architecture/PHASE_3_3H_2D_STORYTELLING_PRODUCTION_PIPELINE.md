@@ -169,3 +169,50 @@ characters. These contracts are channel-agnostic and can be referenced by later
 - Appearance fingerprints are deterministic and change when canonical appearance
   content changes.
 - Unit tests run without FFmpeg, TTS, network access, or external AI services.
+
+
+# Phase 3.4b — Visual Asset Storage & Import Pipeline
+
+## Goal
+Add a local-only asset library that imports supported raster images into a
+managed, content-addressed directory and records verified identity and basic
+image metadata in a persistent catalog.
+
+## Included behavior
+- VisualAssetLibrary owns a caller-selected local library root and a
+  versioned VisualAssetCatalog JSON manifest.
+- Imports PNG, JPEG, GIF, and BMP files from local regular files only.
+  Extension and detected file signature must agree; dimensions are read from
+  bounded image headers without requiring Pillow or another runtime dependency.
+- Copies are streamed through a temporary staging file while calculating
+  SHA-256 and enforcing configurable file-size and pixel-count limits.
+- Stored image paths are content-addressed under assets/<hash-prefix>/.
+  Re-importing identical bytes is idempotent; conflicting IDs or corrupted
+  content-addressed destinations are rejected.
+- Catalog writes use a temporary file and atomic replacement. Asset locations
+  are relative to the library root; verification rejects traversal and
+  symbolic-link paths.
+- Import returns a VisualAsset containing verified SHA-256, detected media
+  type, dimensions, size metadata, and caller-supplied provenance/tags.
+
+## Safety and compatibility boundaries
+- No network URLs, remote providers, AI generation, image editing, or rendering.
+- The importer inspects image signatures and dimension headers; it does not
+  fully decode or sanitize image pixels. Downstream renderers must treat
+  imported files as untrusted input and decode them with their own safeguards.
+- SVG and other active/document formats are intentionally not accepted.
+- The library is opt-in and independent of Project, Scene, ScenePlan, and
+  legacy .voxora serialization. No existing renderer or cache behavior changes.
+- The content-addressed store is local application data; provenance/license
+  values remain declarations and are not legal clearance.
+
+## Acceptance criteria
+- Supported formats import with stable content hashes and dimensions.
+- Unsupported, mismatched, oversized, malformed-header, and empty files fail
+  without catalog mutation.
+- Duplicate imports do not create duplicate catalog entries.
+- Catalog survives reload and rejects invalid/future catalog data through the
+  existing domain contracts.
+- Hash verification detects missing or modified files; unsafe relative paths
+  and symlink traversal are rejected.
+- Tests run without Pillow, FFmpeg, TTS, network access, or external AI services.
