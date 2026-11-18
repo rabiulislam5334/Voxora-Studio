@@ -114,11 +114,6 @@ def test_reports_unused_continuity_references_and_estimated_timing():
 
 
 def test_reports_timing_beyond_declared_narration_duration():
-    source = NarrationSource(
-        "s", "One.",
-        (NarrationTextUnit("u1", 0, 4, TimingInterval(0, 1500, TimingBasis.MEASURED)),),
-        total_duration_ms=1000,
-    )
     # The source contract itself forbids a unit interval beyond its duration.
     # Construct a valid source with a longer unit then an independent beat interval.
     valid_source = NarrationSource(
