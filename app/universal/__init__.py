@@ -406,3 +406,19 @@ __all__ += [
     "build_composition_video_mux_args",
     "composition_video_duration",
 ]
+
+from app.universal.motion_raster_renderer import (
+    MotionRasterRenderCancelledError,
+    MotionRasterRenderError,
+    MotionRasterRenderResult,
+    MotionRasterRenderer,
+    MotionRasterSequenceResult,
+)
+
+__all__ += [
+    "MotionRasterRenderCancelledError",
+    "MotionRasterRenderError",
+    "MotionRasterRenderResult",
+    "MotionRasterRenderer",
+    "MotionRasterSequenceResult",
+]
