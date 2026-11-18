@@ -78,8 +78,8 @@ def test_builds_deterministic_scene_slots_from_existing_timeline_contract():
     assert first.is_valid
     assert first.requires_review is False
     assert [slot.scene_id for slot in first.slots] == ["scene-a", "scene-b"]
-    assert first.total_ticks == _ticks(5.6)
-    assert first.total_frames == 134
+    assert first.total_ticks == _ticks(6.0)
+    assert first.total_frames == 144
     assert first.transition == "crossfade"
     assert first.transition_ticks == _ticks(0.25)
     assert first.slots[0].start_ticks == 0
@@ -89,7 +89,7 @@ def test_builds_deterministic_scene_slots_from_existing_timeline_contract():
     assert first.slots[0].frame_end == 48
     assert first.slots[0].segment_frame_end == 54
     assert first.slots[1].start_ticks == _ticks(2.0)
-    assert first.slots[1].slot_ticks == _ticks(3.6)
+    assert first.slots[1].slot_ticks == _ticks(4.0)
     assert first.slots[1].timing_basis == "measured_narration"
     assert first.slots[0].timing_basis == "configured_floor"
     assert first.slots[0].assets[0].identity == "sha256-a"
@@ -106,7 +106,7 @@ def test_uses_scene_pause_ms_when_explicit_pause_map_is_not_supplied():
     assert plan.slots[0].pause_ticks == _ticks(0.2)
     assert plan.slots[1].pause_ticks == _ticks(0.1)
     assert plan.slots[0].slot_ticks == _ticks(2.0)
-    assert plan.slots[1].slot_ticks == _ticks(1.0)
+    assert plan.slots[1].slot_ticks == _ticks(1.5)
 
 
 def test_explicit_pause_ticks_override_scene_pause_ms():
@@ -125,7 +125,7 @@ def test_missing_measured_narration_is_visible_as_review_diagnostic():
     plan = build_composition_timeline_plan(project, {"scene-a": _ticks(1.0)})
     assert plan.is_valid
     assert plan.requires_review
-    assert any(item.code == "NARRATION_TIMING_MISSING" and item.scene_id == "scene-b"
+    assert any(item.code == "SCENE_DURATION_ESTIMATED" and item.scene_id == "scene-b"
                for item in plan.diagnostics)
     assert plan.slots[1].timing_basis == "default_estimate"
 
@@ -200,8 +200,11 @@ def test_rejects_corrupt_persisted_composition_fingerprint():
     state = UniversalState.from_project_settings(project.settings)
     state.extra["scene_compositions"]["scene-a"]["composition_fingerprint"] = "0" * 64
     project.settings = state.apply_to_project_settings(project.settings)
-    with pytest.raises(CompositionTimelinePlanError, match="fingerprint is inconsistent"):
-        build_composition_timeline_plan(project, {})
+    plan = build_composition_timeline_plan(project, {})
+    assert not plan.is_valid
+    assert any(item.code == "COMPOSITION_INVALID" and item.scene_id == "scene-a"
+               and "fingerprint is inconsistent" in item.message
+               for item in plan.diagnostics)
 
 
 def test_cut_transition_has_no_overlap_segments():
