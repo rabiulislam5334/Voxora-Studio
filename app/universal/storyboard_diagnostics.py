@@ -58,6 +58,7 @@ class StoryboardDiagnostic:
 def diagnose_storyboard(
     proposal: StoryboardProposal,
     source: Optional[NarrationSource] = None,
+    available_continuity_reference_ids: Optional[Sequence[str]] = None,
 ) -> Tuple[StoryboardDiagnostic, ...]:
     """Return stable findings for timing, narration coverage, and continuity usage.
 
@@ -69,6 +70,23 @@ def diagnose_storyboard(
         raise StoryboardValidationError("proposal must be a StoryboardProposal")
     if source is not None and not isinstance(source, NarrationSource):
         raise StoryboardValidationError("source must be a NarrationSource or null")
+    if available_continuity_reference_ids is None:
+        available_reference_ids = None
+    else:
+        if isinstance(available_continuity_reference_ids, (str, bytes)):
+            raise StoryboardValidationError(
+                "available_continuity_reference_ids must be a sequence of IDs"
+            )
+        available_reference_ids = tuple(available_continuity_reference_ids)
+        if not all(isinstance(item, str) and item.strip() for item in available_reference_ids):
+            raise StoryboardValidationError(
+                "available_continuity_reference_ids must contain non-empty strings"
+            )
+        if len(set(available_reference_ids)) != len(available_reference_ids):
+            raise StoryboardValidationError(
+                "available_continuity_reference_ids must not contain duplicates"
+            )
+        available_reference_ids = set(available_reference_ids)
 
     findings = []
     if source is not None:
@@ -141,6 +159,14 @@ def diagnose_storyboard(
                 "CONTINUITY_REFERENCE_UNUSED", StoryboardDiagnosticSeverity.INFO,
                 "This declared continuity reference is not used by any storyboard beat.",
                 reference.reference_id,
+            ))
+
+    if available_reference_ids is not None:
+        for reference_id in sorted(referenced_ids - available_reference_ids):
+            findings.append(StoryboardDiagnostic(
+                "CONTINUITY_REFERENCE_UNRESOLVED", StoryboardDiagnosticSeverity.ERROR,
+                "A storyboard beat references an ID that is absent from the supplied continuity catalog.",
+                reference_id,
             ))
 
     for beat in beats:
