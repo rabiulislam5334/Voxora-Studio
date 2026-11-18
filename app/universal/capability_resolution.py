@@ -108,15 +108,26 @@ class EngineCapabilityResolver:
     ) -> EngineCapabilityResolution:
         query = {
             "scene_kind": scene_kind,
-            "style_tags": style_tags,
-            "asset_kinds": asset_kinds,
+            "style_tags": style_tags if isinstance(style_tags, (str, bytes)) else tuple(style_tags),
+            "asset_kinds": asset_kinds if isinstance(asset_kinds, (str, bytes)) else tuple(asset_kinds),
             "output_format": output_format,
         }
-        candidates = self._registry.find_compatible(**query)
         if resource_context is not None and not isinstance(
             resource_context, EngineResourceContext
         ):
             raise TypeError("resource_context must be an EngineResourceContext or null")
+        try:
+            candidates = self._registry.find_compatible(**query)
+        except (TypeError, ValueError) as exc:
+            return EngineCapabilityResolution(
+                requested_engine_id=engine_id if isinstance(engine_id, str) else None,
+                status="invalid_request",
+                diagnostics=(EngineDiagnostic(
+                    code="engine.invalid_requirements",
+                    severity=DiagnosticSeverity.ERROR,
+                    message=f"Invalid capability requirements: {exc}",
+                ),),
+            )
 
         if engine_id is None:
             return EngineCapabilityResolution(
