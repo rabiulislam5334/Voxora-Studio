@@ -13,7 +13,7 @@ import struct
 import tempfile
 import threading
 from pathlib import Path
-from typing import BinaryIO, Optional
+from typing import Optional
 
 from app.universal.visual_assets import (
     AssetProvenance,
@@ -166,7 +166,10 @@ class VisualAssetLibrary:
                 raise AssetImportError("provenance must be AssetProvenance or null")
             if isinstance(tags, (str, bytes)):
                 raise AssetImportError("tags must be a sequence of strings")
-            tags = tuple(tags)
+            try:
+                tags = tuple(tags)
+            except TypeError:
+                raise AssetImportError("tags must be a sequence of strings") from None
         except OSError as exc:
             raise AssetImportError(f"Cannot access source file: {exc}") from exc
 
