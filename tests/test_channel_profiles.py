@@ -74,7 +74,12 @@ def test_profile_does_not_mutate_input_or_share_nested_metadata():
 
 
 def test_future_profile_schema_is_read_only_and_preserved_verbatim():
-    raw = {"schema_version": 99, "profile_id": "future", "new_contract": {"x": [1, 2]}}
+    raw = {
+        "schema_version": 99,
+        "profile_id": "Future/Profile-ID",
+        "display_name": {"localized": ["Future profile"]},
+        "new_contract": {"x": [1, 2]},
+    }
     loaded = ChannelProfile.from_dict(raw)
 
     assert loaded.read_only
