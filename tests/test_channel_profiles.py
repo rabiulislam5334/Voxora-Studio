@@ -52,6 +52,7 @@ def test_profile_round_trip_preserves_nested_unknown_fields():
     raw["visual_defaults"]["future_visual_field"] = "preserve"
     raw["presets"][0]["future_preset_field"] = True
     raw["rules"][0]["future_rule_field"] = {"retain": True}
+    raw["presets"][0]["rules"][0]["future_rule_field"] = {"retain": True}
 
     loaded = ChannelProfile.from_dict(raw)
 
