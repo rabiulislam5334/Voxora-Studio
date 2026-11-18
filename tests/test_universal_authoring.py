@@ -132,3 +132,13 @@ def test_wrong_input_type_is_reported():
     assert not proposal.is_valid
     assert proposal.scenes == []
     assert any(item.code == "invalid_script" for item in proposal.diagnostics)
+
+
+def test_empty_existing_scene_collection_is_rejected():
+    proposal = build_scene_plan_proposal(
+        options=SceneAuthoringOptions(split_strategy="existing_scenes"),
+        existing_scenes=[],
+    )
+    assert not proposal.is_valid
+    assert proposal.scenes == []
+    assert any(item.code == "no_scenes" for item in proposal.diagnostics)
