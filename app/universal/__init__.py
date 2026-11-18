@@ -364,3 +364,27 @@ __all__ += [
     "build_builtin_frame_sequence_encoder",
     "build_frame_sequence_encode_args",
 ]
+
+from app.universal.composition_timeline import (
+    COMPOSITION_TIMELINE_PLAN_VERSION,
+    CompositionSceneSlot,
+    CompositionTimelinePlan,
+    CompositionTimelinePlanError,
+    StaleCompositionTimelinePlanError,
+    TimelineAssetSnapshot,
+    TimelinePlanDiagnostic,
+    assert_composition_timeline_plan_current,
+    build_composition_timeline_plan,
+)
+
+__all__ += [
+    "COMPOSITION_TIMELINE_PLAN_VERSION",
+    "CompositionSceneSlot",
+    "CompositionTimelinePlan",
+    "CompositionTimelinePlanError",
+    "StaleCompositionTimelinePlanError",
+    "TimelineAssetSnapshot",
+    "TimelinePlanDiagnostic",
+    "assert_composition_timeline_plan_current",
+    "build_composition_timeline_plan",
+]
