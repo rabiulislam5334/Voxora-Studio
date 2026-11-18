@@ -1,4 +1,12 @@
 from app.universal.builtins import BUILTIN_ENGINE_IDS, build_builtin_engine_runtime_registry
+from app.universal.capability_resolution import (
+    DiagnosticSeverity,
+    EngineCapabilityResolution,
+    EngineCapabilityResolver,
+    EngineDiagnostic,
+    EngineResourceAssessment,
+    EngineResourceContext,
+)
 """Universal Core domain contracts."""
 
 from app.universal.execution import (
@@ -53,7 +61,11 @@ __all__ = [
     "AssetRef",
     "BUILTIN_ENGINE_IDS",
     "build_builtin_engine_runtime_registry",
+    "DiagnosticSeverity",
     "EngineAdapter",
+    "EngineCapabilityResolution",
+    "EngineCapabilityResolver",
+    "EngineDiagnostic",
     "EngineBindingError",
     "EngineCapabilities",
     "EngineChoice",
@@ -64,6 +76,8 @@ __all__ = [
     "EngineRegistryError",
     "EngineRenderError",
     "EngineRenderRequest",
+    "EngineResourceAssessment",
+    "EngineResourceContext",
     "EnginePlanResolution",
     "EnginePlanResolver",
     "EnginePlanStatus",
