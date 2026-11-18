@@ -225,7 +225,7 @@ class SceneComposition:
         _identifier(self.scene_id, "scene_id")
         if not isinstance(self.canvas, CompositionCanvas):
             raise CompositionValidationError("composition.canvas must be CompositionCanvas")
-        if isinstance(self.composition_version, bool) or self.composition_version != COMPOSITION_VERSION:
+        if isinstance(self.composition_version, bool) or not isinstance(self.composition_version, int) or self.composition_version != COMPOSITION_VERSION:
             raise CompositionValidationError("unsupported composition version")
         elements = tuple(self.elements)
         if not all(isinstance(item, CompositionElement) for item in elements):
