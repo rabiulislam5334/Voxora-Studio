@@ -96,7 +96,7 @@ def test_renderer_must_declare_layer_and_transform_support():
     ))
     result = CompositionRenderBridge({"fake-compositor": renderer}).inspect("fake-compositor")
     assert not result.supported
-    assert "layer and transform" in result.reason
+    assert "layered composition and element transforms" in result.reason
 
 
 def test_declared_composition_renderer_is_supported():
