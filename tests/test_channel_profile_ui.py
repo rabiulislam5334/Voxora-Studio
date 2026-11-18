@@ -35,7 +35,7 @@ def test_channel_profile_tab_preview_and_explicit_apply(tmp_path, monkeypatch):
         tab._preset_var.set("Islamic Documentary")
         tab._render_preview()
         assert "respectful_documentary_illustration" in tab._defaults.cget("text")
-        assert "PROFILE" not in tab._diagnostics.get("1.0", "end").upper() or "PROFILE" in tab._diagnostics.get("1.0", "end").upper()
+        assert "No current rule diagnostics" in tab._diagnostics.get("1.0", "end")
 
         asked = []
         import app.ui.channel_profile_tab as module
