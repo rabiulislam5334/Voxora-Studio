@@ -342,9 +342,11 @@ class ChannelProfile:
         if isinstance(version, bool) or not isinstance(version, int) or version < 1:
             raise ProfileValidationError("profile.schema_version must be a positive integer")
         if version > PROFILE_SCHEMA_VERSION:
+            # Do not interpret fields owned by a newer schema. Use safe wrapper
+            # values while retaining the original document verbatim for export.
             return cls(
-                profile_id=_string(data.get("profile_id", "unsupported"), "profile.profile_id"),
-                display_name=_string(data.get("display_name", "Unsupported profile"), "profile.display_name"),
+                profile_id="unsupported",
+                display_name="Unsupported profile",
                 schema_version=version,
                 read_only=True,
                 raw_payload=_json_copy(data, "profile"),
