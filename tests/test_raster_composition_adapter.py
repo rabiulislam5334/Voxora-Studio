@@ -14,12 +14,12 @@ from app.universal.composition_builtins import (
 )
 from app.universal.composition_render_bridge import (
     CompositionRenderApprovalError, CompositionRenderBridge,
-    CompositionRenderCapabilities, CompositionRenderUnsupportedError,
+    CompositionRenderBridgeError, CompositionRenderCapabilities,
+    CompositionRenderUnsupportedError,
 )
 from app.universal.composition_workflow import preview_scene_composition
 from app.universal.engines import EngineCapabilities, EngineDescriptor
 from app.universal.models import AssetRef, ScenePlan
-from app.universal.raster_renderer import RasterCompositionRenderer
 
 
 def _fixture(tmp_path: Path):
@@ -32,7 +32,8 @@ def _fixture(tmp_path: Path):
     plan = ScenePlan(scene_id="scene-1", asset_refs=[asset_ref])
     project = Project(
         id="project-1",
-        scenes=[Scene(id="scene-1", title="Scene 1")],
+        name="Composition adapter test",
+        scenes=[Scene(id="scene-1", title="Scene 1", text="Narration", order=0)],
         settings={"universal": {
             "format_version": 1, "profile_id": None,
             "scene_plans": {"scene-1": plan.to_dict()},
@@ -130,7 +131,7 @@ def test_bridge_rejects_stale_preview(tmp_path):
         elements=composition.elements,
     )
     bridge = build_builtin_composition_render_bridge()
-    with pytest.raises(Exception, match="stale"):
+    with pytest.raises(CompositionRenderBridgeError, match="stale"):
         bridge.render(
             "raster", project, changed, preview,
             asset_paths=assets, destination=tmp_path / "stale.png",
@@ -142,7 +143,7 @@ def test_bridge_rejects_stale_preview(tmp_path):
 def test_bridge_requires_exact_visible_asset_set(tmp_path):
     project, composition, preview, assets = _fixture(tmp_path)
     bridge = build_builtin_composition_render_bridge()
-    with pytest.raises(Exception, match="exactly"):
+    with pytest.raises(CompositionRenderBridgeError, match="exactly"):
         bridge.render(
             "raster", project, composition, preview,
             asset_paths={}, destination=tmp_path / "missing.png",
