@@ -47,6 +47,12 @@ from app.universal.profile_authoring import (
     apply_profiled_scene_plan_proposal,
     build_profiled_scene_plan_proposal,
 )
+from app.universal.profile_preference_resolution import (
+    EnginePreference,
+    EnginePreferenceStatus,
+    ProfilePreferenceResolution,
+    ProfilePreferenceResolver,
+)
 from app.universal.requests import EngineRenderRequest, RawEngineOutput
 from app.universal.runtime import (
     EngineAdapter,
@@ -72,6 +78,8 @@ __all__ = [
     "EngineCompatibilityError",
     "EngineDescriptor",
     "EngineInitializationError",
+    "EnginePreference",
+    "EnginePreferenceStatus",
     "EngineRegistry",
     "EngineRegistryError",
     "EngineRenderError",
@@ -81,6 +89,8 @@ __all__ = [
     "EnginePlanResolution",
     "EnginePlanResolver",
     "EnginePlanStatus",
+    "ProfilePreferenceResolution",
+    "ProfilePreferenceResolver",
     "EngineRuntimeError",
     "EngineRuntimeRegistry",
     "EngineUnavailableError",
