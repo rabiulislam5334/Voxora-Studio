@@ -9,13 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 import math
+import os
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
 from app.audio.ffmpeg_tool import FFmpegTool
 from app.audio.mixer import build_mix_args, has_mixing_work
 from app.core import constants
-from app.core.exceptions import MediaError, ProductionError
+from app.core.exceptions import ProductionError
 from app.core.timebase import frames_to_ticks, ticks_to_seconds
 from app.studio.models import AudioSettings
 from app.studio.previews import probe_track_durations
@@ -256,9 +257,13 @@ class CompositionAudioMuxer:
                 raise CompositionAudioMuxError("FFmpeg did not produce the final MP4")
             video_codec, audio_codec = _validate_final_mp4(self._ffmpeg, part_path, plan, duration_s, cancel)
             _cancel(cancel)
-            if target.exists():
-                raise CompositionAudioMuxError("final video appeared during export; refusing to overwrite it")
-            part_path.replace(target)
+            try:
+                os.link(part_path, target)
+            except FileExistsError:
+                raise CompositionAudioMuxError(
+                    "final video appeared during export; refusing to overwrite it"
+                ) from None
+            part_path.unlink()
             if on_progress:
                 on_progress(1.0, "Final MP4 ready")
             return CompositionAudioMuxResult(
