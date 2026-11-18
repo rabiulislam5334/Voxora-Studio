@@ -145,6 +145,13 @@ class EngineCatalogTab(ttk.Frame):
         lines.extend(("", format_capabilities(descriptor.capabilities)))
         self._set_details("\n".join(lines))
 
+    def apply_theme(self, palette) -> None:
+        self._palette = palette
+        self._details.configure(
+            background=palette["field_bg"], foreground=palette["fg"],
+            insertbackground=palette["fg"], highlightbackground=palette["border"],
+        )
+
     def refresh(self, *, probe_availability: bool = False) -> None:
         try:
             registry = build_builtin_engine_runtime_registry(
@@ -157,7 +164,9 @@ class EngineCatalogTab(ttk.Frame):
 
         selected = self._tree.selection()
         selected_id = selected[0] if selected else None
-        self._tree.delete(*self._tree.get_children())
+        children = self._tree.get_children()
+        if children:
+            self._tree.delete(*children)
         self._descriptors = {item.engine_id: item for item in descriptors}
         for descriptor in descriptors:
             self._tree.insert(
