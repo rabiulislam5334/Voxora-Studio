@@ -231,3 +231,20 @@ def test_wrong_scene_and_invalid_frame_are_rejected(tmp_path):
             asset_paths={"hero-asset": source},
             destination=tmp_path / "invalid-frame.png",
         )
+
+
+def test_rendering_does_not_mutate_source_composition_or_motion(tmp_path):
+    source = _save(tmp_path / "hero.png")
+    composition = _composition(box_width=0.25, box_height=0.25)
+    motion = _motion(_track("x", 0.0, 0.5))
+    composition_before = composition.to_dict()
+    motion_before = motion.to_dict()
+
+    MotionRasterRenderer().render_frame(
+        composition, motion, 10,
+        asset_paths={"hero-asset": source},
+        destination=tmp_path / "immutable.png",
+    )
+
+    assert composition.to_dict() == composition_before
+    assert motion.to_dict() == motion_before
