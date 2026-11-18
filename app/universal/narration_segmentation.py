@@ -49,6 +49,12 @@ def _is_sentence_boundary(text: str, punctuation_end: int) -> bool:
         cursor += 1
     if cursor >= len(text) or not text[cursor].isspace():
         return False
+    # Let the paragraph boundary own blank-line separators; avoid whitespace-only units.
+    whitespace_end = cursor
+    while whitespace_end < len(text) and text[whitespace_end].isspace():
+        whitespace_end += 1
+    if len(re.findall(r"\\r?\\n", text[cursor:whitespace_end])) >= 2:
+        return False
     # A period in a decimal or a common title/abbreviation is not a sentence end.
     if text[punctuation_end - 1] == ".":
         previous = text[punctuation_end - 2] if punctuation_end >= 2 else ""
