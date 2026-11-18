@@ -144,3 +144,27 @@ def test_project_scope_rules_use_only_explicitly_supplied_context():
     )
     assert missing.diagnostics[0].code == "PROFILE_RULE_REQUIRED"
     assert supplied.diagnostics == ()
+
+def test_apply_rechecks_profile_rules_after_a_proposal_is_edited():
+    profile = _profile(rules=[{
+        "rule_id": "avoid_disallowed_visual_prompt",
+        "category": "required",
+        "severity": "error",
+        "scope": "scene",
+        "target": "visual_prompt",
+        "operator": "not_equals",
+        "expected": "disallowed",
+        "message": "Choose a different visual prompt.",
+    }])
+    result = build_profiled_scene_plan_proposal("Narration.", profile=profile)
+    assert result.is_valid
+
+    # A draft can be edited during review, so apply must not trust stale diagnostics.
+    result.proposal.scenes[0].visual_prompt = "disallowed"
+    assert not result.is_valid
+    project = Project()
+    before = copy.deepcopy(project)
+    with pytest.raises(ValueError, match="Profile diagnostics"):
+        apply_profiled_scene_plan_proposal(project, result)
+    assert project == before
+
