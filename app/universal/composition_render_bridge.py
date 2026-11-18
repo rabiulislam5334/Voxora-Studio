@@ -19,6 +19,7 @@ from app.universal.composition_workflow import (
     preview_scene_composition,
 )
 from app.universal.engines import EngineDescriptor
+from app.universal.models import UniversalState
 
 
 class CompositionRenderBridgeError(RuntimeError):
@@ -130,10 +131,15 @@ class CompositionRenderBridge:
             return CompositionRenderResolution(
                 engine_id, False, reason="Adapter does not implement render_composition()."
             )
-        if not capabilities.supports_layers or not capabilities.supports_transforms:
+        if not (
+            capabilities.supports_layers
+            and capabilities.supports_transforms
+            and capabilities.supports_opacity
+            and capabilities.supports_rotation
+        ):
             return CompositionRenderResolution(
                 engine_id, False,
-                reason="Adapter does not support required layer and transform semantics."
+                reason="Adapter must support layers, transforms, opacity, and rotation."
             )
         return CompositionRenderResolution(
             engine_id, True, capabilities.output_formats,
@@ -174,7 +180,31 @@ class CompositionRenderBridge:
             )
         if not isinstance(asset_paths, Mapping):
             raise CompositionRenderBridgeError("asset_paths must be a mapping.")
+        state = UniversalState.from_project_settings(project.settings)
+        if state.read_only:
+            raise CompositionRenderBridgeError("Universal project state is read-only.")
+        plan = state.scene_plans.get(composition.scene_id)
+        bound_assets = {item.asset_id: item for item in plan.asset_refs} if plan else {}
         required_ids = {item.asset_id for item in composition.elements if item.visible}
+        for asset_id in required_ids:
+            asset_ref = bound_assets.get(asset_id)
+            if asset_ref is None:
+                raise CompositionRenderBridgeError(
+                    f"Composition asset '{asset_id}' is not bound to the target scene."
+                )
+            if asset_ref.kind not in getattr(self._adapters[engine_id], "composition_capabilities").asset_kinds:
+                raise CompositionRenderUnsupportedError(
+                    f"Engine '{engine_id}' does not declare asset kind '{asset_ref.kind}'."
+                )
+        capabilities = getattr(self._adapters[engine_id], "composition_capabilities")
+        if not capabilities.supports_opacity and any(
+            item.visible and item.transform.opacity != 1.0 for item in composition.elements
+        ):
+            raise CompositionRenderUnsupportedError("Renderer does not support element opacity.")
+        if not capabilities.supports_rotation and any(
+            item.visible and item.transform.rotation_degrees != 0.0 for item in composition.elements
+        ):
+            raise CompositionRenderUnsupportedError("Renderer does not support element rotation.")
         if set(asset_paths) != required_ids:
             raise CompositionRenderBridgeError(
                 "asset_paths must contain exactly the visible composition asset IDs."
