@@ -132,6 +132,18 @@ from app.universal.runtime import (
 __all__ = [
     "AssetImportError",
     "VisualAssetLibrary",
+    "SceneAssetBinding",
+    "SceneBindingError",
+    "SceneBindingPreview",
+    "SceneCharacterBinding",
+    "SceneBindingDiagnostic",
+    "apply_scene_bindings",
+    "preview_scene_bindings",
+    "AssetContinuityDiagnostic",
+    "AssetContinuityReport",
+    "AssetReuseGroup",
+    "CharacterContinuityGroup",
+    "analyze_asset_continuity",
     "AssetRef",
     "AssetProvenance",
     "CharacterAppearance",
@@ -232,3 +244,13 @@ __all__ = [
     "apply_profiled_scene_plan_proposal",
     "build_profiled_scene_plan_proposal",
 ]
+
+from app.universal.scene_asset_bindings import (
+    SceneAssetBinding, SceneBindingError, SceneBindingPreview,
+    SceneCharacterBinding, SceneBindingDiagnostic, apply_scene_bindings,
+    preview_scene_bindings,
+)
+from app.universal.asset_continuity import (
+    AssetContinuityDiagnostic, AssetContinuityReport, AssetReuseGroup,
+    CharacterContinuityGroup, analyze_asset_continuity,
+)
