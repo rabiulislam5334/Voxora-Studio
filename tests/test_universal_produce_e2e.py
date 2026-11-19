@@ -55,7 +55,7 @@ def _make_project(tmp_path: Path, *, generated_image_scenes=()):
         scene_id: ScenePlan(
             scene_id=scene_id,
             asset_refs=[AssetRef(
-                asset.asset_id, "image", path=asset.location,
+                asset.asset_id, asset.kind, path=asset.location,
                 identity=asset.content_sha256,
             )],
         )
