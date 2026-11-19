@@ -425,6 +425,8 @@ class ScriptPanel(ttk.Frame):
             return
         if not messagebox.askyesno("Delete Scene", f"Delete '{scene.title}'? This cannot be undone."):
             return
+        if self._project_session is not None and not self._project_session.can_delete_scene(scene.id):
+            return
 
         deleted_index = scene.order
         self._project.delete_scene(scene.id)
