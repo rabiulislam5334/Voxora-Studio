@@ -50,11 +50,17 @@ def move_transform(transform: VisualTransform, dx: float, dy: float) -> VisualTr
 class CompositionEditorTab(ttk.Frame):
     """A lightweight local drag-and-drop composition editor."""
 
-    def __init__(self, master, *, config, palette) -> None:
+    def __init__(
+        self, master, *, config, palette, project_manager=None,
+        on_open_project=None, on_save_project=None, on_project_dirty=None,
+    ) -> None:
         super().__init__(master, style="App.TFrame", padding=16)
         self.config = config
         self.palette = palette
-        self.project_manager = ProjectManager()
+        self.project_manager = project_manager or ProjectManager()
+        self._on_open_project_callback = on_open_project
+        self._on_save_project_callback = on_save_project
+        self._on_project_dirty_callback = on_project_dirty or (lambda: None)
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
         self.catalog = None
         self.composition = None
@@ -65,6 +71,7 @@ class CompositionEditorTab(ttk.Frame):
         self._selected_element_id = None
         self._composition_dirty = False
         self._active_scene_id = None
+        self._scene_ids = []
         self._drag_origin = None
         self._drag_transform = None
         self._canvas_origin = (0, 0)
@@ -176,6 +183,9 @@ class CompositionEditorTab(ttk.Frame):
 
 
     def _save_project(self):
+        if self._on_save_project_callback is not None:
+            self._on_save_project_callback()
+            return
         from tkinter import filedialog
         try:
             if self.project_manager.current_path is None:
@@ -214,6 +224,9 @@ class CompositionEditorTab(ttk.Frame):
             self._status.set(f"Visual library unavailable: {exc}")
 
     def _open_project(self):
+        if self._on_open_project_callback is not None:
+            self._on_open_project_callback()
+            return
         from tkinter import filedialog
         if self._composition_dirty and not messagebox.askyesno(
             "Discard composition edits",
@@ -271,6 +284,50 @@ class CompositionEditorTab(ttk.Frame):
             self._status.set(f"Opened {Path(path).name}. Choose a scene.")
         except Exception as exc:
             messagebox.showerror("Project not opened", str(exc), parent=self)
+
+    def confirm_project_switch(self) -> bool:
+        """Prevent Script workspace from replacing a project with a local draft."""
+        if not self._composition_dirty:
+            return True
+        if not messagebox.askyesno(
+            "Discard composition edits",
+            "The current composition has unapplied editor changes. Discard them before switching projects?",
+            parent=self,
+        ):
+            return False
+        return True
+
+    def confirm_close(self) -> bool:
+        """Do not silently lose an unapplied composition draft on application exit."""
+        if not self._composition_dirty:
+            return True
+        return messagebox.askyesno(
+            "Unapplied composition edits",
+            "The current composition has unapplied editor changes. Close Voxora Studio without applying them?",
+            parent=self,
+        )
+
+    def refresh_project(self):
+        """Reload the scene selector after the shared project is replaced."""
+        project = self.project_manager.current_project
+        ordered = sorted(project.scenes, key=lambda item: item.order)
+        self._scene_ids = [scene.id for scene in ordered]
+        self.scene_combo["values"] = [
+            f"{scene.title}  [{scene.id}]" for scene in ordered
+        ]
+        self.scene_var.set("")
+        self.composition = None
+        self.preview = None
+        self._composition_dirty = False
+        self._active_scene_id = None
+        self._selected_element_id = None
+        self.asset_combo["values"] = ()
+        self.asset_var.set("")
+        self._populate_layers()
+        self._update_properties()
+        self._redraw()
+        suffix = self.project_manager.current_path.name if self.project_manager.current_path else "Unsaved project"
+        self._status.set(f"Active project: {project.name} · {suffix}. Choose a scene.")
 
     def _load_scene(self, _event=None):
         if self.project_manager.current_project is None:
@@ -733,6 +790,7 @@ class CompositionEditorTab(ttk.Frame):
             apply_scene_composition(self.project_manager.current_project,
                                     self.composition, self.preview, approved=True)
             self.project_manager.mark_dirty()
+            self._on_project_dirty_callback()
             self.preview = None
             self._composition_dirty = False
             self._status.set("Composition applied in memory. Use Save Project to persist the .voxora file.")

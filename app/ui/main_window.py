@@ -8,6 +8,7 @@ from app.core import constants
 from app.core.async_bridge import AsyncBridge
 from app.core.config import get_config
 from app.core.logger import get_logger
+from app.projects.manager import ProjectManager
 from app.tts.edge_tts_provider import EdgeTTSProvider
 from app.tts.manager import TTSManager
 from app.ui.sidebar import Sidebar
@@ -37,6 +38,9 @@ class MainWindow:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.config = get_config()
+        # One application-owned project manager is injected into every
+        # workspace; Script remains the authoritative open/new/save UI.
+        self.project_manager = ProjectManager()
         self.style = ttk.Style(root)
         self.theme_name = self.config.default_theme
         self.palette = apply_theme(self.style, self.theme_name)
@@ -109,15 +113,17 @@ class MainWindow:
     def _build_pages(self) -> None:
         for name, description in _PAGE_DESCRIPTIONS.items():
             self._pages[name] = self._build_placeholder_page(name, description)
+
+        # Build Script first so every project-aware workspace can share its
+        # application-owned ProjectManager and delegate Open/Save actions.
+        self._pages["Script"] = self._build_script_page()
         self._pages["Engines"] = self._build_engine_catalog_page()
         self._pages["Visual Assets"] = self._build_asset_library_page()
         self._pages["Image Generation"] = self._build_visual_generation_page()
         self._pages["Scene Assets"] = self._build_scene_asset_binding_page()
         self._pages["Composition"] = self._build_composition_editor_page()
-        # Script first: the studio workspace reads scenes from it.
-        self._pages["Script"] = self._build_script_page()
-        # One workspace (tabs) behind five sidebar entries: Voice, Audio,
-        # Timeline, Video, Produce. The same panel object serves all of them.
+
+        # One workspace (tabs) behind the production sidebar entries.
         studio = self._build_studio_page(script_source=self._pages["Script"])
         for name in StudioPanel.SECTION_NAMES:
             self._pages[name] = studio
@@ -139,12 +145,24 @@ class MainWindow:
         return page
 
     def _build_scene_asset_binding_page(self) -> SceneAssetBindingTab:
-        page = SceneAssetBindingTab(self.content, config=self.config, palette=self.palette)
+        page = SceneAssetBindingTab(
+            self.content, config=self.config, palette=self.palette,
+            project_manager=self.project_manager,
+            on_open_project=self._open_project_from_workspace,
+            on_save_project=self._save_project_from_workspace,
+            on_project_dirty=self._pages["Script"].refresh_project_status,
+        )
         page.grid(row=0, column=0, sticky="nsew")
         return page
 
     def _build_composition_editor_page(self) -> CompositionEditorTab:
-        page = CompositionEditorTab(self.content, config=self.config, palette=self.palette)
+        page = CompositionEditorTab(
+            self.content, config=self.config, palette=self.palette,
+            project_manager=self.project_manager,
+            on_open_project=lambda: self._show_page("Script"),
+            on_save_project=self._pages["Script"].save_project,
+            on_project_dirty=self._pages["Script"].refresh_project_status,
+        )
         page.grid(row=0, column=0, sticky="nsew")
         return page
 
@@ -172,6 +190,9 @@ class MainWindow:
             config=self.config,
             palette=self.palette,
             on_status=self.status_bar.set_text,
+            project_manager=self.project_manager,
+            on_project_changed=self._on_project_changed,
+            before_project_change=self._before_project_change,
         )
         panel.grid(row=0, column=0, sticky="nsew")
         return panel
@@ -250,11 +271,39 @@ class MainWindow:
 
     # ---------- actions ----------
 
+    def _before_project_change(self) -> bool:
+        """Ask project-aware editors to release any unapplied local drafts."""
+        for name in ("Composition", "Scene Assets"):
+            page = self._pages.get(name)
+            confirm = getattr(page, "confirm_project_switch", None)
+            if confirm is not None and not confirm():
+                return False
+        return True
+
+    def _on_project_changed(self) -> None:
+        """Refresh every workspace after Script replaces the shared project."""
+        project = self.project_manager.current_project
+        self.project_label.configure(text=project.name)
+        for name in ("Scene Assets", "Composition"):
+            page = self._pages.get(name)
+            refresh = getattr(page, "refresh_project", None)
+            if refresh is not None:
+                refresh()
+
+    def _open_project_from_workspace(self) -> None:
+        self._show_page("Script")
+        self._pages["Script"]._on_open_project()
+
+    def _save_project_from_workspace(self) -> None:
+        self._show_page("Script")
+        self._pages["Script"].save_project()
+
     def _on_new_project(self) -> None:
-        self.status_bar.set_text("New project — full flow implemented in a later phase.")
+        self._show_page("Script")
+        self._pages["Script"]._on_new_project()
 
     def _on_open_project(self) -> None:
-        self.status_bar.set_text("Open project — full flow implemented in a later phase.")
+        self._open_project_from_workspace()
 
     def _on_export(self) -> None:
         self.status_bar.set_text("Export — implemented once the audio/video pipelines exist.")
