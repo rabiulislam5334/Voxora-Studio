@@ -637,6 +637,10 @@ class ScriptPanel(ttk.Frame):
             if replace is None:
                 return
             if replace:
+                if self._project_session is not None:
+                    for existing_scene in tuple(self._project.scenes):
+                        if not self._project_session.can_delete_scene(existing_scene.id):
+                            return
                 self._flush_editor_to_scene()
                 self._selected_scene_id = None
                 self._project.scenes.clear()
