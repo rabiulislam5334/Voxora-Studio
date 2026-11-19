@@ -478,6 +478,15 @@ class UniversalProductionResult:
     warnings: tuple[str, ...]
 
 
+def _existing_file_signature(path: Path):
+    """Return a stable-enough local file stamp for race-safe overwrite approval."""
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
 async def run_universal_production(
     narration_job: NarrationJob,
     requests: tuple[SceneRequest, ...] | list[SceneRequest],
@@ -549,8 +558,11 @@ async def run_universal_production(
     target = Path(video_destination).expanduser()
     if target.suffix.lower() != ".mp4":
         raise ProjectMotionProductionError("video destination must use .mp4")
-    if target.is_symlink() or (target.exists() and not overwrite):
-        raise ProjectMotionProductionError("video destination exists or is a symlink")
+    if target.is_symlink() or (target.exists() and not target.is_file()):
+        raise ProjectMotionProductionError("video destination must be a regular file")
+    target_signature = _existing_file_signature(target)
+    if target_signature is not None and not overwrite:
+        raise ProjectMotionProductionError("video destination already exists; explicit overwrite is required")
     target.parent.mkdir(parents=True, exist_ok=True)
     stage = target.with_name(f".{target.stem}.voxora-{uuid.uuid4().hex}.mp4")
     try:
@@ -571,13 +583,18 @@ async def run_universal_production(
             ),
         )
         token.raise_if_cancelled("Universal Produce cancelled before publishing the MP4.")
-        if target.exists():
-            if not overwrite:
+        current_signature = _existing_file_signature(target)
+        if target_signature is not None:
+            if current_signature != target_signature:
                 raise ProjectMotionProductionError(
-                    "video destination appeared during rendering; refusing to overwrite it"
+                    "video destination changed during rendering; refusing to replace it"
                 )
             os.replace(stage, target)
         else:
+            if current_signature is not None:
+                raise ProjectMotionProductionError(
+                    "video destination appeared during rendering; refusing to overwrite it"
+                )
             try:
                 os.link(stage, target)
             except FileExistsError:
@@ -593,18 +610,26 @@ async def run_universal_production(
     if audio_destination is not None:
         audio_target = Path(audio_destination).expanduser()
         source_audio = narration.mp3_path if audio_format == "mp3" else narration.wav_path
+        audio_signature = _existing_file_signature(audio_target)
         if audio_target.suffix.lower() != f".{audio_format}":
             warnings.append("Audio export was skipped because the destination extension does not match its format.")
-        elif audio_target.is_symlink() or (audio_target.exists() and not overwrite):
-            warnings.append("Audio export was skipped because the destination exists or is a symlink.")
+        elif audio_target.is_symlink() or (audio_target.exists() and not audio_target.is_file()):
+            warnings.append("Audio export was skipped because the destination is not a regular file.")
+        elif audio_signature is not None and not overwrite:
+            warnings.append("Audio export was skipped because the destination already exists.")
         else:
             audio_target.parent.mkdir(parents=True, exist_ok=True)
             part = audio_target.with_name(f".{audio_target.name}.{uuid.uuid4().hex}.part")
             try:
                 shutil.copyfile(source_audio, part)
-                if audio_target.exists():
+                current_audio_signature = _existing_file_signature(audio_target)
+                if audio_signature is not None:
+                    if current_audio_signature != audio_signature:
+                        raise FileExistsError("audio destination changed during export")
                     os.replace(part, audio_target)
                 else:
+                    if current_audio_signature is not None:
+                        raise FileExistsError("audio destination appeared during export")
                     try:
                         os.link(part, audio_target)
                     except FileExistsError:
