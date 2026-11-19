@@ -1,4 +1,5 @@
 import pytest
+from PIL import Image
 
 from app.universal.composition_timeline import (
     CompositionSceneSlot,
@@ -9,6 +10,7 @@ from app.universal.motion_timeline import (
     MotionTimelinePlanError,
     assert_motion_timeline_plan_current,
     build_motion_timeline_plan,
+    _blend_transition_frames,
 )
 
 
@@ -220,3 +222,34 @@ def test_motion_timeline_plan_rejects_incomplete_total_frame_coverage():
             _composition_plan(total_frames=7),
             {"scene-a": _motion("scene-a"), "scene-b": _motion("scene-b")},
         )
+
+
+
+def test_crossfade_frame_compositor_blends_scene_pixels(tmp_path):
+    outgoing = tmp_path / "outgoing.png"
+    incoming = tmp_path / "incoming.png"
+    destination = tmp_path / "blend.png"
+    Image.new("RGBA", (2, 2), (255, 0, 0, 255)).save(outgoing)
+    Image.new("RGBA", (2, 2), (0, 0, 255, 255)).save(incoming)
+
+    _blend_transition_frames(outgoing, incoming, destination, 2, 2, 0.5)
+
+    with Image.open(destination) as result:
+        red, green, blue, alpha = result.convert("RGBA").getpixel((0, 0))
+    assert red in (127, 128)
+    assert green == 0
+    assert blue in (127, 128)
+    assert alpha == 255
+
+
+def test_crossfade_frame_compositor_normalizes_output_dimensions(tmp_path):
+    outgoing = tmp_path / "small-outgoing.png"
+    incoming = tmp_path / "small-incoming.png"
+    destination = tmp_path / "normalized-blend.png"
+    Image.new("RGBA", (2, 2), (255, 0, 0, 255)).save(outgoing)
+    Image.new("RGBA", (2, 2), (0, 0, 255, 255)).save(incoming)
+
+    _blend_transition_frames(outgoing, incoming, destination, 8, 6, 0.25)
+
+    with Image.open(destination) as result:
+        assert result.size == (8, 6)
