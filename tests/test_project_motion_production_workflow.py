@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.timebase import seconds_to_ticks
+from app.core.timebase import frames_to_ticks, seconds_to_ticks, ticks_to_samples
 from app.models.project import Project
 from app.models.scene import Scene
 from app.studio.models import StudioState, VideoSettings
@@ -146,9 +146,13 @@ def test_aligned_narration_pads_each_scene_to_its_timeline_slot_and_final_video_
         assert reader.getframerate() == 24000
         output_samples = reader.getnframes()
     assert output_samples >= 24000
-    assert output_samples == round(
-        seconds_to_ticks(1.0) * 24000 / 141120000
+    expected_ticks = frames_to_ticks(
+        plan.total_frames, plan.fps, rounding="ceil",
     )
+    expected_samples = ticks_to_samples(
+        expected_ticks, 24000, rounding="ceil",
+    )
+    assert output_samples == expected_samples
 
 
 def test_aligned_narration_rounds_cumulative_slot_boundaries_to_samples(tmp_path):
