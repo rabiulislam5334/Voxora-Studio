@@ -11,6 +11,9 @@ from app.universal.models import UniversalState
 from app.universal.scene_asset_bindings import (
     SceneAssetBinding, apply_scene_bindings, preview_scene_bindings,
 )
+from app.universal.generated_image_scene_workflow import (
+    preview_generated_image_binding, apply_generated_image_binding,
+)
 from app.universal.asset_continuity import analyze_asset_continuity
 
 
@@ -59,6 +62,7 @@ class SceneAssetBindingTab(ttk.Frame):
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
         self.catalog = None
         self._preview = None
+        self._preview_generated_only = False
         self._preview_image = None
         self._asset_ids = []
         self._character_ids = []
@@ -143,6 +147,8 @@ class SceneAssetBindingTab(ttk.Frame):
         actions.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 8))
         ttk.Button(actions, text="Preview Bindings", style="Primary.TButton",
                    command=self._preview_bindings).pack(side="left", padx=(0, 8))
+        ttk.Button(actions, text="Preview Generated Images", style="Secondary.TButton",
+                   command=self._preview_generated_bindings).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Apply Reviewed Bindings", style="Secondary.TButton",
                    command=self._apply_bindings).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Analyze Continuity", style="Secondary.TButton",
@@ -199,6 +205,7 @@ class SceneAssetBindingTab(ttk.Frame):
         try:
             self.project_manager.open(Path(path))
             self._preview = None
+            self._preview_generated_only = False
             self._populate_scenes()
             self.project_label.configure(text=f"{self.project_manager.current_project.name} · {Path(path).name}")
             self._status.set(f"Opened {Path(path).name} ({len(self.project_manager.current_project.scenes)} scenes).")
@@ -248,6 +255,7 @@ class SceneAssetBindingTab(ttk.Frame):
     def _invalidate_preview(self, *_args):
         if self._preview is not None:
             self._preview = None
+            self._preview_generated_only = False
             self._set_report("Selection changed. Create a new binding preview before applying.")
 
     def _on_asset_select(self, _event=None):
@@ -279,6 +287,7 @@ class SceneAssetBindingTab(ttk.Frame):
             self.asset_preview.configure(image="", text=f"Preview unavailable: {exc}")
 
     def _preview_bindings(self):
+        self._preview_generated_only = False
         project = self.project_manager.current_project
         scene_id = self._selected_scene_id()
         if self.project_manager.current_path is None or scene_id is None or self.catalog is None:
@@ -298,6 +307,30 @@ class SceneAssetBindingTab(ttk.Frame):
             self._preview = None
             messagebox.showerror("Preview failed", str(exc), parent=self)
 
+    def _preview_generated_bindings(self):
+        project = self.project_manager.current_project
+        scene_id = self._selected_scene_id()
+        selected = self.asset_list.curselection()
+        if self.project_manager.current_path is None or scene_id is None or self.catalog is None:
+            messagebox.showinfo("Select a project and scene", "Open a project and select a scene first.", parent=self)
+            return
+        if self.character_list.curselection():
+            messagebox.showinfo("Generated images only", "Clear character selections before previewing generated images.", parent=self)
+            return
+        try:
+            asset_ids = tuple(self._asset_ids[index] for index in selected)
+            self._preview = preview_generated_image_binding(
+                project, self.catalog, scene_id, asset_ids,
+                role=self.role_var.get().strip() or "visual",
+            )
+            self._preview_generated_only = True
+            self._set_report(format_binding_preview(self._preview))
+            self._status.set("Generated-image binding preview created. Review it before applying.")
+        except Exception as exc:
+            self._preview = None
+            self._preview_generated_only = False
+            messagebox.showerror("Generated-image preview failed", str(exc), parent=self)
+
     def _apply_bindings(self):
         if self._preview is None:
             messagebox.showinfo("Preview required", "Create and review a binding preview first.", parent=self)
@@ -311,10 +344,19 @@ class SceneAssetBindingTab(ttk.Frame):
             parent=self):
             return
         try:
-            apply_scene_bindings(self.project_manager.current_project, self.catalog,
-                                 self._preview, approved=True)
+            if self._preview_generated_only:
+                apply_generated_image_binding(
+                    self.project_manager.current_project, self.catalog,
+                    self._preview, approved=True,
+                )
+            else:
+                apply_scene_bindings(
+                    self.project_manager.current_project, self.catalog,
+                    self._preview, approved=True,
+                )
             self.project_manager.mark_dirty()
             self._preview = None
+            self._preview_generated_only = False
             self._on_scene_select()
             self._status.set("Bindings applied in memory. Save Project to persist them.")
         except Exception as exc:
