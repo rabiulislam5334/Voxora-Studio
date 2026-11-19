@@ -10,7 +10,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -142,6 +141,8 @@ def build_motion_timeline_plan(
     ))
     expected_ids = {slot.scene_id for slot in ordered_slots}
     supplied_ids = set(scene_motions)
+    if any(not isinstance(scene_id, str) or not scene_id.strip() for scene_id in supplied_ids):
+        raise MotionTimelinePlanError("scene_motions contains an invalid scene ID")
     missing = sorted(expected_ids - supplied_ids)
     unknown = sorted(supplied_ids - expected_ids)
     if missing:
