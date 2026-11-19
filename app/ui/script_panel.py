@@ -12,6 +12,7 @@ from app.core.logger import get_logger
 from app.models.project import Project
 from app.models.scene import Scene
 from app.projects.manager import PROJECT_EXTENSION, ProjectManager
+from app.projects.session import ProjectSession
 from app.text.importer import import_txt_file, split_into_scenes
 from app.text.wordcount import count_characters, count_words, estimate_duration_seconds, format_duration
 
@@ -21,13 +22,11 @@ logger = get_logger("ui.script_panel")
 class ScriptPanel(ttk.Frame):
     """Script Editor & Scene Management (Phase 3).
 
-    Owns a ProjectManager (its own Project model + file I/O); the editor
-    widgets are a *view* onto whichever scene is currently selected. The
-    model is treated as the continuous source of truth: every keystroke
-    flushes into the selected Scene object immediately (see
-    _flush_editor_to_scene), so there is no separate "did we remember to
-    save before switching" bookkeeping anywhere else in this file -- the
-    model simply never goes stale relative to the widgets.
+    Uses the application-owned ProjectSession when hosted by MainWindow.
+    The editor widgets are a *view* onto whichever scene is currently
+    selected. Every keystroke flushes into the selected Scene object
+    immediately (see _flush_editor_to_scene), keeping the shared model
+    current for the other project-aware pages.
     """
 
     def __init__(
@@ -36,13 +35,15 @@ class ScriptPanel(ttk.Frame):
         config: AppConfig,
         palette: dict,
         on_status: Optional[callable] = None,
+        project_session: Optional[ProjectSession] = None,
     ) -> None:
         super().__init__(master, style="App.TFrame")
         self._config = config
         self._palette = palette
         self._on_status = on_status or (lambda text: None)
 
-        self._project_manager = ProjectManager()
+        self._project_session = project_session
+        self._project_manager = project_session.manager if project_session is not None else ProjectManager()
         self._selected_scene_id: Optional[str] = None
 
         self._build_layout()
@@ -424,6 +425,8 @@ class ScriptPanel(ttk.Frame):
             return
         if not messagebox.askyesno("Delete Scene", f"Delete '{scene.title}'? This cannot be undone."):
             return
+        if self._project_session is not None and not self._project_session.can_delete_scene(scene.id):
+            return
 
         deleted_index = scene.order
         self._project.delete_scene(scene.id)
@@ -525,6 +528,8 @@ class ScriptPanel(ttk.Frame):
 
     def _on_new_project(self) -> None:
         self._flush_editor_to_scene()
+        if self._project_session is not None and not self._project_session.can_replace_project():
+            return
         if not self._confirm_discard_if_dirty():
             return
         self._project_manager.new_project()
@@ -543,6 +548,8 @@ class ScriptPanel(ttk.Frame):
             title="Open Project", filetypes=[("Voxora Project", f"*{PROJECT_EXTENSION}"), ("All Files", "*.*")]
         )
         if not path:
+            return
+        if self._project_session is not None and not self._project_session.can_replace_project():
             return
         try:
             self._project_manager.open(Path(path))
@@ -630,6 +637,10 @@ class ScriptPanel(ttk.Frame):
             if replace is None:
                 return
             if replace:
+                if self._project_session is not None:
+                    for existing_scene in tuple(self._project.scenes):
+                        if not self._project_session.can_delete_scene(existing_scene.id):
+                            return
                 self._flush_editor_to_scene()
                 self._selected_scene_id = None
                 self._project.scenes.clear()

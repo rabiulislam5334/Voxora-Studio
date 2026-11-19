@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Dict, Optional
 
 from app.core import constants
@@ -10,6 +10,7 @@ from app.core.config import get_config
 from app.core.logger import get_logger
 from app.tts.edge_tts_provider import EdgeTTSProvider
 from app.tts.manager import TTSManager
+from app.projects.session import ProjectSession
 from app.ui.sidebar import Sidebar
 from app.ui.status_bar import StatusBar
 from app.ui.theme import apply_theme
@@ -44,6 +45,7 @@ class MainWindow:
         self.tts_manager = TTSManager()
         self.tts_manager.register(EdgeTTSProvider(), set_active=True)
         self.async_bridge = AsyncBridge()
+        self.project_session = ProjectSession()
 
         self._pages: Dict[str, ttk.Frame] = {}
         self._current_page: Optional[str] = None
@@ -116,6 +118,8 @@ class MainWindow:
         self._pages["Composition"] = self._build_composition_editor_page()
         # Script first: the studio workspace reads scenes from it.
         self._pages["Script"] = self._build_script_page()
+        self.project_session.add_change_guard(self._confirm_composition_discard)
+        self.project_session.add_scene_delete_guard(self._confirm_composition_scene_delete)
         # One workspace (tabs) behind five sidebar entries: Voice, Audio,
         # Timeline, Video, Produce. The same panel object serves all of them.
         studio = self._build_studio_page(script_source=self._pages["Script"])
@@ -139,12 +143,14 @@ class MainWindow:
         return page
 
     def _build_scene_asset_binding_page(self) -> SceneAssetBindingTab:
-        page = SceneAssetBindingTab(self.content, config=self.config, palette=self.palette)
+        page = SceneAssetBindingTab(self.content, config=self.config, palette=self.palette,
+                                   project_session=self.project_session)
         page.grid(row=0, column=0, sticky="nsew")
         return page
 
     def _build_composition_editor_page(self) -> CompositionEditorTab:
-        page = CompositionEditorTab(self.content, config=self.config, palette=self.palette)
+        page = CompositionEditorTab(self.content, config=self.config, palette=self.palette,
+                                    project_session=self.project_session)
         page.grid(row=0, column=0, sticky="nsew")
         return page
 
@@ -172,6 +178,7 @@ class MainWindow:
             config=self.config,
             palette=self.palette,
             on_status=self.status_bar.set_text,
+            project_session=self.project_session,
         )
         panel.grid(row=0, column=0, sticky="nsew")
         return panel
@@ -228,6 +235,32 @@ class MainWindow:
                 pages.append(page)
         return pages
 
+    def _confirm_composition_discard(self) -> bool:
+        composition = self._pages.get("Composition")
+        if composition is None or not getattr(composition, "_composition_dirty", False):
+            return True
+        return messagebox.askyesno(
+            "Discard composition edits",
+            "The Composition page has unapplied layout edits. Discard them before "
+            "switching projects?",
+            parent=self.root,
+        )
+
+    def _confirm_composition_scene_delete(self, scene_id: str) -> bool:
+        composition = self._pages.get("Composition")
+        if (
+            composition is None
+            or not getattr(composition, "_composition_dirty", False)
+            or getattr(composition, "_active_scene_id", None) != scene_id
+        ):
+            return True
+        return messagebox.askyesno(
+            "Discard composition edits",
+            "The scene being deleted has unapplied composition edits. "
+            "Discard them before deleting this scene?",
+            parent=self.root,
+        )
+
     # ---------- navigation ----------
 
     def _show_page(self, name: str) -> None:
@@ -236,6 +269,9 @@ class MainWindow:
             return
         page = self._pages[name]
         page.tkraise()
+        refresh_project = getattr(page, "refresh_project", None)
+        if callable(refresh_project):
+            refresh_project()
         if hasattr(page, "show_section"):
             page.show_section(name)
         self._current_page = name

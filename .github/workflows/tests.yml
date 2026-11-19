@@ -33,12 +33,12 @@ jobs:
       - name: Install project and test dependencies
         run: python -m pip install -e ".[dev]"
       - name: Run test suite
-        run: python -m pytest -q tests
+        run: python -m pytest -vv -o faulthandler_timeout=180 --durations=30 tests
 
   pytest-windows:
     name: pytest (Windows)
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -60,4 +60,4 @@ jobs:
       - name: Install project and test dependencies
         run: python -m pip install -e ".[dev]"
       - name: Run test suite
-        run: python -m pytest -q tests
+        run: python -m pytest -vv -o faulthandler_timeout=180 --durations=30 tests
