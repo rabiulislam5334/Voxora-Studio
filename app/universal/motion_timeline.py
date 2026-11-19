@@ -12,7 +12,7 @@ import hashlib
 import json
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
@@ -93,6 +93,7 @@ class MotionTimelinePlan:
     scenes: tuple[MotionSceneTimelineSlot, ...]
     motion_fingerprint: str
     plan_fingerprint: str
+    transition_settings_fingerprint: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -424,11 +425,14 @@ def build_project_motion_timeline_plan(
     scene_motions: Mapping[str, SceneMotion],
 ) -> MotionTimelinePlan:
     """Build the motion plan using the Transition Editor's saved scene effects."""
-    return build_motion_timeline_plan(
+    plan = build_motion_timeline_plan(
         composition_plan,
         scene_motions,
         transition_specs=resolve_project_transition_specs(project, composition_plan),
     )
+    studio = StudioState.from_project_settings(project.settings)
+    raw = studio.video.extra.get(SCENE_TRANSITIONS_KEY, {})
+    return replace(plan, transition_settings_fingerprint=_digest(raw))
 
 
 def assert_project_transition_settings_current(
@@ -438,19 +442,19 @@ def assert_project_transition_settings_current(
     motion_plan: MotionTimelinePlan,
 ) -> None:
     """Reject a render plan if saved Transition Editor settings have changed."""
-    studio = StudioState.from_project_settings(project.settings)
-    if SCENE_TRANSITIONS_KEY not in studio.video.extra:
+    if motion_plan.transition_settings_fingerprint is None:
         return
-    expected = build_motion_timeline_plan(
-        composition_plan,
-        scene_motions,
-        transition_specs=resolve_project_transition_specs(project, composition_plan),
-    )
-    if expected.transition_specs != motion_plan.transition_specs:
+    studio = StudioState.from_project_settings(project.settings)
+    if studio.read_only:
+        raise MotionTimelinePlanError("Studio transition settings are malformed or read-only")
+    raw = studio.video.extra.get(SCENE_TRANSITIONS_KEY, {})
+    if _digest(raw) != motion_plan.transition_settings_fingerprint:
         raise MotionTimelinePlanError(
             "saved scene transition settings changed after timeline approval; "
             "rebuild and review the motion timeline before rendering"
         )
+    # Also validate the current structure/specifications before allowing render.
+    resolve_project_transition_specs(project, composition_plan)
 
 def _cancel(cancel: Optional[CancelToken]) -> None:
     if cancel is not None:
