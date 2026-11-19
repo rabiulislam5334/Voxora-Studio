@@ -461,3 +461,24 @@ __all__ += [
     "assert_motion_timeline_plan_current",
     "build_motion_timeline_plan",
 ]
+
+
+from app.universal.transitions import (
+    TRANSITION_EASINGS,
+    TRANSITION_EFFECTS,
+    TRANSITION_SPEC_VERSION,
+    TransitionSpec,
+    TransitionValidationError,
+    transition_boundary,
+    transition_progress,
+)
+
+__all__ += [
+    "TRANSITION_EASINGS",
+    "TRANSITION_EFFECTS",
+    "TRANSITION_SPEC_VERSION",
+    "TransitionSpec",
+    "TransitionValidationError",
+    "transition_boundary",
+    "transition_progress",
+]
