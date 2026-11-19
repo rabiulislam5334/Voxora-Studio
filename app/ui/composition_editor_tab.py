@@ -6,9 +6,12 @@ it does not render a video or modify legacy Scene records.
 """
 from __future__ import annotations
 
+import asyncio
+import copy
+import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from app.projects.manager import ProjectManager
 from app.projects.session import ProjectSession
@@ -25,6 +28,8 @@ from app.universal.composition_workflow import (
 )
 from app.universal.models import UniversalState
 from app.universal.generated_image_composition import append_bound_generated_images
+from app.universal.composition_builtins import build_builtin_composition_render_bridge
+from app.universal.raster_renderer import resolve_scene_composition_assets
 
 
 def canvas_rect(transform: VisualTransform, width: int, height: int):
@@ -51,12 +56,15 @@ def move_transform(transform: VisualTransform, dx: float, dy: float) -> VisualTr
 class CompositionEditorTab(ttk.Frame):
     """A lightweight local drag-and-drop composition editor."""
 
-    def __init__(self, master, *, config, palette, project_session: ProjectSession | None = None) -> None:
+    def __init__(self, master, *, config, palette, project_session: ProjectSession | None = None, async_bridge=None) -> None:
         super().__init__(master, style="App.TFrame", padding=16)
         self.config = config
         self.palette = palette
         self.project_session = project_session
+        self.async_bridge = async_bridge
         self.project_manager = project_session.manager if project_session is not None else ProjectManager()
+        self._render_cancel_event = None
+        self._rendering = False
         self._project_ref = None
         self._scene_ids = []
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
@@ -175,6 +183,16 @@ class CompositionEditorTab(ttk.Frame):
                    command=self._apply).pack(side="left", padx=6)
         ttk.Button(actions, text="Check Render Support", style="Secondary.TButton",
                    command=self._check_render_support).pack(side="left", padx=6)
+        self._render_button = ttk.Button(
+            actions, text="Render Still PNG…", style="Primary.TButton", command=self._render_png
+        )
+        self._render_button.pack(side="left", padx=6)
+        self._cancel_render_button = ttk.Button(
+            actions, text="Cancel Render", command=self._cancel_render, state="disabled"
+        )
+        self._cancel_render_button.pack(side="left", padx=6)
+        self._render_progress = ttk.Progressbar(self, mode="determinate", maximum=100, length=260)
+        self._render_progress.grid(row=6, column=0, sticky="ew", pady=(4, 0))
         ttk.Label(self, textvariable=self._status, style="Muted.TLabel").grid(
             row=5, column=0, sticky="w", pady=(4, 0))
 
@@ -198,16 +216,137 @@ class CompositionEditorTab(ttk.Frame):
             messagebox.showerror("Project not saved", str(exc), parent=self)
 
     def _check_render_support(self):
-        from app.universal.composition_render_bridge import CompositionRenderBridge
-        resolution = CompositionRenderBridge().inspect("ffmpeg")
-        self._status.set("Composition render unavailable: " + resolution.reason)
+        resolution = build_builtin_composition_render_bridge().inspect("raster")
+        if not resolution.supported:
+            self._status.set("Still PNG composition unavailable: " + resolution.reason)
+            messagebox.showinfo("Composition render capability", resolution.reason, parent=self)
+            return
+        self._status.set("Still composition renderer ready: PNG only (CPU raster).")
         messagebox.showinfo(
             "Composition render capability",
-            "The current FFmpeg segment adapter does not declare layered composition support. "
-            "Voxora will not flatten layers or silently drop transforms. A renderer with an explicit "
-            "render_composition() contract is required before composition export can be enabled.",
+            "CPU Raster Composition Renderer is available for transparent still PNG output. "
+            "It supports layers, transforms, opacity, rotation, ordinary images and verified generated images. "
+            "It does not render MP4 or animated video. Use the separate Produce workflow for video export.",
             parent=self,
         )
+
+    def _render_png(self):
+        if self._rendering:
+            return
+        project = self.project_manager.current_project
+        if project is None or self.composition is None:
+            messagebox.showinfo("Select a scene", "Open a project and select a scene first.", parent=self)
+            return
+        if self.preview is None:
+            self._preview()
+        if self.preview is None or not self.preview.is_valid:
+            messagebox.showwarning(
+                "Valid preview required",
+                "Run Preview & Validate and resolve blocking errors before rendering.",
+                parent=self,
+            )
+            return
+        destination = filedialog.asksaveasfilename(
+            parent=self, title="Render composition as a still PNG",
+            defaultextension=".png", filetypes=(("PNG image", "*.png"),),
+        )
+        if not destination:
+            return
+        target = Path(destination).expanduser()
+        if target.suffix.lower() != ".png":
+            messagebox.showerror("Invalid output", "Choose a .png destination.", parent=self)
+            return
+        if target.exists():
+            messagebox.showerror(
+                "Output already exists",
+                "Choose a new filename. Existing files are not overwritten by composition rendering.",
+                parent=self,
+            )
+            return
+        if not messagebox.askyesno(
+            "Render still PNG",
+            f"Render the reviewed {self.composition.canvas.width}×{self.composition.canvas.height} "
+            "composition to a transparent PNG?\n\nThis creates one still image, not an MP4 video.",
+            parent=self,
+        ):
+            return
+
+        project_snapshot = copy.deepcopy(project)
+        composition_snapshot = copy.deepcopy(self.composition)
+        preview_snapshot = copy.deepcopy(self.preview)
+        self._render_cancel_event = threading.Event()
+        self._rendering = True
+        self._render_button.configure(state="disabled")
+        self._cancel_render_button.configure(state="normal")
+        self._render_progress.configure(value=0)
+        self._status.set("Rendering still PNG on a background worker…")
+
+        def progress(value):
+            if self.async_bridge is not None:
+                self.async_bridge.dispatch(self._set_render_progress, value)
+
+        if self.async_bridge is None:
+            try:
+                output = self._render_png_worker(
+                    project_snapshot, composition_snapshot, preview_snapshot,
+                    target, self._render_cancel_event, progress,
+                )
+                self._render_png_complete(output)
+            except Exception as exc:
+                self._render_png_failed(exc)
+            return
+
+        try:
+            self.async_bridge.run_coroutine(
+                asyncio.to_thread(
+                    self._render_png_worker, project_snapshot, composition_snapshot,
+                    preview_snapshot, target, self._render_cancel_event, progress,
+                ),
+                on_success=self._render_png_complete,
+                on_error=self._render_png_failed,
+            )
+        except Exception as exc:
+            self._render_png_failed(exc)
+
+    def _render_png_worker(self, project, composition, preview, destination, cancel_event, progress=None):
+        asset_paths = resolve_scene_composition_assets(project, composition, self.library)
+        return build_builtin_composition_render_bridge().render(
+            "raster", project, composition, preview,
+            asset_paths=asset_paths, destination=destination,
+            output_format="png", approved=True,
+            on_progress=progress, cancel=cancel_event,
+        )
+
+    def _set_render_progress(self, value):
+        if self._rendering:
+            self._render_progress.configure(value=max(0, min(100, round(float(value) * 100))))
+
+    def _finish_render_ui(self):
+        self._rendering = False
+        self._cancel_render_button.configure(state="disabled")
+        self._render_button.configure(state="normal")
+        self._render_cancel_event = None
+
+    def _render_png_complete(self, output):
+        self._finish_render_ui()
+        self._render_progress.configure(value=100)
+        self._status.set(f"Still PNG rendered: {output}")
+        messagebox.showinfo("Composition rendered", f"Transparent PNG saved to:\n{output}", parent=self)
+
+    def _render_png_failed(self, exc):
+        cancelled = "cancel" in str(exc).lower()
+        self._finish_render_ui()
+        self._status.set("Composition render cancelled." if cancelled else f"Composition render failed: {exc}")
+        if cancelled:
+            messagebox.showinfo("Render cancelled", "No completed composition output was published.", parent=self)
+        else:
+            messagebox.showerror("Composition render failed", str(exc), parent=self)
+
+    def _cancel_render(self):
+        if self._render_cancel_event is not None:
+            self._render_cancel_event.set()
+            self._cancel_render_button.configure(state="disabled")
+            self._status.set("Cancelling composition render…")
 
     def _load_catalog(self):
         try:
