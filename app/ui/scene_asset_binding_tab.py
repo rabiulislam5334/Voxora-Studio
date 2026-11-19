@@ -6,6 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from app.projects.manager import ProjectManager
+from app.projects.session import ProjectSession
 from app.universal.asset_library import VisualAssetLibrary
 from app.universal.models import UniversalState
 from app.universal.scene_asset_bindings import (
@@ -54,11 +55,13 @@ def format_continuity_report(report) -> str:
 class SceneAssetBindingTab(ttk.Frame):
     """Explicit project/scene binding UI backed by the reviewed domain APIs."""
 
-    def __init__(self, master, *, config, palette) -> None:
+    def __init__(self, master, *, config, palette, project_session: ProjectSession | None = None) -> None:
         super().__init__(master, style="App.TFrame", padding=18)
         self.app_config = config
         self.palette = palette
-        self.project_manager = ProjectManager()
+        self.project_session = project_session
+        self.project_manager = project_session.manager if project_session is not None else ProjectManager()
+        self._project_ref = None
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
         self.catalog = None
         self._preview = None
@@ -80,8 +83,8 @@ class SceneAssetBindingTab(ttk.Frame):
             row=1, column=0, sticky="w", pady=(0, 12))
         toolbar = ttk.Frame(self, style="App.TFrame")
         toolbar.grid(row=2, column=0, sticky="new", pady=(0, 10))
-        ttk.Button(toolbar, text="Open Project…", style="Primary.TButton",
-                   command=self._open_project).pack(side="left", padx=(0, 8))
+        ttk.Button(toolbar, text="Refresh Active Project", style="Primary.TButton",
+                   command=self.refresh_project).pack(side="left", padx=(0, 8))
         ttk.Button(toolbar, text="Save Project", style="Secondary.TButton",
                    command=self._save_project).pack(side="left", padx=(0, 8))
         ttk.Button(toolbar, text="Refresh Library", style="Secondary.TButton",
@@ -182,35 +185,28 @@ class SceneAssetBindingTab(ttk.Frame):
             self._status.set(f"Library unavailable: {exc}")
 
     def _open_project(self):
-        if self.project_manager.dirty:
-            choice = messagebox.askyesnocancel(
-                "Unsaved project changes",
-                "Save the current project before opening another one?\n\n"
-                "Yes = Save, No = Discard changes, Cancel = Stay here.",
-                parent=self,
+        """Compatibility alias: project selection is centralized on Script."""
+        self.refresh_project()
+
+    def refresh_project(self):
+        project = self.project_manager.current_project
+        if project is self._project_ref:
+            self.project_label.configure(
+                text=f"{project.name} · {self.project_manager.current_path.name}"
+                if self.project_manager.current_path else f"{project.name} · Unsaved"
             )
-            if choice is None:
-                return
-            if choice:
-                try:
-                    self.project_manager.save()
-                except Exception as exc:
-                    messagebox.showerror("Project not saved", str(exc), parent=self)
-                    return
-        path = filedialog.askopenfilename(parent=self, title="Open Voxora project",
-            initialdir=str(self.app_config.projects_dir),
-            filetypes=(("Voxora projects", "*.voxora"), ("All files", "*.*")))
-        if not path:
             return
-        try:
-            self.project_manager.open(Path(path))
-            self._preview = None
-            self._preview_generated_only = False
-            self._populate_scenes()
-            self.project_label.configure(text=f"{self.project_manager.current_project.name} · {Path(path).name}")
-            self._status.set(f"Opened {Path(path).name} ({len(self.project_manager.current_project.scenes)} scenes).")
-        except Exception as exc:
-            messagebox.showerror("Project not opened", str(exc), parent=self)
+        self._project_ref = project
+        self._preview = None
+        self._preview_generated_only = False
+        self._populate_scenes()
+        self.project_label.configure(
+            text=f"{project.name} · {self.project_manager.current_path.name}"
+            if self.project_manager.current_path else f"{project.name} · Unsaved"
+        )
+        self._status.set(
+            f"Active project: {project.name} ({len(project.scenes)} scenes)."
+        )
 
     def _save_project(self):
         if self.project_manager.current_path is None:
