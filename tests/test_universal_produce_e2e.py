@@ -8,12 +8,14 @@ import pytest
 from PIL import Image
 
 from app.audio.assembler import wav_duration_ticks
+from app.audio.ffmpeg_tool import FFmpegTool
+from app.core.settings_store import SettingsStore
 from app.models.project import Project
 from app.models.scene import Scene
 from app.studio.models import StudioState, VideoSettings
 from app.universal import production_workflow
 from app.universal.asset_library import VisualAssetLibrary
-from app.universal.composition import CompositionElement, SceneComposition
+from app.universal.composition import CompositionCanvas, CompositionElement, SceneComposition
 from app.universal.composition_workflow import apply_scene_composition, preview_scene_composition
 from app.universal.models import AssetRef, ScenePlan, UniversalState
 from app.workers.narration import NarrationResult, SceneAudio, SceneRequest
@@ -44,13 +46,14 @@ def _make_project(tmp_path: Path):
     composition = SceneComposition(
         composition_id="composition-1",
         scene_id="scene-1",
+        canvas=CompositionCanvas(width=640, height=360),
         elements=(CompositionElement(element_id="element-1", asset_id="asset-1"),),
     )
     preview = preview_scene_composition(project, composition)
     assert preview.is_valid
     apply_scene_composition(project, composition, preview, approved=True)
     studio = StudioState(video=VideoSettings(
-        fps=24, transition="cut", default_duration_s=0.5,
+        fps=12, resolution="360p (draft)", transition="cut", default_duration_s=0.5,
     ))
     studio.write_to(project.settings)
     return project, library
@@ -124,5 +127,52 @@ def test_universal_produce_does_not_publish_video_when_render_fails(tmp_path, mo
 
         assert not destination.exists()
         assert not list(destination.parent.glob(".final.voxora-*.mp4"))
+
+    asyncio.run(scenario())
+
+
+
+def test_universal_produce_renders_and_probes_real_mp4(tmp_path):
+    async def scenario():
+        project, library = _make_project(tmp_path)
+        narration_wav = tmp_path / "narration" / "scene-1.wav"
+        _write_narration(narration_wav)
+        destination = tmp_path / "output" / "real-render.mp4"
+        ffmpeg = FFmpegTool(SettingsStore(tmp_path / "settings.json"))
+        status = ffmpeg.detect()
+        assert status.available, status.message
+
+        request = SceneRequest(
+            scene_id="scene-1", scene_index=1, title="Scene 1",
+            text="A short narration.", voice_id="en-US-BrianNeural",
+            rate=1.0, pitch_hz=0, volume_percent=100,
+            sentence_pause_ms=0, paragraph_pause_ms=0, scene_pause_ms=0,
+        )
+        result = await production_workflow.run_universal_production(
+            _NarrationJob(narration_wav), [request], project,
+            ffmpeg=ffmpeg, asset_library=library,
+            narration_output_dir=tmp_path / "narration",
+            basename="real-render", video_destination=destination,
+        )
+
+        assert destination.is_file()
+        assert destination.stat().st_size > 0
+        assert result.render.destination == destination
+        assert result.render.frame_count == 6
+        assert result.render.fps == 12
+        assert result.render.audio.video_codec == "h264"
+        assert result.render.audio.audio_codec == "aac"
+
+        media = ffmpeg.probe_structured(destination, count_packets=True)
+        video = next(stream for stream in media.streams if stream.codec_type == "video")
+        audio = next(stream for stream in media.streams if stream.codec_type == "audio")
+        assert video.width == 640
+        assert video.height == 360
+        assert video.packet_count == 6
+        assert video.avg_frame_rate == "12/1"
+        assert audio.codec_name == "aac"
+        assert media.format_duration_s == pytest.approx(0.5, abs=0.04)
+        assert not list(destination.parent.glob(".real-render.voxora-*.mp4"))
+        assert not list(destination.parent.glob(".voxora-universal-produce-*"))
 
     asyncio.run(scenario())
