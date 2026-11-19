@@ -157,3 +157,15 @@ def test_advanced_transition_frames_encode_to_verified_mp4(tmp_path, effect):
     assert result.width == 4 and result.height == 4
     assert result.codec == "h264"
     assert result.duration_seconds == pytest.approx(1.0)
+
+
+def test_single_frame_overlap_preserves_legacy_midpoint_crossfade():
+    outgoing, incoming = _frames()
+    try:
+        spec = TransitionSpec(effect="crossfade", duration_ticks=1)
+        result = composite_transition_frames(outgoing, incoming, spec, 0, 1)
+        assert result.getpixel((0, 0)) == (128, 0, 128, 255)
+        result.close()
+    finally:
+        outgoing.close()
+        incoming.close()
