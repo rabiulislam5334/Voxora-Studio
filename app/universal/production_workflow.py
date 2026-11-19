@@ -7,21 +7,25 @@ ProductionJob behavior.
 """
 from __future__ import annotations
 
+import asyncio
+import os
+import shutil
 import tempfile
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, replace
+from decimal import Decimal
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
 from app.audio.assembler import WavBuilder, wav_duration_ticks
 from app.audio.ffmpeg_tool import FFmpegTool
 from app.core import constants
-from app.core.timebase import frames_to_ticks, ticks_to_samples
+from app.core.timebase import frames_to_ticks, seconds_to_ticks, ticks_to_samples
 from app.models.project import Project
 from app.universal.asset_library import VisualAssetLibrary
 from app.universal.composition import SceneComposition
 from app.universal.composition_timeline import (
     CompositionTimelinePlan,
-    CompositionTimelinePlanError,
     build_composition_timeline_plan,
 )
 from app.universal.composition_workflow import (
@@ -38,6 +42,7 @@ from app.universal.motion_timeline import (
 )
 from app.universal.models import UniversalState
 from app.workers.cancel import CancelToken
+from app.workers.narration import NarrationJob, NarrationResult, SceneRequest
 
 
 AUTOMATIC_MOTION_VERSION = 1
@@ -435,33 +440,11 @@ def render_project_motion_production(
         raise ProjectMotionProductionError(f"Universal Produce failed: {exc}") from exc
 
 
-__all__ = [
-    "AUTOMATIC_MOTION_PRESETS",
-    "AUTOMATIC_MOTION_VERSION",
-    "AutomaticMotionPlan",
-    "ProjectMotionProductionError",
-    "ProjectMotionProductionPlan",
-    "assemble_aligned_narration_wav",
-    "build_automatic_motion_plan",
-    "build_project_motion_production_plan",
-    "render_project_motion_production",
-]
 
 
 # ---------------------------------------------------------------------------
 # Narration → plan → motion render orchestration used by the desktop Produce tab
 # ---------------------------------------------------------------------------
-
-import asyncio
-import os
-import shutil
-import uuid
-from dataclasses import replace
-from decimal import Decimal
-
-from app.core.timebase import seconds_to_ticks
-from app.workers.narration import NarrationJob, NarrationResult, SceneRequest
-
 
 @dataclass(frozen=True)
 class UniversalProductionProgress:
@@ -654,5 +637,21 @@ __all__ = [
     *__all__,
     "UniversalProductionProgress",
     "UniversalProductionResult",
+    "run_universal_production",
+]
+
+
+__all__ = [
+    "AUTOMATIC_MOTION_PRESETS",
+    "AUTOMATIC_MOTION_VERSION",
+    "AutomaticMotionPlan",
+    "ProjectMotionProductionError",
+    "ProjectMotionProductionPlan",
+    "UniversalProductionProgress",
+    "UniversalProductionResult",
+    "assemble_aligned_narration_wav",
+    "build_automatic_motion_plan",
+    "build_project_motion_production_plan",
+    "render_project_motion_production",
     "run_universal_production",
 ]
