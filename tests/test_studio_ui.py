@@ -101,7 +101,8 @@ def add_scenes(script, *texts):
 def test_every_sidebar_section_opens_the_right_tab(studio):
     root, script, panel, *_ = studio
     expected = {"voice": panel.voice, "audio": panel.audio_tab, "scenes": panel.scenes_tab,
-                "video": panel.video_tab, "produce": panel.produce_tab}
+                "video": panel.video_tab, "produce": panel.produce_tab,
+                "transitions": panel.transitions_tab}
     for section, key in SECTION_TABS.items():
         panel.show_section(section)
         assert panel._notebook.nametowidget(panel._notebook.select()) is expected[key], section
