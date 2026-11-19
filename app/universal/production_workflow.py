@@ -113,16 +113,16 @@ def _scene_motion(scene_id: str, duration_frames: int, preset: str) -> SceneMoti
         pan_x = pan_y = None
     elif preset == "pan_left":
         zoom = (1.06, 1.06)
-        pan_x, pan_y = (0.02, -0.02), None
+        pan_x, pan_y = (-0.02, 0.02), None
     elif preset == "pan_right":
         zoom = (1.06, 1.06)
-        pan_x, pan_y = (-0.02, 0.02), None
+        pan_x, pan_y = (0.02, -0.02), None
     elif preset == "pan_up":
         zoom = (1.06, 1.06)
-        pan_x, pan_y = None, (0.02, -0.02)
+        pan_x, pan_y = None, (-0.02, 0.02)
     elif preset == "pan_down":
         zoom = (1.06, 1.06)
-        pan_x, pan_y = None, (-0.02, 0.02)
+        pan_x, pan_y = None, (0.02, -0.02)
     else:
         raise ProjectMotionProductionError(f"unsupported automatic motion preset: {preset!r}")
 
