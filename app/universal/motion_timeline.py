@@ -85,7 +85,7 @@ class MotionTimelinePlan:
     fps: int
     total_frames: int
     transition: str
-    transition_frames: int
+    transition_frames: tuple[int, ...]
     scenes: tuple[MotionSceneTimelineSlot, ...]
     motion_fingerprint: str
     plan_fingerprint: str
@@ -224,7 +224,7 @@ def build_motion_timeline_plan(
     if composition_plan.transition == "cut":
         if any(overlap_frames):
             raise MotionTimelinePlanError("cut transitions cannot contain overlapping scene frames")
-        transition_frames = 0
+        transition_frames = tuple(0 for _ in ordered_slots[:-1])
     else:
         if len(ordered_slots) < 2:
             raise MotionTimelinePlanError("crossfade requires at least two scenes")
@@ -232,11 +232,9 @@ def build_motion_timeline_plan(
             raise MotionTimelinePlanError(
                 "crossfade is shorter than one output frame at the selected FPS"
             )
-        if len(set(overlap_frames[:-1])) != 1 or overlap_frames[-1] != 0:
-            raise MotionTimelinePlanError(
-                "all outgoing scene overlaps must use the same frame duration"
-            )
-        transition_frames = overlap_frames[0]
+        if overlap_frames[-1] != 0:
+            raise MotionTimelinePlanError("the final scene cannot overlap another scene")
+        transition_frames = tuple(overlap_frames[:-1])
         if any(
             ordered_slots[index].segment_frame_end > ordered_slots[index + 1].frame_end
             for index in range(len(ordered_slots) - 1)
@@ -396,8 +394,11 @@ class MotionTimelineRenderCoordinator:
             raise TypeError("on_progress must be callable")
         if motion_plan.transition != composition_plan.transition:
             raise MotionTimelineRenderError("motion plan transition does not match composition timeline")
-        if motion_plan.transition_frames < 0:
-            raise MotionTimelineRenderError("motion plan transition frame count is invalid")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in motion_plan.transition_frames
+        ):
+            raise MotionTimelineRenderError("motion plan transition frame counts are invalid")
         if not composition_plan.is_valid:
             raise MotionTimelineRenderError("composition timeline contains blocking diagnostics")
         if not isinstance(cancel, (CancelToken, type(None))):
@@ -538,8 +539,13 @@ class MotionTimelineRenderCoordinator:
                         outgoing, incoming = active
                         if outgoing.scene_order >= incoming.scene_order:
                             raise MotionTimelineRenderError("overlapping scenes are not in timeline order")
+                        outgoing_index = motion_plan.scenes.index(outgoing)
                         overlap = outgoing.segment_frame_end - incoming.frame_start
-                        if overlap != motion_plan.transition_frames or overlap <= 0:
+                        if (
+                            outgoing_index >= len(motion_plan.transition_frames)
+                            or overlap != motion_plan.transition_frames[outgoing_index]
+                            or overlap <= 0
+                        ):
                             raise MotionTimelineRenderError("scene overlap does not match approved transition")
                         if overlap == 1:
                             alpha = 0.5
