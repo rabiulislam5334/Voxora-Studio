@@ -423,7 +423,8 @@ def test_composition_editor_renders_still_png_from_managed_bound_asset(tmp_path,
         script._on_new_project()
         scene = script._project.add_scene(Scene(title="Raster UI scene", text="Still image test"))
         script._project_manager.mark_dirty()
-        source = png(real_ffmpeg, tmp_path / "bound-source.png", color="red")
+        source = tmp_path / "bound-source.png"
+        Image.new("RGBA", (8, 4), (255, 0, 0, 255)).save(source)
         editor = window._pages["Composition"]
         asset = editor.library.import_file(source)
         plan = ScenePlan(scene_id=scene.id, asset_refs=[AssetRef(
