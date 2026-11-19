@@ -317,6 +317,37 @@ def _save_normalized_frame(
             frame.close()
 
 
+def _blend_transition_frames(
+    outgoing_path: Path,
+    incoming_path: Path,
+    destination: Path,
+    width: int,
+    height: int,
+    alpha: float,
+) -> None:
+    """Alpha-blend two scene frames and atomically scope all image resources."""
+    with Image.open(outgoing_path) as outgoing_image, Image.open(incoming_path) as incoming_image:
+        outgoing = outgoing_image.convert("RGBA")
+        incoming = incoming_image.convert("RGBA")
+        try:
+            if outgoing.size != (width, height):
+                resized = outgoing.resize((width, height), resample=Image.Resampling.LANCZOS)
+                outgoing.close()
+                outgoing = resized
+            if incoming.size != (width, height):
+                resized = incoming.resize((width, height), resample=Image.Resampling.LANCZOS)
+                incoming.close()
+                incoming = resized
+            blended = Image.blend(outgoing, incoming, max(0.0, min(1.0, alpha)))
+            try:
+                blended.save(destination, format="PNG", optimize=False)
+            finally:
+                blended.close()
+        finally:
+            outgoing.close()
+            incoming.close()
+
+
 class MotionTimelineRenderCoordinator:
     """Render all animated scenes into one verified MP4 with aligned audio.
 
@@ -516,33 +547,11 @@ class MotionTimelineRenderCoordinator:
                             alpha = (output_index - incoming.frame_start) / (overlap - 1)
                         first_path = scene_frame_paths[outgoing.scene_id][output_index - outgoing.frame_start]
                         second_path = scene_frame_paths[incoming.scene_id][output_index - incoming.frame_start]
-                        with Image.open(first_path) as first_image, Image.open(second_path) as second_image:
-                            first = first_image.convert("RGBA")
-                            second = second_image.convert("RGBA")
-                            try:
-                                if first.size != (composition_plan.width, composition_plan.height):
-                                    resized = first.resize(
-                                        (composition_plan.width, composition_plan.height),
-                                        resample=Image.Resampling.LANCZOS,
-                                    )
-                                    first.close()
-                                    first = resized
-                                if second.size != (composition_plan.width, composition_plan.height):
-                                    resized = second.resize(
-                                        (composition_plan.width, composition_plan.height),
-                                        resample=Image.Resampling.LANCZOS,
-                                    )
-                                    second.close()
-                                    second = resized
-                                composed = Image.blend(first, second, max(0.0, min(1.0, alpha)))
-                                try:
-                                    output_path = frame_dir / f"frame_{output_index:06d}.png"
-                                    composed.save(output_path, format="PNG", optimize=False)
-                                finally:
-                                    composed.close()
-                            finally:
-                                first.close()
-                                second.close()
+                        output_path = frame_dir / f"frame_{output_index:06d}.png"
+                        _blend_transition_frames(
+                            first_path, second_path, output_path,
+                            composition_plan.width, composition_plan.height, alpha,
+                        )
                     else:
                         slot = active[0]
                         source_index = output_index - slot.frame_start
