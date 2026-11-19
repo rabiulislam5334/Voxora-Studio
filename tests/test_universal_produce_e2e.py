@@ -158,7 +158,7 @@ def test_universal_produce_renders_and_probes_real_mp4(tmp_path):
         assert destination.is_file()
         assert destination.stat().st_size > 0
         assert result.render.destination == destination
-        assert result.render.frame_count == 6
+        assert result.render.frame_count == 7
         assert result.render.fps == 12
         assert result.render.audio.video_codec == "h264"
         assert result.render.audio.audio_codec == "aac"
@@ -168,10 +168,10 @@ def test_universal_produce_renders_and_probes_real_mp4(tmp_path):
         audio = next(stream for stream in media.streams if stream.codec_type == "audio")
         assert video.width == 640
         assert video.height == 360
-        assert video.packet_count == 6
+        assert video.packet_count == 7
         assert video.avg_frame_rate == "12/1"
         assert audio.codec_name == "aac"
-        assert media.format_duration_s == pytest.approx(0.5, abs=0.04)
+        assert media.format_duration_s == pytest.approx(7 / 12, abs=0.04)
         assert not list(destination.parent.glob(".real-render.voxora-*.mp4"))
         assert not list(destination.parent.glob(".voxora-universal-produce-*"))
 
