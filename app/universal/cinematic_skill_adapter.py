@@ -206,6 +206,21 @@ class CinematicSkillRenderCoordinator:
             render_doc = doc
             if self._uses_upstream_renderer and render_doc is None:
                 render_doc = _prepare_project_context(staging / "project")
+            elif self._uses_upstream_renderer:
+                prep_dir = getattr(render_doc, "prep", None)
+                project_dir = getattr(render_doc, "dir", None)
+                if prep_dir is None or project_dir is None:
+                    raise CinematicSkillRenderError(
+                        "a supplied Cinematic Skill doc must expose project dir and prep paths"
+                    )
+                try:
+                    from app.universal.cinematic_skill.prep_assets import textures
+                    Path(prep_dir).mkdir(parents=True, exist_ok=True)
+                    textures(Path(prep_dir))
+                except (ImportError, OSError, RuntimeError, ValueError) as exc:
+                    raise CinematicSkillUnavailableError(
+                        f"could not prepare supplied Cinematic Skill project textures: {exc}"
+                    ) from exc
             try:
                 renderer_type = self._renderer_factory()
                 renderer = renderer_type(film, width=width, height=height, doc=render_doc)
