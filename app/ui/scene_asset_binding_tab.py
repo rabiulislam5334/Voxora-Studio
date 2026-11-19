@@ -86,7 +86,7 @@ class SceneAssetBindingTab(ttk.Frame):
             row=1, column=0, sticky="w", pady=(0, 12))
         toolbar = ttk.Frame(self, style="App.TFrame")
         toolbar.grid(row=2, column=0, sticky="new", pady=(0, 10))
-        ttk.Button(toolbar, text="Open Project in Script", style="Primary.TButton",
+        ttk.Button(toolbar, text="Open Project…", style="Primary.TButton",
                    command=self._open_project).pack(side="left", padx=(0, 8))
         ttk.Button(toolbar, text="Save Project", style="Secondary.TButton",
                    command=self._save_project).pack(side="left", padx=(0, 8))
