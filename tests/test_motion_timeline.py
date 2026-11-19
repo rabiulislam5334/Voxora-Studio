@@ -1,4 +1,5 @@
 import pytest
+from PIL import Image
 
 from app.universal.composition_timeline import (
     CompositionSceneSlot,
@@ -9,10 +10,12 @@ from app.universal.motion_timeline import (
     MotionTimelinePlanError,
     assert_motion_timeline_plan_current,
     build_motion_timeline_plan,
+    _blend_transition_frames,
 )
 
 
-def _slot(scene_id, order, start, end, *, composition=True):
+def _slot(scene_id, order, start, end, *, composition=True, segment_end=None):
+    segment_end = end if segment_end is None else segment_end
     return CompositionSceneSlot(
         scene_id=scene_id,
         scene_order=order,
@@ -22,12 +25,12 @@ def _slot(scene_id, order, start, end, *, composition=True):
         assets=(),
         start_ticks=start,
         slot_ticks=end - start,
-        segment_ticks=end - start,
+        segment_ticks=segment_end - start,
         end_ticks=end,
-        segment_end_ticks=end,
+        segment_end_ticks=segment_end,
         frame_start=start,
         frame_end=end,
-        segment_frame_end=end,
+        segment_frame_end=segment_end,
         narration_duration_ticks=None,
         pause_ticks=0,
         timing_basis="configured",
@@ -80,10 +83,14 @@ def test_motion_timeline_plan_binds_exact_scene_frame_ranges_deterministically()
     plan = build_motion_timeline_plan(composition, motions)
 
     assert [item.scene_id for item in plan.scenes] == ["scene-a", "scene-b"]
-    assert [(item.frame_start, item.frame_end) for item in plan.scenes] == [(0, 3), (3, 6)]
+    assert [(item.frame_start, item.frame_end, item.segment_frame_end) for item in plan.scenes] == [
+        (0, 3, 3), (3, 6, 6),
+    ]
     assert plan.total_frames == 6
     assert plan.fps == 3
     assert len(plan.motion_fingerprint) == 64
+    assert plan.transition == "cut"
+    assert plan.transition_frames == (0,)
     assert len(plan.plan_fingerprint) == 64
     assert build_motion_timeline_plan(composition, motions) == plan
 
@@ -131,12 +138,67 @@ def test_motion_timeline_plan_rejects_duration_mismatch_and_wrong_scene_id():
         })
 
 
-def test_motion_timeline_plan_rejects_crossfade_until_transition_rendering_exists():
-    with pytest.raises(MotionTimelinePlanError, match="cut transitions"):
+def test_motion_timeline_plan_binds_crossfade_overlap_frames():
+    composition = _composition_plan(
+        transition="crossfade",
+        slots=(
+            _slot("scene-a", 0, 0, 3, segment_end=4),
+            _slot("scene-b", 1, 3, 6),
+        ),
+    )
+    motions = {
+        "scene-a": _motion("scene-a", duration=4),
+        "scene-b": _motion("scene-b", duration=3),
+    }
+
+    plan = build_motion_timeline_plan(composition, motions)
+
+    assert plan.transition == "crossfade"
+    assert plan.transition_frames == (1,)
+    assert [(item.frame_start, item.frame_end, item.segment_frame_end) for item in plan.scenes] == [
+        (0, 3, 4), (3, 6, 6),
+    ]
+    assert [item.frame_count for item in plan.scenes] == [4, 3]
+
+
+def test_motion_timeline_plan_preserves_per_transition_frame_rounding():
+    composition = _composition_plan(
+        transition="crossfade",
+        slots=(
+            _slot("scene-a", 0, 0, 3, segment_end=4),
+            _slot("scene-b", 1, 3, 6, segment_end=8),
+            _slot("scene-c", 2, 6, 9),
+        ),
+        total_frames=9,
+    )
+    motions = {
+        "scene-a": _motion("scene-a", duration=4),
+        "scene-b": _motion("scene-b", duration=5),
+        "scene-c": _motion("scene-c", duration=3),
+    }
+
+    plan = build_motion_timeline_plan(composition, motions)
+
+    assert plan.transition_frames == (1, 2)
+
+
+def test_motion_timeline_plan_rejects_crossfade_motion_without_overlap_frames():
+    composition = _composition_plan(transition="crossfade")
+    with pytest.raises(MotionTimelinePlanError, match="shorter than one output frame"):
         build_motion_timeline_plan(
-            _composition_plan(transition="crossfade"),
+            composition,
             {"scene-a": _motion("scene-a"), "scene-b": _motion("scene-b")},
         )
+
+
+def test_motion_timeline_plan_rejects_crossfade_with_single_scene():
+    composition = _composition_plan(
+        transition="crossfade",
+        slots=(_slot("scene-a", 0, 0, 3),),
+        total_frames=3,
+    )
+    with pytest.raises(MotionTimelinePlanError, match="at least two scenes"):
+        build_motion_timeline_plan(composition, {"scene-a": _motion("scene-a")})
 
 
 def test_motion_timeline_plan_rejects_gaps_and_missing_compositions():
@@ -181,3 +243,34 @@ def test_motion_timeline_plan_rejects_incomplete_total_frame_coverage():
             _composition_plan(total_frames=7),
             {"scene-a": _motion("scene-a"), "scene-b": _motion("scene-b")},
         )
+
+
+
+def test_crossfade_frame_compositor_blends_scene_pixels(tmp_path):
+    outgoing = tmp_path / "outgoing.png"
+    incoming = tmp_path / "incoming.png"
+    destination = tmp_path / "blend.png"
+    Image.new("RGBA", (2, 2), (255, 0, 0, 255)).save(outgoing)
+    Image.new("RGBA", (2, 2), (0, 0, 255, 255)).save(incoming)
+
+    _blend_transition_frames(outgoing, incoming, destination, 2, 2, 0.5)
+
+    with Image.open(destination) as result:
+        red, green, blue, alpha = result.convert("RGBA").getpixel((0, 0))
+    assert red in (127, 128)
+    assert green == 0
+    assert blue in (127, 128)
+    assert alpha == 255
+
+
+def test_crossfade_frame_compositor_normalizes_output_dimensions(tmp_path):
+    outgoing = tmp_path / "small-outgoing.png"
+    incoming = tmp_path / "small-incoming.png"
+    destination = tmp_path / "normalized-blend.png"
+    Image.new("RGBA", (2, 2), (255, 0, 0, 255)).save(outgoing)
+    Image.new("RGBA", (2, 2), (0, 0, 255, 255)).save(incoming)
+
+    _blend_transition_frames(outgoing, incoming, destination, 8, 6, 0.25)
+
+    with Image.open(destination) as result:
+        assert result.size == (8, 6)

@@ -70,11 +70,13 @@ class MotionSceneTimelineSlot:
     scene_order: int
     frame_start: int
     frame_end: int
+    segment_frame_end: int
     motion: SceneMotion
 
     @property
     def frame_count(self) -> int:
-        return self.frame_end - self.frame_start
+        """Number of rendered source frames, including any outgoing overlap."""
+        return self.segment_frame_end - self.frame_start
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,8 @@ class MotionTimelinePlan:
     composition_plan_fingerprint: str
     fps: int
     total_frames: int
+    transition: str
+    transition_frames: tuple[int, ...]
     scenes: tuple[MotionSceneTimelineSlot, ...]
     motion_fingerprint: str
     plan_fingerprint: str
@@ -123,8 +127,14 @@ def build_motion_timeline_plan(
         raise MotionTimelinePlanError("composition_plan must be a CompositionTimelinePlan")
     if not composition_plan.is_valid:
         raise MotionTimelinePlanError("composition timeline contains blocking diagnostics")
-    if composition_plan.transition != "cut" or composition_plan.transition_ticks != 0:
-        raise MotionTimelinePlanError("motion timeline currently supports cut transitions only")
+    if composition_plan.transition not in ("cut", "crossfade"):
+        raise MotionTimelinePlanError(
+            f"unsupported transition type: {composition_plan.transition!r}"
+        )
+    if composition_plan.transition == "cut" and composition_plan.transition_ticks != 0:
+        raise MotionTimelinePlanError("cut transitions must have zero transition duration")
+    if composition_plan.transition == "crossfade" and composition_plan.transition_ticks <= 0:
+        raise MotionTimelinePlanError("crossfade transitions require a positive duration")
     if not isinstance(scene_motions, Mapping):
         raise MotionTimelinePlanError("scene_motions must map scene IDs to SceneMotion values")
     if not composition_plan.slots:
@@ -153,11 +163,24 @@ def build_motion_timeline_plan(
     cursor = 0
     scene_slots = []
     motion_payload = []
-    for slot in ordered_slots:
+    overlap_frames = []
+    for index, slot in enumerate(ordered_slots):
         if slot.frame_start != cursor or slot.frame_end <= slot.frame_start:
             raise MotionTimelinePlanError(
                 "scene frame intervals must be contiguous, ordered, and non-empty"
             )
+        if slot.segment_frame_end < slot.frame_end:
+            raise MotionTimelinePlanError(
+                f"scene {slot.scene_id!r} segment ends before its timeline slot"
+            )
+        if slot.segment_frame_end > composition_plan.total_frames:
+            raise MotionTimelinePlanError(
+                f"scene {slot.scene_id!r} segment extends beyond the output timeline"
+            )
+        overlap = slot.segment_frame_end - slot.frame_end
+        if index == len(ordered_slots) - 1 and overlap:
+            raise MotionTimelinePlanError("the final scene cannot have an outgoing transition overlap")
+        overlap_frames.append(overlap)
         if slot.composition_fingerprint is None or slot.composition_target_fingerprint is None:
             raise MotionTimelinePlanError(
                 f"scene {slot.scene_id!r} has no validated composition snapshot"
@@ -171,7 +194,7 @@ def build_motion_timeline_plan(
             raise MotionTimelinePlanError(
                 f"motion scene ID does not match timeline scene {slot.scene_id!r}"
             )
-        expected_frames = slot.frame_end - slot.frame_start
+        expected_frames = slot.segment_frame_end - slot.frame_start
         if motion.duration_frames != expected_frames:
             raise MotionTimelinePlanError(
                 f"motion for scene {slot.scene_id!r} has {motion.duration_frames} frames; "
@@ -182,21 +205,49 @@ def build_motion_timeline_plan(
             scene_order=slot.scene_order,
             frame_start=slot.frame_start,
             frame_end=slot.frame_end,
+            segment_frame_end=slot.segment_frame_end,
             motion=motion,
         ))
-        motion_payload.append({"scene_id": slot.scene_id, "motion": motion.to_dict()})
+        motion_payload.append({
+            "scene_id": slot.scene_id,
+            "motion": motion.to_dict(),
+            "frame_start": slot.frame_start,
+            "frame_end": slot.frame_end,
+            "segment_frame_end": slot.segment_frame_end,
+        })
         cursor = slot.frame_end
 
     if cursor != composition_plan.total_frames:
         raise MotionTimelinePlanError(
             "scene motion intervals do not cover the complete composition timeline"
         )
+    if composition_plan.transition == "cut":
+        if any(overlap_frames):
+            raise MotionTimelinePlanError("cut transitions cannot contain overlapping scene frames")
+        transition_frames = tuple(0 for _ in ordered_slots[:-1])
+    else:
+        if len(ordered_slots) < 2:
+            raise MotionTimelinePlanError("crossfade requires at least two scenes")
+        if not overlap_frames or any(value <= 0 for value in overlap_frames[:-1]):
+            raise MotionTimelinePlanError(
+                "crossfade is shorter than one output frame at the selected FPS"
+            )
+        if overlap_frames[-1] != 0:
+            raise MotionTimelinePlanError("the final scene cannot overlap another scene")
+        transition_frames = tuple(overlap_frames[:-1])
+        if any(
+            ordered_slots[index].segment_frame_end > ordered_slots[index + 1].frame_end
+            for index in range(len(ordered_slots) - 1)
+        ):
+            raise MotionTimelinePlanError("crossfade overlaps cannot span more than adjacent scenes")
 
     motion_fingerprint = _digest(motion_payload)
     payload = {
         "composition_plan_fingerprint": composition_plan.plan_fingerprint,
         "fps": composition_plan.fps,
         "total_frames": composition_plan.total_frames,
+        "transition": composition_plan.transition,
+        "transition_frames": transition_frames,
         "motion_fingerprint": motion_fingerprint,
         "scenes": [
             {
@@ -212,6 +263,8 @@ def build_motion_timeline_plan(
         composition_plan_fingerprint=composition_plan.plan_fingerprint,
         fps=composition_plan.fps,
         total_frames=composition_plan.total_frames,
+        transition=composition_plan.transition,
+        transition_frames=transition_frames,
         scenes=tuple(scene_slots),
         motion_fingerprint=motion_fingerprint,
         plan_fingerprint=_digest(payload),
@@ -236,6 +289,61 @@ def assert_motion_timeline_plan_current(
 def _cancel(cancel: Optional[CancelToken]) -> None:
     if cancel is not None:
         cancel.raise_if_cancelled("Motion timeline render cancelled.")
+
+
+def _save_normalized_frame(
+    source: Path,
+    destination: Path,
+    width: int,
+    height: int,
+) -> None:
+    """Save a frame on the output canvas without changing its aspect ratio policy."""
+    with Image.open(source) as image:
+        frame = image.convert("RGBA")
+        try:
+            if frame.size != (width, height):
+                resized = frame.resize(
+                    (width, height), resample=Image.Resampling.LANCZOS,
+                )
+                try:
+                    resized.save(destination, format="PNG", optimize=False)
+                finally:
+                    resized.close()
+            else:
+                frame.save(destination, format="PNG", optimize=False)
+        finally:
+            frame.close()
+
+
+def _blend_transition_frames(
+    outgoing_path: Path,
+    incoming_path: Path,
+    destination: Path,
+    width: int,
+    height: int,
+    alpha: float,
+) -> None:
+    """Alpha-blend two scene frames and atomically scope all image resources."""
+    with Image.open(outgoing_path) as outgoing_image, Image.open(incoming_path) as incoming_image:
+        outgoing = outgoing_image.convert("RGBA")
+        incoming = incoming_image.convert("RGBA")
+        try:
+            if outgoing.size != (width, height):
+                resized = outgoing.resize((width, height), resample=Image.Resampling.LANCZOS)
+                outgoing.close()
+                outgoing = resized
+            if incoming.size != (width, height):
+                resized = incoming.resize((width, height), resample=Image.Resampling.LANCZOS)
+                incoming.close()
+                incoming = resized
+            blended = Image.blend(outgoing, incoming, max(0.0, min(1.0, alpha)))
+            try:
+                blended.save(destination, format="PNG", optimize=False)
+            finally:
+                blended.close()
+        finally:
+            outgoing.close()
+            incoming.close()
 
 
 class MotionTimelineRenderCoordinator:
@@ -284,8 +392,13 @@ class MotionTimelineRenderCoordinator:
     ) -> MotionTimelineRenderResult:
         if on_progress is not None and not callable(on_progress):
             raise TypeError("on_progress must be callable")
-        if composition_plan.transition != "cut" or composition_plan.transition_ticks != 0:
-            raise MotionTimelineRenderError("crossfade rendering is not implemented; select cut")
+        if motion_plan.transition != composition_plan.transition:
+            raise MotionTimelineRenderError("motion plan transition does not match composition timeline")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in motion_plan.transition_frames
+        ):
+            raise MotionTimelineRenderError("motion plan transition frame counts are invalid")
         if not composition_plan.is_valid:
             raise MotionTimelineRenderError("composition timeline contains blocking diagnostics")
         if not isinstance(cancel, (CancelToken, type(None))):
@@ -318,11 +431,15 @@ class MotionTimelineRenderCoordinator:
                 raise MotionTimelineRenderError("stored scene compositions are malformed")
 
             cursor = 0
-            for slot in motion_plan.scenes:
+            for index, slot in enumerate(motion_plan.scenes):
                 if slot.frame_start != cursor or slot.frame_end <= slot.frame_start:
                     raise MotionTimelineRenderError(
                         "motion scene frame intervals are not contiguous and non-empty"
                     )
+                if slot.segment_frame_end < slot.frame_end:
+                    raise MotionTimelineRenderError("motion scene segment ends before its timeline slot")
+                if index == len(motion_plan.scenes) - 1 and slot.segment_frame_end != slot.frame_end:
+                    raise MotionTimelineRenderError("final scene cannot have an outgoing overlap")
                 cursor = slot.frame_end
             if cursor != composition_plan.total_frames:
                 raise MotionTimelineRenderError(
@@ -336,7 +453,9 @@ class MotionTimelineRenderCoordinator:
                 frame_dir = work / "frames"
                 frame_dir.mkdir()
                 frame_paths: list[Path] = []
+                scene_frame_paths: dict[str, tuple[Path, ...]] = {}
                 rendered_before = 0
+                total_scene_frames = sum(item.frame_count for item in motion_plan.scenes)
                 for index, slot in enumerate(motion_plan.scenes):
                     _cancel(cancel)
                     entry = stored.get(slot.scene_id)
@@ -381,10 +500,10 @@ class MotionTimelineRenderCoordinator:
                     motion = scene_motions[slot.scene_id]
 
                     def report_scene(fraction: float, message: str, *, base=rendered_before,
-                                     count=slot.frame_count) -> None:
+                                     count=slot.frame_count, scene_id=slot.scene_id) -> None:
                         if on_progress:
-                            value = 0.65 * (base + max(0.0, min(1.0, fraction)) * count) / motion_plan.total_frames
-                            on_progress(value, f"{slot.scene_id}: {message}")
+                            value = 0.60 * (base + max(0.0, min(1.0, fraction)) * count) / total_scene_frames
+                            on_progress(value, f"{scene_id}: {message}")
 
                     rendered = self._renderer.render_sequence(
                         composition, motion, asset_paths=asset_paths,
@@ -396,31 +515,62 @@ class MotionTimelineRenderCoordinator:
                         raise MotionTimelineRenderError(
                             f"scene {slot.scene_id!r} rendered an unexpected frame count"
                         )
-                    for local_index, source in enumerate(rendered.frame_paths):
-                        _cancel(cancel)
-                        destination_frame = frame_dir / f"frame_{len(frame_paths):06d}.png"
-                        with Image.open(source) as rendered_frame:
-                            frame = rendered_frame.convert("RGBA")
-                            try:
-                                if frame.size != (composition_plan.width, composition_plan.height):
-                                    resized = frame.resize(
-                                        (composition_plan.width, composition_plan.height),
-                                        resample=Image.Resampling.LANCZOS,
-                                    )
-                                    try:
-                                        resized.save(destination_frame, format="PNG", optimize=False)
-                                    finally:
-                                        resized.close()
-                                else:
-                                    frame.save(destination_frame, format="PNG", optimize=False)
-                            finally:
-                                frame.close()
-                        frame_paths.append(destination_frame)
+                    scene_frame_paths[slot.scene_id] = rendered.frame_paths
                     rendered_before += slot.frame_count
                     if on_progress:
                         on_progress(
-                            0.65 * rendered_before / motion_plan.total_frames,
+                            0.60 * rendered_before / total_scene_frames,
                             f"Rendered scene {index + 1}/{len(motion_plan.scenes)}",
+                        )
+
+                # Composite each output frame from one active scene or a
+                # two-scene alpha blend during the approved overlap interval.
+                for output_index in range(motion_plan.total_frames):
+                    _cancel(cancel)
+                    active = [
+                        slot for slot in motion_plan.scenes
+                        if slot.frame_start <= output_index < slot.segment_frame_end
+                    ]
+                    if not active or len(active) > 2:
+                        raise MotionTimelineRenderError(
+                            f"output frame {output_index} has an invalid active-scene count"
+                        )
+                    if len(active) == 2:
+                        outgoing, incoming = active
+                        if outgoing.scene_order >= incoming.scene_order:
+                            raise MotionTimelineRenderError("overlapping scenes are not in timeline order")
+                        outgoing_index = motion_plan.scenes.index(outgoing)
+                        overlap = outgoing.segment_frame_end - incoming.frame_start
+                        if (
+                            outgoing_index >= len(motion_plan.transition_frames)
+                            or overlap != motion_plan.transition_frames[outgoing_index]
+                            or overlap <= 0
+                        ):
+                            raise MotionTimelineRenderError("scene overlap does not match approved transition")
+                        if overlap == 1:
+                            alpha = 0.5
+                        else:
+                            alpha = (output_index - incoming.frame_start) / (overlap - 1)
+                        first_path = scene_frame_paths[outgoing.scene_id][output_index - outgoing.frame_start]
+                        second_path = scene_frame_paths[incoming.scene_id][output_index - incoming.frame_start]
+                        output_path = frame_dir / f"frame_{output_index:06d}.png"
+                        _blend_transition_frames(
+                            first_path, second_path, output_path,
+                            composition_plan.width, composition_plan.height, alpha,
+                        )
+                    else:
+                        slot = active[0]
+                        source_index = output_index - slot.frame_start
+                        source = scene_frame_paths[slot.scene_id][source_index]
+                        output_path = frame_dir / f"frame_{output_index:06d}.png"
+                        _save_normalized_frame(
+                            source, output_path, composition_plan.width, composition_plan.height,
+                        )
+                    frame_paths.append(output_path)
+                    if on_progress:
+                        on_progress(
+                            0.60 + 0.10 * (output_index + 1) / motion_plan.total_frames,
+                            f"Compositing frame {output_index + 1}/{motion_plan.total_frames}",
                         )
 
                 _cancel(cancel)
@@ -434,7 +584,7 @@ class MotionTimelineRenderCoordinator:
                 encoded = self._encoder.encode(
                     sequence, silent_video,
                     on_progress=lambda fraction: on_progress(
-                        0.65 + 0.20 * max(0.0, min(1.0, fraction)),
+                        0.70 + 0.15 * max(0.0, min(1.0, fraction)),
                         "Encoding full motion timeline",
                     ) if on_progress else None,
                     cancel=cancel,
