@@ -422,3 +422,17 @@ __all__ += [
     "MotionRasterRenderer",
     "MotionRasterSequenceResult",
 ]
+
+from app.universal.motion_video import (
+    MotionVideoRenderCancelledError,
+    MotionVideoRenderCoordinator,
+    MotionVideoRenderError,
+    MotionVideoRenderResult,
+)
+
+__all__ += [
+    "MotionVideoRenderCancelledError",
+    "MotionVideoRenderCoordinator",
+    "MotionVideoRenderError",
+    "MotionVideoRenderResult",
+]
