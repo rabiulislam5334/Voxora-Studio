@@ -297,6 +297,16 @@ class CompositionEditorTab(ttk.Frame):
             return False
         return True
 
+    def confirm_close(self) -> bool:
+        """Do not silently lose an unapplied composition draft on application exit."""
+        if not self._composition_dirty:
+            return True
+        return messagebox.askyesno(
+            "Unapplied composition edits",
+            "The current composition has unapplied editor changes. Close Voxora Studio without applying them?",
+            parent=self,
+        )
+
     def refresh_project(self):
         """Reload the scene selector after the shared project is replaced."""
         project = self.project_manager.current_project
