@@ -148,8 +148,8 @@ class MainWindow:
         page = SceneAssetBindingTab(
             self.content, config=self.config, palette=self.palette,
             project_manager=self.project_manager,
-            on_open_project=lambda: self._show_page("Script"),
-            on_save_project=self._pages["Script"].save_project,
+            on_open_project=self._open_project_from_workspace,
+            on_save_project=self._save_project_from_workspace,
             on_project_dirty=self._pages["Script"].refresh_project_status,
         )
         page.grid(row=0, column=0, sticky="nsew")
@@ -290,13 +290,20 @@ class MainWindow:
             if refresh is not None:
                 refresh()
 
+    def _open_project_from_workspace(self) -> None:
+        self._show_page("Script")
+        self._pages["Script"]._on_open_project()
+
+    def _save_project_from_workspace(self) -> None:
+        self._show_page("Script")
+        self._pages["Script"].save_project()
+
     def _on_new_project(self) -> None:
         self._show_page("Script")
         self._pages["Script"]._on_new_project()
 
     def _on_open_project(self) -> None:
-        self._show_page("Script")
-        self._pages["Script"]._on_open_project()
+        self._open_project_from_workspace()
 
     def _on_export(self) -> None:
         self.status_bar.set_text("Export — implemented once the audio/video pipelines exist.")
