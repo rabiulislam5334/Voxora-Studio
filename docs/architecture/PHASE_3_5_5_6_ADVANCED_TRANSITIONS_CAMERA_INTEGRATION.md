@@ -4,7 +4,7 @@
 
 This phase extends the real motion-to-MP4 pipeline after Phase 3.5.5.5 added cut and adjacent-scene alpha crossfade rendering. The goal is to make transition behavior deterministic, renderer-independent where practical, and compatible with the existing per-scene camera-motion evaluator.
 
-This document is an implementation plan only. It does not claim that the effects below are already implemented.
+This document tracks the implementation. The transition contract (3.5.5.6a), pixel compositor (3.5.5.6b), motion-timeline binding and camera-aware orchestration (3.5.5.6c), and FFmpeg frame-sequence regression coverage (part of 3.5.5.6d) are implemented in this PR. Full desktop UI and project persistence remain out of scope.
 
 ## Current foundation
 
@@ -12,7 +12,7 @@ This document is an implementation plan only. It does not claim that the effects
 - `MotionTimelinePlan` binds caller-supplied `SceneMotion` to each scene and includes outgoing overlap frames.
 - `MotionRasterRenderer` renders actual PNG frames with per-element and camera transforms.
 - `MotionTimelineRenderCoordinator` renders scene motion sequentially, composites the timeline, encodes one H.264 MP4, and reuses the existing narration/global Studio music muxer.
-- Cut and linear alpha crossfade are implemented. The legacy `ProductionJob` is intentionally unchanged.
+- Cut, crossfade, four directional wipes, and dip-to-color are implemented for the motion timeline. Each scene's own camera motion is rendered before transition compositing. The legacy `ProductionJob` is intentionally unchanged.
 
 ## Design principles
 
@@ -60,25 +60,22 @@ The specification should carry only validated, serializable values: effect ID, d
 - Add deterministic progress/easing helpers and stable serialization/fingerprinting.
 - Add tests for unknown effect, invalid parameters, duration bounds, and round-trip behavior.
 
-### 3.5.5.6b — Transition frame compositor
-- Extract transition compositing from the motion timeline coordinator into a focused component.
-- Preserve existing crossfade pixels byte-for-byte where feasible.
-- Implement four directional wipes and dip-to-color.
-- Validate equal frame dimensions/modes and normalize only through the existing explicit frame-normalization policy.
-- Add pixel-level tests for boundary frames, midpoint, odd/even frame counts, and complete pixel coverage.
+### 3.5.5.6b — Transition frame compositor — implemented
+- Added a focused Pillow compositor for crossfade, four directional wipes, and dip-to-color.
+- Preserved the existing linear crossfade calculation and explicit RGBA normalization in the coordinator.
+- Enforced matching dimensions/modes at the compositor boundary; only RGB/RGBA inputs are accepted.
+- Added pixel-level endpoint, easing, direction, odd/even dip, and invalid-input tests.
 
-### 3.5.5.6c — Camera-aware transition orchestration
-- Bind the validated transition specification to the immutable motion timeline plan.
-- Render each scene's own camera motion before compositing.
-- Revalidate the plan before rendering and before final publish.
-- Keep sequential execution, cancellation, progress reporting, temporary cleanup, and no-overwrite guarantees.
-- Reject unsupported transition/camera combinations rather than silently falling back.
+### 3.5.5.6c — Camera-aware transition orchestration — implemented
+- Bind per-outgoing-scene `TransitionSpec` values into the immutable `MotionTimelinePlan` fingerprint.
+- Require each spec duration to equal the approved composition overlap; reject unknown scene IDs, cut-overlap mismatches, and invalid specs.
+- Render each scene's own camera motion through `MotionRasterRenderer` before applying the transition compositor; camera values are never interpolated across scenes.
+- Preserve pre-render and pre-publish stale-plan checks, sequential rendering, cancellation, progress, temporary cleanup, and no-overwrite guarantees.
 
-### 3.5.5.6d — Integration and regression validation
-- Reuse the existing frame-sequence encoder and audio muxer.
-- Verify exact output frame count, dimensions, codec, stream alignment, and duration.
-- Add end-to-end FFmpeg tests for at least one wipe and dip-to-color transition with camera motion on both scenes.
-- Run the full test suite on Windows and Ubuntu with FFmpeg/FFprobe available.
+### 3.5.5.6d — Integration and regression validation — implemented with a scoped boundary
+- Reuse the existing numbered-PNG frame-sequence encoder and existing Studio audio muxer; no alternate audio path is introduced.
+- Added FFmpeg/FFprobe integration tests that encode wipe and dip-to-color frame sequences and verify H.264 codec, dimensions, FPS, exact frame count, and duration.
+- Existing audio-mux regression tests remain part of the full suite. A single full `MotionTimelineRenderCoordinator` test combining real asset-library setup, camera animation, advanced transition, narration, and global music is still a follow-up validation gap and must not be inferred from the frame-encoder test.
 
 ## Explicit non-goals
 
@@ -92,8 +89,8 @@ The specification should carry only validated, serializable values: effect ID, d
 ## Acceptance criteria
 
 - Existing cut and crossfade behavior remains regression-tested.
-- Every new transition is deterministic at the pixel level.
+- Every new transition is deterministic at the pixel level and has exact first/last-frame behavior.
 - Camera motion is independently applied to each scene before transition composition.
-- Invalid transition data fails safely with actionable diagnostics.
-- Cancellation leaves no partial published MP4 or temporary frame directory.
+- Invalid transition data fails safely with actionable diagnostics and is included in the plan fingerprint.
+- Existing cancellation/no-overwrite/temp-cleanup guarantees are preserved by the coordinator.
 - Windows and Ubuntu full test suites pass on the exact PR head SHA, including FFmpeg/FFprobe checks.
