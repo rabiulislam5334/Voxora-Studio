@@ -12,14 +12,19 @@ from app.universal.asset_library import VisualAssetLibrary
 from app.universal.composition import CompositionElement, SceneComposition
 from app.universal.composition_workflow import apply_scene_composition, preview_scene_composition
 from app.universal.models import AssetRef, ScenePlan, UniversalState
+from app.universal.visual_assets import AssetProvenance
 from app.universal.produce_readiness import inspect_universal_produce_readiness
 
 
-def make_project(tmp_path: Path, *, import_asset: bool = True, duration_s: float = 0.5):
+def make_project(tmp_path: Path, *, import_asset: bool = True, duration_s: float = 0.5, generated_image: bool = False):
     source = tmp_path / "source.png"
     Image.new("RGBA", (64, 64), (255, 0, 0, 255)).save(source)
     library = VisualAssetLibrary(tmp_path / "library")
-    asset = library.import_file(source, asset_id="asset-1") if import_asset else None
+    asset = library.import_file(
+        source, asset_id="asset-1",
+        kind="generated-image" if generated_image else "image",
+        provenance=AssetProvenance(source="generated:stable-diffusion-cpp") if generated_image else None,
+    ) if import_asset else None
 
     project = Project(
         id="readiness-project",
@@ -67,6 +72,19 @@ def test_readiness_passes_for_verified_local_assets_without_mutating_project(tmp
     assert report.total_frames == 12
     assert project.settings == before
 
+
+
+def test_readiness_passes_for_verified_generated_image_assets(tmp_path):
+    project, library = make_project(tmp_path, generated_image=True)
+    before = deepcopy(project.settings)
+
+    report = inspect_universal_produce_readiness(project, library)
+
+    assert report.is_ready
+    assert report.error_count == 0
+    assert report.scene_count == 1
+    assert report.asset_count == 1
+    assert project.settings == before
 
 def test_readiness_reports_missing_local_catalog_asset(tmp_path):
     project, library = make_project(tmp_path, import_asset=False)
