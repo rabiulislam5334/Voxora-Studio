@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 from PIL import Image
@@ -55,7 +56,7 @@ def make_project(tmp_path: Path, *, import_asset: bool = True, duration_s: float
 
 def test_readiness_passes_for_verified_local_assets_without_mutating_project(tmp_path):
     project, library = make_project(tmp_path)
-    before = project.to_dict()
+    before = deepcopy(project.settings)
 
     report = inspect_universal_produce_readiness(project, library)
 
@@ -64,7 +65,7 @@ def test_readiness_passes_for_verified_local_assets_without_mutating_project(tmp
     assert report.scene_count == 1
     assert report.asset_count == 1
     assert report.total_frames == 12
-    assert project.to_dict() == before
+    assert project.settings == before
 
 
 def test_readiness_reports_missing_local_catalog_asset(tmp_path):

@@ -18,7 +18,10 @@ from app.universal.composition_workflow import (
     preview_scene_composition,
 )
 from app.universal.motion_raster_renderer import MotionRasterRenderer
-from app.universal.production_workflow import build_automatic_motion_plan
+from app.universal.production_workflow import (
+    ProjectMotionProductionError,
+    build_automatic_motion_plan,
+)
 from app.universal.raster_renderer import (
     RasterRenderError,
     resolve_scene_composition_assets,
@@ -191,7 +194,7 @@ def inspect_universal_produce_readiness(
     if plan.is_valid:
         try:
             build_automatic_motion_plan(project, plan)
-        except (TypeError, ValueError) as exc:
+        except (ProjectMotionProductionError, TypeError, ValueError) as exc:
             issues.append(ProduceReadinessIssue(
                 "error", "MOTION_PLAN_INVALID",
                 f"Saved transition or camera-motion settings are not renderable: {exc}",
