@@ -207,9 +207,14 @@ def build_automatic_motion_plan(
             raise ProjectMotionProductionError(
                 f"scene {slot.scene_id!r} composition is invalid: {exc}"
             ) from exc
+        stored_fingerprint = entry.get("composition_fingerprint")
         if (
             composition.scene_id != slot.scene_id
             or composition.fingerprint != slot.composition_fingerprint
+            or (
+                stored_fingerprint is not None
+                and stored_fingerprint != composition.fingerprint
+            )
         ):
             raise ProjectMotionProductionError(
                 f"scene {slot.scene_id!r} composition changed after timeline planning"
