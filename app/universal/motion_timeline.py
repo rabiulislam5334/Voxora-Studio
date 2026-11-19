@@ -1,9 +1,10 @@
 """Timeline-aware multi-scene motion rendering for Universal projects.
 
 This opt-in pipeline combines approved scene compositions, per-scene motion,
-the immutable composition timeline, the existing frame-sequence encoder, and
-the existing Studio audio mixer/muxer. Motion remains caller-supplied until a
-separate persistence/editor phase is implemented.
+persisted Transition Editor settings, the immutable composition timeline,
+the frame-sequence encoder, and the existing Studio audio mixer/muxer.
+Motion remains caller-supplied; transition overrides are loaded from Studio
+project settings and revalidated before rendering.
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ import hashlib
 import json
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
@@ -92,6 +93,7 @@ class MotionTimelinePlan:
     scenes: tuple[MotionSceneTimelineSlot, ...]
     motion_fingerprint: str
     plan_fingerprint: str
+    transition_settings_fingerprint: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -333,6 +335,127 @@ def assert_motion_timeline_plan_current(
         )
 
 
+
+SCENE_TRANSITIONS_KEY = "scene_transitions"
+SCENE_TRANSITIONS_STORAGE_VERSION = 1
+
+
+def resolve_project_transition_specs(
+    project,
+    composition_plan: CompositionTimelinePlan,
+) -> dict[str, TransitionSpec]:
+    """Read and validate the Transition Editor's persisted per-scene settings.
+
+    The project-wide timeline determines whether boundaries overlap. When it
+    does, each saved outgoing-scene override is validated against that exact
+    overlap duration. Missing overrides retain the renderer's crossfade
+    default; settings are never silently retimed.
+    """
+    if not isinstance(getattr(project, "settings", None), dict):
+        raise MotionTimelinePlanError("project settings must be an object")
+    studio = StudioState.from_project_settings(project.settings)
+    if studio.read_only:
+        raise MotionTimelinePlanError("Studio transition settings are malformed or read-only")
+
+    raw = studio.video.extra.get(SCENE_TRANSITIONS_KEY)
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise MotionTimelinePlanError("persisted scene transition settings must be an object")
+    version = raw.get("version", SCENE_TRANSITIONS_STORAGE_VERSION)
+    if (
+        isinstance(version, bool)
+        or not isinstance(version, int)
+        or version != SCENE_TRANSITIONS_STORAGE_VERSION
+    ):
+        raise MotionTimelinePlanError("unsupported scene transition settings version")
+    scenes = raw.get("scenes", {})
+    if not isinstance(scenes, dict):
+        raise MotionTimelinePlanError("persisted scene transition map must be an object")
+
+    # Cut timelines contain no overlap frames. Preserve saved overrides so
+    # switching the project back to Overlap restores them, but do not render
+    # or validate their duration against a non-existent overlap.
+    if composition_plan.transition == "cut":
+        return {}
+    if composition_plan.transition != "crossfade":
+        raise MotionTimelinePlanError(
+            f"unsupported project transition mode: {composition_plan.transition!r}"
+        )
+
+    ordered = tuple(sorted(
+        composition_plan.slots,
+        key=lambda item: (item.frame_start, item.scene_order, item.scene_id),
+    ))
+    outgoing_ids = {slot.scene_id for slot in ordered[:-1]}
+    unknown = sorted(set(scenes) - outgoing_ids)
+    if unknown:
+        raise MotionTimelinePlanError(
+            "saved transitions reference scenes without outgoing boundaries: "
+            + ", ".join(str(scene_id) for scene_id in unknown)
+        )
+
+    resolved: dict[str, TransitionSpec] = {}
+    for scene_id, value in scenes.items():
+        if not isinstance(scene_id, str) or not scene_id.strip():
+            raise MotionTimelinePlanError("saved transition contains an invalid scene ID")
+        try:
+            spec = TransitionSpec.from_dict(value)
+        except (TypeError, ValueError) as exc:
+            raise MotionTimelinePlanError(
+                f"saved transition for scene {scene_id!r} is invalid: {exc}"
+            ) from exc
+        if spec.effect == "cut":
+            raise MotionTimelinePlanError(
+                f"scene {scene_id!r} uses cut inside an overlap timeline"
+            )
+        if spec.duration_ticks != composition_plan.transition_ticks:
+            raise MotionTimelinePlanError(
+                f"saved transition for scene {scene_id!r} has a duration that does not "
+                "match the approved project overlap; update the Transition Editor "
+                "and rebuild the timeline"
+            )
+        resolved[scene_id] = spec
+    return resolved
+
+
+def build_project_motion_timeline_plan(
+    project,
+    composition_plan: CompositionTimelinePlan,
+    scene_motions: Mapping[str, SceneMotion],
+) -> MotionTimelinePlan:
+    """Build the motion plan using the Transition Editor's saved scene effects."""
+    plan = build_motion_timeline_plan(
+        composition_plan,
+        scene_motions,
+        transition_specs=resolve_project_transition_specs(project, composition_plan),
+    )
+    studio = StudioState.from_project_settings(project.settings)
+    raw = studio.video.extra.get(SCENE_TRANSITIONS_KEY, {})
+    return replace(plan, transition_settings_fingerprint=_digest(raw))
+
+
+def assert_project_transition_settings_current(
+    project,
+    composition_plan: CompositionTimelinePlan,
+    scene_motions: Mapping[str, SceneMotion],
+    motion_plan: MotionTimelinePlan,
+) -> None:
+    """Reject a render plan if saved Transition Editor settings have changed."""
+    if motion_plan.transition_settings_fingerprint is None:
+        return
+    studio = StudioState.from_project_settings(project.settings)
+    if studio.read_only:
+        raise MotionTimelinePlanError("Studio transition settings are malformed or read-only")
+    raw = studio.video.extra.get(SCENE_TRANSITIONS_KEY, {})
+    if _digest(raw) != motion_plan.transition_settings_fingerprint:
+        raise MotionTimelinePlanError(
+            "saved scene transition settings changed after timeline approval; "
+            "rebuild and review the motion timeline before rendering"
+        )
+    # Also validate the current structure/specifications before allowing render.
+    resolve_project_transition_specs(project, composition_plan)
+
 def _cancel(cancel: Optional[CancelToken]) -> None:
     if cancel is not None:
         cancel.raise_if_cancelled("Motion timeline render cancelled.")
@@ -509,6 +632,12 @@ class MotionTimelineRenderCoordinator:
                 raise MotionTimelineRenderError(
                     "project Universal or Studio settings are read-only"
                 )
+            try:
+                assert_project_transition_settings_current(
+                    project, composition_plan, scene_motions, motion_plan,
+                )
+            except MotionTimelinePlanError as exc:
+                raise MotionTimelineRenderError(str(exc)) from exc
             stored = universal.extra.get(SCENE_COMPOSITIONS_KEY, {})
             if not isinstance(stored, dict):
                 raise MotionTimelineRenderError("stored scene compositions are malformed")
@@ -718,5 +847,8 @@ __all__ = [
     "MotionTimelineRenderError",
     "MotionTimelineRenderResult",
     "assert_motion_timeline_plan_current",
+    "assert_project_transition_settings_current",
+    "build_project_motion_timeline_plan",
+    "resolve_project_transition_specs",
     "build_motion_timeline_plan",
 ]
