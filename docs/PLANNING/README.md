@@ -414,6 +414,20 @@ This is a **candidate registry**, not an implementation commitment. These projec
 | [Audio Separator](https://github.com/nomadkaraoke/python-audio-separator) | Voice/music/stem separation for audio cleanup and sound-design workflows | Optional audio utility behind capability detection; never alter the supplied narration without explicit policy | CANDIDATE; verify model licences, disk/GPU/RAM requirements and audio-quality impact |
 | [Motion Canvas](https://github.com/motion-canvas/motion-canvas), [HyperFrames](https://github.com/HyperFrames)(https://github.com/HyperFrames), [Remotion](https://github.com/remotion-dev/remotion) | Code-driven motion graphics and composition | Reuse the completed TS-02 benchmark evidence; do not repeat the same benchmark. Decide adapter only after the formal matrix | BENCHMARK PARTIAL; primary framework decision remains open |
 
+### Non-negotiable free-only and commercial-use policy
+
+This policy is a **hard adoption gate** for every external project, library, tool, model, dataset and asset considered for Voxora.
+
+- **Zero-cost requirement:** do not purchase, subscribe to, or adopt any paid licence, paid edition, commercial upgrade, credit package or usage-based service. No core workflow may depend on a paid API, hosted service, cloud renderer or subscription.
+- **No hidden paywalls:** reject a candidate if a required feature is trial-only, requires paid credits, or becomes unusable without payment. An optional remote integration is acceptable only when a genuinely free, self-hostable/local or otherwise zero-cost path preserves the required core capability; it must never be the only production path.
+- **Commercial-content permission:** the exact code, model, data and asset terms must permit the intended use: creating and monetizing YouTube videos and, where applicable, distributing or commercializing Voxora itself. “Free to download” is not proof of commercial-use permission.
+- **Audit every layer separately:** inspect the upstream repository licence and version; direct and transitive dependency licences; model architecture and weight licences; training/inference dataset terms; fonts; stock footage/photos; music/SFX; map tiles/geodata; plugins; codecs and bundled binaries; attribution, notice, share-alike, source-disclosure and redistribution obligations.
+- **Copyleft is not automatically acceptable:** GPL/AGPL and other reciprocal licences require a specific compatibility review covering linking, subprocess boundaries, distribution, network use, source-offer duties and the planned Voxora packaging model. Do not adopt or distribute such components until the obligations are understood and explicitly approved. Prefer permissive options or a clean native implementation when obligations create uncertainty.
+- **Record evidence:** each candidate remains **UNVERIFIED** until its exact version, licence texts, dependency tree, model/data/assets and required feature path have been checked and recorded. Do not infer approval from an “open source” label or a repository-level licence badge.
+- **Reject on failure:** if any mandatory component has a paid requirement, incompatible commercial restriction, unclear rights, or unacceptable legal/distribution obligation, mark it **REJECTED** or **BLOCKED** and do not integrate it. Never solve a licence gap by buying a licence.
+
+No candidate in this registry is currently certified as passing this policy. The policy is a selection constraint, not a claim that the listed projects are all free of cost or cleared for commercial use.
+
 ### Integration rules and acceptance gates
 
 1. **Source and licence audit:** record canonical upstream URL, exact commit/tag, licence file, transitive dependencies, model/weight/data licences, attribution duties and redistribution obligations. A repository licence does not automatically license its models, datasets, fonts, footage or generated assets.
