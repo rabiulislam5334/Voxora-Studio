@@ -19,6 +19,7 @@ class Sidebar(ttk.Frame):
         "Settings",
         "Engines",
         "Visual Assets",
+        "Image Generation",
         "Scene Assets",
         "Composition",
         "Transitions",
