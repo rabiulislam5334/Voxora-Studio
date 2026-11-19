@@ -226,6 +226,8 @@ def build_motion_timeline_plan(
             raise MotionTimelinePlanError("cut transitions cannot contain overlapping scene frames")
         transition_frames = 0
     else:
+        if len(ordered_slots) < 2:
+            raise MotionTimelinePlanError("crossfade requires at least two scenes")
         if not overlap_frames or any(value <= 0 for value in overlap_frames[:-1]):
             raise MotionTimelinePlanError(
                 "crossfade is shorter than one output frame at the selected FPS"
@@ -289,6 +291,30 @@ def assert_motion_timeline_plan_current(
 def _cancel(cancel: Optional[CancelToken]) -> None:
     if cancel is not None:
         cancel.raise_if_cancelled("Motion timeline render cancelled.")
+
+
+def _save_normalized_frame(
+    source: Path,
+    destination: Path,
+    width: int,
+    height: int,
+) -> None:
+    """Save a frame on the output canvas without changing its aspect ratio policy."""
+    with Image.open(source) as image:
+        frame = image.convert("RGBA")
+        try:
+            if frame.size != (width, height):
+                resized = frame.resize(
+                    (width, height), resample=Image.Resampling.LANCZOS,
+                )
+                try:
+                    resized.save(destination, format="PNG", optimize=False)
+                finally:
+                    resized.close()
+            else:
+                frame.save(destination, format="PNG", optimize=False)
+        finally:
+            frame.close()
 
 
 class MotionTimelineRenderCoordinator:
@@ -495,9 +521,19 @@ class MotionTimelineRenderCoordinator:
                             second = second_image.convert("RGBA")
                             try:
                                 if first.size != (composition_plan.width, composition_plan.height):
-                                    raise MotionTimelineRenderError("outgoing frame dimensions do not match output canvas")
+                                    resized = first.resize(
+                                        (composition_plan.width, composition_plan.height),
+                                        resample=Image.Resampling.LANCZOS,
+                                    )
+                                    first.close()
+                                    first = resized
                                 if second.size != (composition_plan.width, composition_plan.height):
-                                    raise MotionTimelineRenderError("incoming frame dimensions do not match output canvas")
+                                    resized = second.resize(
+                                        (composition_plan.width, composition_plan.height),
+                                        resample=Image.Resampling.LANCZOS,
+                                    )
+                                    second.close()
+                                    second = resized
                                 composed = Image.blend(first, second, max(0.0, min(1.0, alpha)))
                                 try:
                                     output_path = frame_dir / f"frame_{output_index:06d}.png"
@@ -512,14 +548,9 @@ class MotionTimelineRenderCoordinator:
                         source_index = output_index - slot.frame_start
                         source = scene_frame_paths[slot.scene_id][source_index]
                         output_path = frame_dir / f"frame_{output_index:06d}.png"
-                        with Image.open(source) as image:
-                            frame = image.convert("RGBA")
-                            try:
-                                if frame.size != (composition_plan.width, composition_plan.height):
-                                    raise MotionTimelineRenderError("scene frame dimensions do not match output canvas")
-                                frame.save(output_path, format="PNG", optimize=False)
-                            finally:
-                                frame.close()
+                        _save_normalized_frame(
+                            source, output_path, composition_plan.width, composition_plan.height,
+                        )
                     frame_paths.append(output_path)
                     if on_progress:
                         on_progress(
