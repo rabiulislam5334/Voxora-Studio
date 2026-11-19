@@ -643,14 +643,6 @@ async def run_universal_production(
 
 
 __all__ = [
-    *__all__,
-    "UniversalProductionProgress",
-    "UniversalProductionResult",
-    "run_universal_production",
-]
-
-
-__all__ = [
     "AUTOMATIC_MOTION_PRESETS",
     "AUTOMATIC_MOTION_VERSION",
     "AutomaticMotionPlan",
