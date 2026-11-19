@@ -327,37 +327,46 @@ def assemble_aligned_narration_wav(
     staged = target.with_name(f".{target.name}.{uuid.uuid4().hex}.stage.wav")
     try:
         with WavBuilder(staged, sample_rate) as builder:
+            cumulative_slot_ticks = 0
             for slot in slots:
                 scene_id = slot.scene_id
                 source_value = scene_audio_paths.get(scene_id)
                 measured_ticks = narration_duration_ticks.get(scene_id)
-                if source_value is None:
-                    if measured_ticks is not None or slot.narration_duration_ticks is not None:
+                if source_value is not None:
+                    if measured_ticks is None or slot.narration_duration_ticks != measured_ticks:
                         raise ProjectMotionProductionError(
-                            f"scene {scene_id!r} has narration timing but no scene WAV"
+                            f"scene {scene_id!r} narration duration does not match the approved timeline"
                         )
-                    builder.add_silence_ticks(slot.slot_ticks)
-                    continue
-                if measured_ticks is None or slot.narration_duration_ticks != measured_ticks:
+                    source = Path(source_value).expanduser()
+                    if source.is_symlink() or not source.is_file():
+                        raise ProjectMotionProductionError(
+                            f"scene {scene_id!r} narration WAV is missing or not a regular file"
+                        )
+                    actual_ticks = wav_duration_ticks(source)
+                    if actual_ticks != measured_ticks:
+                        raise ProjectMotionProductionError(
+                            f"scene {scene_id!r} narration WAV duration changed after planning"
+                        )
+                    if actual_ticks > slot.slot_ticks:
+                        raise ProjectMotionProductionError(
+                            f"scene {scene_id!r} narration is longer than its approved timeline slot"
+                        )
+                    builder.add_wav(source)
+                elif measured_ticks is not None or slot.narration_duration_ticks is not None:
                     raise ProjectMotionProductionError(
-                        f"scene {scene_id!r} narration duration does not match the approved timeline"
+                        f"scene {scene_id!r} has narration timing but no scene WAV"
                     )
-                source = Path(source_value).expanduser()
-                if source.is_symlink() or not source.is_file():
+
+                cumulative_slot_ticks += slot.slot_ticks
+                slot_end_samples = ticks_to_samples(
+                    cumulative_slot_ticks, sample_rate, rounding="half_up",
+                )
+                remaining_samples = slot_end_samples - builder.frames
+                if remaining_samples < 0:
                     raise ProjectMotionProductionError(
-                        f"scene {scene_id!r} narration WAV is missing or not a regular file"
+                        f"scene {scene_id!r} audio exceeds its sample-aligned timeline slot"
                     )
-                actual_ticks = wav_duration_ticks(source)
-                if actual_ticks != measured_ticks:
-                    raise ProjectMotionProductionError(
-                        f"scene {scene_id!r} narration WAV duration changed after planning"
-                    )
-                if actual_ticks > slot.slot_ticks:
-                    raise ProjectMotionProductionError(
-                        f"scene {scene_id!r} narration is longer than its approved timeline slot"
-                    )
-                builder.add_wav(source)
-                builder.add_silence_ticks(slot.slot_ticks - actual_ticks)
+                builder.add_silence_samples(remaining_samples)
 
             required_ticks = frames_to_ticks(
                 composition_plan.total_frames, composition_plan.fps, rounding="ceil",
