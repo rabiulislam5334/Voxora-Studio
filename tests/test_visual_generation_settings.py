@@ -41,11 +41,12 @@ def test_settings_reject_invalid_values(kwargs):
         LocalImageGenerationSettings(**kwargs)
 
 
-def test_settings_reject_unknown_version(tmp_path):
+def test_settings_reject_unknown_and_boolean_versions(tmp_path):
     path = tmp_path / "settings.json"
-    path.write_text(json.dumps({"version": 99}), encoding="utf-8")
-    with pytest.raises(VisualGenerationSettingsError, match="Unsupported"):
-        load_local_image_generation_settings(path)
+    for version in (99, True):
+        path.write_text(json.dumps({"version": version}), encoding="utf-8")
+        with pytest.raises(VisualGenerationSettingsError, match="Unsupported"):
+            load_local_image_generation_settings(path)
 
 
 def test_settings_reject_symlink(tmp_path):
