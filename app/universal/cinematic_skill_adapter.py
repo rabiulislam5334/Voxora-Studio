@@ -140,6 +140,10 @@ class CinematicSkillRenderCoordinator:
         width: int = 1280,
         height: int = 720,
         doc=None,
+        narration_wav: Optional[os.PathLike[str] | str] = None,
+        audio_settings=None,
+        timeline_plan=None,
+        audio_muxer=None,
         cancel=None,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> CinematicSkillRenderResult:
@@ -154,6 +158,16 @@ class CinematicSkillRenderCoordinator:
             raise CinematicSkillRenderError("requested canvas exceeds the configured pixel budget")
         if on_progress is not None and not callable(on_progress):
             raise CinematicSkillRenderError("on_progress must be callable")
+
+        mux_values = (narration_wav, audio_settings, timeline_plan, audio_muxer)
+        use_audio_mux = any(value is not None for value in mux_values)
+        if use_audio_mux and any(value is None for value in mux_values):
+            raise CinematicSkillRenderError(
+                "narration_wav, audio_settings, timeline_plan and audio_muxer "
+                "must be supplied together to preserve the original narration"
+            )
+        if use_audio_mux and not callable(getattr(audio_muxer, "render", None)):
+            raise CinematicSkillRenderError("audio_muxer must provide the Voxora render(...) contract")
 
         try:
             duration = float(film.duration)
@@ -275,23 +289,69 @@ class CinematicSkillRenderCoordinator:
                     "FFmpeg encoder did not produce a non-empty MP4"
                 )
 
+            codec = getattr(encoded, "codec", "h264")
+            if use_audio_mux:
+                plan_values = (
+                    getattr(timeline_plan, "fps", None),
+                    getattr(timeline_plan, "width", None),
+                    getattr(timeline_plan, "height", None),
+                    getattr(timeline_plan, "total_frames", None),
+                )
+                if plan_values != (fps, width, height, frame_count):
+                    raise CinematicSkillRenderError(
+                        "timeline_plan fps, dimensions and total_frames must exactly "
+                        "match the rendered Film; refusing to retime narration"
+                    )
+                if cancel is not None and not callable(
+                    getattr(cancel, "raise_if_cancelled", None)
+                ):
+                    raise CinematicSkillRenderError(
+                        "the existing Voxora audio mux requires a CancelToken when cancellation is supplied"
+                    )
+
+                def mux_progress(fraction: float, message: str) -> None:
+                    if on_progress:
+                        bounded = max(0.0, min(1.0, float(fraction)))
+                        on_progress(0.75 + bounded * 0.25, message)
+
+                try:
+                    mux_result = audio_muxer.render(
+                        silent_video,
+                        Path(narration_wav),
+                        audio_settings,
+                        target,
+                        timeline_plan,
+                        cancel=cancel,
+                        on_progress=mux_progress if on_progress else None,
+                    )
+                except Exception as exc:
+                    raise CinematicSkillRenderError(
+                        f"Voxora narration/audio mux failed: {exc}"
+                    ) from exc
+                codec = getattr(mux_result, "video_codec", codec)
+                audio_included = True
+            else:
+                # Hard-link publication is atomic and cannot replace a file created
+                # by another process between the initial existence check and commit.
+                try:
+                    os.link(silent_video, target)
+                except FileExistsError:
+                    raise CinematicSkillRenderError(
+                        "destination appeared during rendering; refusing to overwrite it"
+                    ) from None
+                silent_video.unlink()
+                audio_included = False
+
+            if not target.is_file() or target.stat().st_size <= 0:
+                raise CinematicSkillRenderError("final MP4 was not published")
+
             digest = hashlib.sha256()
-            with silent_video.open("rb") as stream:
+            with target.open("rb") as stream:
                 for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                     digest.update(chunk)
 
-            # Hard-link publication is atomic and cannot replace a file created
-            # by another process between the initial existence check and commit.
-            try:
-                os.link(silent_video, target)
-            except FileExistsError:
-                raise CinematicSkillRenderError(
-                    "destination appeared during rendering; refusing to overwrite it"
-                ) from None
-            silent_video.unlink()
-
             if on_progress:
-                on_progress(1.0, "Cinematic Skill silent MP4 complete")
+                on_progress(1.0, "Cinematic Skill MP4 complete")
 
             return CinematicSkillRenderResult(
                 destination=target,
@@ -301,7 +361,8 @@ class CinematicSkillRenderCoordinator:
                 height=height,
                 duration_seconds=frame_count / fps,
                 output_sha256=digest.hexdigest(),
-                codec=getattr(encoded, "codec", "h264"),
+                codec=codec,
+                audio_included=audio_included,
             )
         finally:
             shutil.rmtree(staging, ignore_errors=True)
