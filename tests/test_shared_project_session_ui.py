@@ -83,7 +83,7 @@ def test_script_scene_assets_and_composition_share_one_project_manager(shared_wo
     assert composition.project_manager.current_project is project
     assert scene_assets.scene_tree.exists(scene.id)
     assert composition._scene_ids == [scene.id]
-    assert "Shared project" in scene_assets.project_label.cget("text")
+    assert "Untitled Project" in scene_assets.project_label.cget("text")
 
 
 def test_project_replacement_refreshes_both_visual_workspaces(shared_workspaces):
