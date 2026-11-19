@@ -609,3 +609,11 @@ async def run_universal_production(
         audio_path=exported_audio,
         warnings=tuple(warnings),
     )
+
+
+__all__ = [
+    *__all__,
+    "UniversalProductionProgress",
+    "UniversalProductionResult",
+    "run_universal_production",
+]
