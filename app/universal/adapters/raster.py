@@ -31,7 +31,7 @@ class RasterCompositionAdapter:
             raise TypeError("renderer must be a RasterCompositionRenderer")
         self.descriptor = self.build_descriptor()
         self.composition_capabilities = CompositionRenderCapabilities(
-            output_formats=("png",), asset_kinds=("image",),
+            output_formats=("png",), asset_kinds=("image", "generated-image"),
             supports_layers=True, supports_transforms=True,
             supports_opacity=True, supports_rotation=True,
         )
