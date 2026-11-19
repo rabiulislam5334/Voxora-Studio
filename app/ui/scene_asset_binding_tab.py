@@ -69,7 +69,7 @@ class SceneAssetBindingTab(ttk.Frame):
         self._preview_image = None
         self._asset_ids = []
         self._character_ids = []
-        self._status = tk.StringVar(value="Open a .voxora project to manage scene bindings.")
+        self._status = tk.StringVar(value="Open a project from the Script page to manage scene bindings.")
         self._build()
         self._load_catalog()
 
@@ -77,7 +77,7 @@ class SceneAssetBindingTab(ttk.Frame):
         self.columnconfigure(0, weight=1)
         ttk.Label(self, text="Scene Assets & Continuity", style="PageTitle.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 4))
-        ttk.Label(self, text="Bind library images and reusable characters to a scene. "
+        ttk.Label(self, text="Bind library images and reusable characters to the active project scene. "
                   "Changes are explicit and remain unsaved until you save the project.",
                   style="Muted.TLabel", wraplength=1100).grid(
             row=1, column=0, sticky="w", pady=(0, 12))
@@ -190,16 +190,16 @@ class SceneAssetBindingTab(ttk.Frame):
 
     def refresh_project(self):
         project = self.project_manager.current_project
-        if project is self._project_ref:
-            self.project_label.configure(
-                text=f"{project.name} · {self.project_manager.current_path.name}"
-                if self.project_manager.current_path else f"{project.name} · Unsaved"
-            )
-            return
+        changed_project = project is not self._project_ref
+        selected = self._selected_scene_id()
+        if changed_project:
+            self._preview = None
+            self._preview_generated_only = False
         self._project_ref = project
-        self._preview = None
-        self._preview_generated_only = False
         self._populate_scenes()
+        if selected and self.scene_tree.exists(selected):
+            self.scene_tree.selection_set(selected)
+            self._on_scene_select()
         self.project_label.configure(
             text=f"{project.name} · {self.project_manager.current_path.name}"
             if self.project_manager.current_path else f"{project.name} · Unsaved"
