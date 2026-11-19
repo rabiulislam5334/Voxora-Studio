@@ -133,8 +133,14 @@ def resolve_scene_composition_assets(
         asset = catalog_assets.get(asset_id)
         if asset is None:
             raise RasterRenderError(f"Asset '{asset_id}' is missing from the local visual catalog")
-        if ref.kind != "image" or asset.kind != "image":
+        if ref.kind not in ("image", "generated-image") or asset.kind != ref.kind:
             raise RasterRenderError(f"Asset '{asset_id}' is not a supported image asset")
+        if asset.kind == "generated-image":
+            provenance = asset.provenance
+            if provenance is None or not isinstance(provenance.source, str) or not provenance.source.startswith("generated:"):
+                raise RasterRenderError(
+                    f"Generated image '{asset_id}' is missing verified generation provenance"
+                )
         if ref.path != asset.location:
             raise RasterRenderError(f"Asset '{asset_id}' catalog location does not match its scene binding")
         if ref.identity is not None and ref.identity != asset.content_sha256:

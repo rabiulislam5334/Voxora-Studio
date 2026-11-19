@@ -18,7 +18,7 @@ class RasterCompositionAdapter:
             display_name="CPU Raster Composition Renderer",
             version="1.0.0",
             capabilities=EngineCapabilities(
-                scene_kinds=("composition",), asset_kinds=("image",),
+                scene_kinds=("composition",), asset_kinds=("image", "generated-image"),
                 output_formats=("png",), requires_gpu=False,
                 supports_draft_render=True, max_concurrent_jobs=1,
                 estimated_memory_mb=256,
@@ -31,7 +31,7 @@ class RasterCompositionAdapter:
             raise TypeError("renderer must be a RasterCompositionRenderer")
         self.descriptor = self.build_descriptor()
         self.composition_capabilities = CompositionRenderCapabilities(
-            output_formats=("png",), asset_kinds=("image",),
+            output_formats=("png",), asset_kinds=("image", "generated-image"),
             supports_layers=True, supports_transforms=True,
             supports_opacity=True, supports_rotation=True,
         )

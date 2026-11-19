@@ -6,6 +6,7 @@ from PIL import Image
 from app.models.project import Project
 from app.models.scene import Scene
 from app.universal.asset_library import VisualAssetLibrary
+from app.universal.visual_assets import AssetProvenance
 from app.universal.composition import (
     CompositionCanvas, CompositionElement, SceneComposition, VisualTransform,
 )
@@ -273,4 +274,108 @@ def test_bound_render_rejects_unbound_or_modified_catalog_asset(tmp_path):
     plan.asset_refs.append(AssetRef("asset-1", "image", path=asset.location, identity="0" * 64))
     project.settings["universal"]["scene_plans"]["scene-1"] = plan.to_dict()
     with pytest.raises(RasterRenderError, match="identity"):
+        resolve_scene_composition_assets(project, composition, library)
+
+
+
+def test_bound_generated_image_with_verified_provenance_renders_png(tmp_path):
+    source = save_image(tmp_path / "generated.png", (180, 90, 30, 255))
+    library = VisualAssetLibrary(tmp_path / "generated-library")
+    asset = library.import_file(
+        source,
+        kind="generated-image",
+        asset_id="generated-asset-1",
+        provenance=AssetProvenance(
+            source="generated:stable-diffusion.cpp",
+            metadata={"request_id": "request-001"},
+        ),
+    )
+    plan = ScenePlan(
+        scene_id="scene-1",
+        asset_refs=[AssetRef(
+            asset_id=asset.asset_id,
+            kind="generated-image",
+            path=asset.location,
+            identity=asset.content_sha256,
+        )],
+    )
+    project = Project(
+        id="project-1",
+        scenes=[Scene(id="scene-1", title="Generated scene")],
+        settings={"universal": {
+            "format_version": 1,
+            "profile_id": None,
+            "scene_plans": {"scene-1": plan.to_dict()},
+        }},
+    )
+    composition = make_composition(make_element("generated-layer", asset.asset_id))
+    destination = tmp_path / "generated-composition.png"
+
+    resolved = resolve_scene_composition_assets(project, composition, library)
+    assert resolved == {asset.asset_id: library.resolve_asset_path(asset)}
+    result = render_bound_scene_composition(project, composition, library, destination)
+
+    assert result.rendered_element_ids == ("generated-layer",)
+    with Image.open(destination) as output:
+        assert output.convert("RGBA").getpixel((8, 8)) == (180, 90, 30, 255)
+
+
+def test_generated_image_without_generation_provenance_is_rejected(tmp_path):
+    source = save_image(tmp_path / "unverified.png", (10, 20, 30, 255))
+    library = VisualAssetLibrary(tmp_path / "unverified-library")
+    asset = library.import_file(source, kind="generated-image", asset_id="generated-asset-2")
+    plan = ScenePlan(
+        scene_id="scene-1",
+        asset_refs=[AssetRef(
+            asset_id=asset.asset_id,
+            kind="generated-image",
+            path=asset.location,
+            identity=asset.content_sha256,
+        )],
+    )
+    project = Project(
+        id="project-1",
+        scenes=[Scene(id="scene-1")],
+        settings={"universal": {
+            "format_version": 1,
+            "profile_id": None,
+            "scene_plans": {"scene-1": plan.to_dict()},
+        }},
+    )
+    composition = make_composition(make_element("generated-layer", asset.asset_id))
+
+    with pytest.raises(RasterRenderError, match="generation provenance"):
+        resolve_scene_composition_assets(project, composition, library)
+
+
+def test_generated_image_binding_kind_must_match_catalog_kind(tmp_path):
+    source = save_image(tmp_path / "generated.png", (10, 20, 30, 255))
+    library = VisualAssetLibrary(tmp_path / "kind-mismatch-library")
+    asset = library.import_file(
+        source,
+        kind="generated-image",
+        asset_id="generated-asset-3",
+        provenance=AssetProvenance(source="generated:test-provider"),
+    )
+    plan = ScenePlan(
+        scene_id="scene-1",
+        asset_refs=[AssetRef(
+            asset_id=asset.asset_id,
+            kind="image",
+            path=asset.location,
+            identity=asset.content_sha256,
+        )],
+    )
+    project = Project(
+        id="project-1",
+        scenes=[Scene(id="scene-1")],
+        settings={"universal": {
+            "format_version": 1,
+            "profile_id": None,
+            "scene_plans": {"scene-1": plan.to_dict()},
+        }},
+    )
+    composition = make_composition(make_element("generated-layer", asset.asset_id))
+
+    with pytest.raises(RasterRenderError, match="supported image asset"):
         resolve_scene_composition_assets(project, composition, library)
