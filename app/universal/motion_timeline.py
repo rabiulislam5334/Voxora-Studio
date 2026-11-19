@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
+from PIL import Image
+
 from app.audio.ffmpeg_tool import FFmpegTool
 from app.studio.models import StudioState
 from app.universal.asset_library import VisualAssetLibrary
@@ -396,7 +398,22 @@ class MotionTimelineRenderCoordinator:
                     for local_index, source in enumerate(rendered.frame_paths):
                         _cancel(cancel)
                         destination_frame = frame_dir / f"frame_{len(frame_paths):06d}.png"
-                        shutil.copyfile(source, destination_frame)
+                        with Image.open(source) as rendered_frame:
+                            frame = rendered_frame.convert("RGBA")
+                            try:
+                                if frame.size != (composition_plan.width, composition_plan.height):
+                                    resized = frame.resize(
+                                        (composition_plan.width, composition_plan.height),
+                                        resample=Image.Resampling.LANCZOS,
+                                    )
+                                    try:
+                                        resized.save(destination_frame, format="PNG", optimize=False)
+                                    finally:
+                                        resized.close()
+                                else:
+                                    frame.save(destination_frame, format="PNG", optimize=False)
+                            finally:
+                                frame.close()
                         frame_paths.append(destination_frame)
                     rendered_before += slot.frame_count
                     if on_progress:
