@@ -23,6 +23,7 @@ from app.universal.composition_workflow import (
     preview_scene_composition,
 )
 from app.universal.models import UniversalState
+from app.universal.generated_image_composition import append_bound_generated_images
 
 
 def canvas_rect(transform: VisualTransform, width: int, height: int):
@@ -118,7 +119,11 @@ class CompositionEditorTab(ttk.Frame):
         self.asset_combo = ttk.Combobox(left, textvariable=self.asset_var, state="readonly", width=24)
         self.asset_combo.grid(row=1, column=0, sticky="ew", pady=(0, 6))
         ttk.Button(left, text="Add to Canvas", style="Primary.TButton",
-                   command=self._add_asset).grid(row=2, column=0, sticky="ew", pady=(0, 10))
+                   command=self._add_asset).grid(row=2, column=0, sticky="ew", pady=(0, 4))
+        ttk.Button(left, text="Add Bound Generated Images",
+                   style="Secondary.TButton",
+                   command=self._add_bound_generated_images).grid(
+                       row=3, column=0, sticky="ew", pady=(0, 10))
         ttk.Label(left, text="Layers (top first)", style="SectionTitle.TLabel").grid(
             row=3, column=0, sticky="w", pady=(4, 6))
         self.layer_tree = ttk.Treeview(left, columns=("asset",), show="tree headings", height=14,
@@ -365,6 +370,39 @@ class CompositionEditorTab(ttk.Frame):
         self._populate_layers(select=element_id)
         self._redraw()
         self._status.set(f"Added {asset_id}. Drag it on the canvas to position.")
+
+    def _add_bound_generated_images(self):
+        """Add verified generated images already bound to the active scene."""
+        if self.composition is None or self.project_manager.current_project is None:
+            messagebox.showinfo(
+                "Select a scene",
+                "Open a project and select a scene before adding generated images.",
+                parent=self,
+            )
+            return
+        if self.catalog is None:
+            messagebox.showinfo(
+                "Visual library unavailable",
+                "Refresh the Visual Asset Library, then try again.",
+                parent=self,
+            )
+            return
+        try:
+            updated = append_bound_generated_images(
+                self.project_manager.current_project, self.catalog, self.composition,
+            )
+            added = len(updated.elements) - len(self.composition.elements)
+            self.composition = updated
+            self.preview = None
+            self._composition_dirty = True
+            self._populate_layers(select=updated.elements[-1].element_id)
+            self._redraw()
+            self._status.set(
+                f"Added {added} bound generated image(s) in an auto-grid. "
+                "Review the layout, then Preview & Validate."
+            )
+        except Exception as exc:
+            messagebox.showinfo("Generated images not added", str(exc), parent=self)
 
     def _with_elements(self, elements):
         return SceneComposition(
