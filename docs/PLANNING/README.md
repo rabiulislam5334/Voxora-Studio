@@ -159,7 +159,22 @@ These are product-level capability groups used to organize the roadmap while the
 - Timeline-aware keyframes, transforms, camera moves, easing, layers, masks, transitions, and reusable templates.
 - Deterministic preview/render settings and explicit engine capability declarations.
 - Keep motion-framework experiments and evaluation evidence in a dedicated decision record.
-- **HyperFrames, Remotion, Motion Canvas, and the other framework(s) evaluated by the user must be recorded with actual test results before selecting or implementing an adapter.** The full tested-framework list and comparative results remain to be recovered; no winner is assumed here.
+
+#### TS-02 Renderer Benchmark — completed user evaluation (14–15 November 2026)
+
+The user spent approximately two days evaluating three frameworks in an isolated benchmark workspace for Voxora's AI Production Director and documentary/Vox-style animation use case. This was a real comparative test, not merely a list of candidate technologies. The benchmark workspace was `D:\\Voxora-TS02-Benchmark`; Voxora source code and dependencies were intentionally left unchanged during evaluation.
+
+| Framework | Verified setup / output | Recorded result | Evaluation notes |
+|---|---|---|---|
+| Motion Canvas | 29-second animation | Render completed in 39 seconds, no render error | Setup succeeded; visual quality was judged weak in the recorded comparison. |
+| HyperFrames | CLI `0.9.46`; initialized successfully; Node v22.17.0, FFmpeg 9.0.2, Chrome detected | Same documentary-animation comparison rendered in 93 seconds | Visual result was judged good; 3D elements were added successfully. Machine had 7.9 GB RAM with only 1.1 GB available at diagnostic time, so memory pressure is a relevant constraint. |
+| Remotion | `4.0.543`; 1920×1080, 30 FPS, 870 frames / 29 seconds | 870/870 frames completed in 175,486 ms; stitching 708 ms; output 7.2 MB H.264 MP4, no audio | Software rendering (hardware acceleration false), capture about 82 ms/frame. First attempt hit a 25-second Chrome Headless Shell connection timeout; retry succeeded. 3D result was successful. |
+
+**Comparison captured at the time:** Motion Canvas 39 s / weaker visual quality; HyperFrames 93 s / good visuals with 3D; Remotion 175.5 s / successful 3D. These measurements are from the user's tested workload and hardware, not universal framework benchmarks.
+
+**Decision status: evaluation completed; final framework/adapter selection was not yet declared.** The remaining review criteria were visual quality, motion smoothness, typography (including Bengali text), and fit with Voxora's project/timeline/render architecture. Do not claim a winner or start integration until that decision is documented. FFmpeg remains the final production/encoding pipeline; the motion framework is an upstream scene/animation authoring/render adapter, not a replacement for the whole production pipeline.
+
+Benchmark environment recorded: Windows, Node.js v22.17.0, Intel Core i5-8250U, 8 GB RAM, NVIDIA 940MX 4 GB; HyperFrames diagnostics showed 7.9 GB total memory and 1.1 GB available. Docker was not running. Optional Whisper/TTS/BGM integrations were not installed in the isolated HyperFrames test. HyperFrames project path: `D:\\Voxora-TS02-Benchmark\\hyperframes-test`.
 
 ### 6.4 Sound & Voice System — high-priority product pillar
 
