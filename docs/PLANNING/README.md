@@ -4,63 +4,89 @@
 > Canonical location: docs/PLANNING/README.md
 > Last reconciled: 2026-11-20
 
-## 0. Non-negotiable product outcome
+## 0. Non-negotiable product identity and outcome
 
-Voxora is a **Script-to-Finished-Video Production Studio**. Its defining workflow is not merely image generation or a manual editing timeline. A user supplies a script and selects a channel profile, then invokes **Auto Produce**. Voxora automatically creates narration and turns the script into a complete, synchronized video.
+Voxora is an **AI Video Generator / automated video production application — NOT a video editing application or NLE**. Its primary job is to transform a supplied narration voice track and its matching script into a complete, professional-standard video. The user should not have to manually edit a timeline, attach media scene by scene, or assemble transitions.
 
-### Target automatic workflow
+### Primary user inputs
 
-    Script + Channel Profile + Output Preferences
+1. **Script:** the complete text spoken in the video.
+2. **Narration audio:** the user's already-generated voice track. This is the primary timing and synchronization source.
+3. **Optional visual-direction package:** scene breakdowns, visual prompts, image/video prompts, camera/motion directions, visual references and style guidance. This may be authored by Claude or another assistant and supplied alongside the script/audio.
+4. **Channel profile and output preferences:** visual language, aspect ratio, resolution, frame rate and other production defaults.
+
+Voxora must also support a fallback path when the optional visual-direction package is absent: its own Script Intelligence and AI Production Director derive a scene/shot plan and visual prompts from the script and narration. Claude is a supported upstream planning assistant/workflow, not a mandatory runtime dependency.
+
+The defining action is **Generate Video / Auto Produce**. The output is a complete synchronized video, not an editable project that expects the user to finish editing. Internal timelines, tracks and composition data are implementation details used by the generator and may support optional review/corrections, but they do not redefine Voxora as an editor.
+
+### Target user workflow: supplied voice + script → finished video
+
+    User supplies:
+    Script + Narration Audio
+    + optional Claude visual-direction package
+    + Channel Profile / Output Preferences
                        |
                        v
-              Script Understanding
-          structure / story beats / claims
+          Input Validation & Script/Audio Match
+      language / duration / text-audio consistency
                        |
                        v
-                 Narration Engine
-          voice / pronunciation / pauses / TTS
+            Narration Audio Analysis
+       waveform / silence / sentence boundaries /
+       word timestamps when available / pacing
                        |
                        v
-          Actual Narration Timing Analysis
-       audio duration / word timestamps / sentence
-                  and scene boundaries
+         Visual-Direction Package Ingestion
+       scene prompts / shot prompts / references /
+          camera movement / style / constraints
+                       |
+              (if not supplied)
                        |
                        v
-              Scene & Shot Breakdown
-        visual intent / duration / continuity
+          Script Intelligence + AI Director
+       derive scenes, shots and visual prompts
                        |
                        v
-              AI Production Director
-       chooses suitable production engine per shot
-              /            |             \
-             v             v              v
-         Footage /     Motion &         Audio /
-          Images       Animation       Sound Design
-              \            |             /
+            Voice-led Scene & Shot Timing
+       map every scene/shot to narration intervals
+                       |
                        v
-             Automatic Draft Timeline
-       narration + visuals + transitions + captions
-              + SFX + ambience + background music
+            Automatic Visual Production
+       select / generate / compose images, clips,
+           diagrams, maps and motion graphics
+                       |
+                       v
+              Motion & Sound Direction
+       camera motion / animation / transitions /
+          optional SFX, ambience and BGM
+                       |
+                       v
+            Automatic Video Composition
+       narration-led visuals + captions + sound
                        |
                        v
                 Render Orchestrator
-       dependencies / cache / progress / cancellation
+       dependencies / cache / progress / cancel
                        |
                        v
           FFmpeg Final Assembly, Mix and Mux
                        |
                        v
              Automated Quality Validation
-       duration / sync / frames / audio / missing media
+       voice sync / duration / visual coverage /
+         missing media / black frames / audio
                        |
                        v
-                 Finished Video
+                 Finished Video.mp4
 
-**The script and the generated narration are the source of truth for the edit.** Scene and shot boundaries, visual changes, motion, captions and sound cues must align with what is actually spoken—not only rough word-count estimates. Use word timestamps when a provider supplies them. Otherwise use measured audio duration plus deterministic sentence/segment timing, and label estimated timing honestly.
+**The supplied narration audio is the timing master; the script is the semantic master.** Voxora does not need to generate a replacement voice when the user has supplied narration. It analyses the audio, aligns it with the script, detects pauses and sentence/phrase boundaries, and maps scenes/shots to the real spoken intervals. Use word timestamps when available; otherwise combine audio analysis, forced alignment where practical, and measured segment boundaries. Clearly label uncertain timing. If script and audio materially disagree, report the mismatch and ask for correction or offer a reviewable alignment proposal rather than silently producing an unrelated video.
 
 ### Automation requirements
 
-- Auto Produce must create a complete first draft without requiring the user to manually attach every image, clip, animation, transition or sound cue.
+- The primary path starts from user-supplied narration audio + matching script; TTS generation is optional, not a required first step.
+- Auto Produce creates the complete video without requiring manual timeline editing or scene-by-scene media attachment.
+- Accept an optional structured visual-direction package from Claude/another assistant (scene and shot breakdown, per-shot visual prompts, image/video prompts, camera/motion directions, style references and constraints). Validate and map it to the script/audio rather than blindly trusting it.
+- When that package is absent, the internal Director generates equivalent scene/shot directions and prompts.
 - The Director may use user assets, managed libraries, deterministic templates, procedural graphics and configured generation providers.
 - If a suitable visual cannot be found or generated, use a deliberate profile-compatible fallback (map, diagram, typography, sketch, neutral illustration or clearly marked placeholder), never a silent missing-media gap.
 - Factual visuals retain source/provenance and license notes. AI reconstructions must never be represented as genuine archival footage.
@@ -277,19 +303,19 @@ Do not introduce parallel rendering or silent engine fallback without a separate
 
 This is the main automation milestone. It integrates existing engines; it must not duplicate them.
 
-10.1 Production-plan schema: scenes, shots, narration ranges, visual intent, audio cues and engine choice.  
-10.2 Script understanding and creative treatment from profile.  
-10.3 Automatic scene/shot plan generation.  
-10.4 Automatic narration generation and actual timing alignment.  
-10.5 Automatic visual selection/acquisition/generation per shot.  
+10.1 Production-plan schema: scenes, shots, narration audio ranges, visual prompts, motion directions, audio cues and engine choice.  
+10.2 Import and validate external visual-direction packages (Claude-generated or compatible structured input).  
+10.3 Script/audio alignment and narration-led scene/shot timing.  
+10.4 Internal Script Intelligence fallback: derive scene/shot plan and prompts when no external package is supplied.  
+10.5 Automatic visual selection/acquisition/generation per shot from approved prompts.  
 10.6 Automatic motion/animation/graphics direction per shot.  
-10.7 Automatic SFX/BGM/ambience cue placement and mix intent.  
-10.8 Build a complete draft timeline without manual per-shot placement.  
-10.9 One-click Auto Produce: plan → assets → narration → motion → sound → render → QC.  
-10.10 Review checkpoints and selective regeneration of one scene/shot/track.  
+10.7 Automatic SFX/BGM/ambience cue placement and mix intent, respecting the supplied narration track.  
+10.8 Build the internal composition/timeline automatically; no manual per-shot assembly required.  
+10.9 One-action Generate Video: validate inputs → align voice/script → plan → visuals → motion → sound → render → QC.  
+10.10 Optional review and selective regeneration of a scene/shot; never make editing a prerequisite.  
 10.11 Failure recovery and deterministic rerun from cached successful stages.
 
-**Auto Produce acceptance:** with a valid script, profile and configured available providers/libraries, one user action produces a playable final MP4 with narration, automatically assigned visuals, motion/transitions, sound mix and passing media validation. The user must not manually attach media to every scene. Missing providers/assets yield explicit fallback or actionable errors, never fake success.
+**Generate Video acceptance:** with a matching script + supplied narration audio + profile, and optionally a Claude visual-direction package, one user action produces a playable final MP4. The narration track is preserved as the primary voice track; visuals, scene changes, motion, captions and optional sound design align to its actual timing. Without an external prompt package, Voxora creates the scene/shot prompts itself. No manual timeline editing or per-scene asset attachment is required. Missing providers/assets yield explicit profile-compatible fallback or actionable errors, never fake success.
 
 ### VXP-11 — Hybrid media, documentary, cartoon and specialized workflows (R-8/R-9/R-10)
 
