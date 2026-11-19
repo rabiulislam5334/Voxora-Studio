@@ -6,6 +6,7 @@ import gc
 import os
 import subprocess
 import time
+import threading
 from pathlib import Path
 
 import pytest
@@ -382,6 +383,69 @@ def test_main_window_starts_with_all_sections_and_closes(tmp_path, monkeypatch, 
     assert window.project_session.can_delete_scene(shared_scene.id) is True
     composition._composition_dirty = False
 
+    # Dashboard actions delegate to the real Script workspace; the top-bar shortcut opens Produce.
+    routed = []
+    original_new, original_open = script._on_new_project, script._on_open_project
+    script._on_new_project = lambda: routed.append("new")
+    script._on_open_project = lambda: routed.append("open")
+    window._on_new_project()
+    assert window._current_page == "Script" and routed == ["new"]
+    window._on_open_project()
+    assert window._current_page == "Script" and routed == ["new", "open"]
+    script._on_new_project, script._on_open_project = original_new, original_open
+    window._on_export()
+    assert window._current_page == "Produce"
+    assert window._pages["Produce"]._notebook.nametowidget(window._pages["Produce"]._notebook.select()) is window._pages["Produce"].produce_tab
+    assert window.project_label.cget("text") == script._project.name
     window._toggle_theme()
     window._toggle_theme()
     window._on_close()
+
+
+def test_composition_editor_renders_still_png_from_managed_bound_asset(tmp_path, monkeypatch, real_ffmpeg):
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        pytest.skip(f"No display available: {exc}")
+    from app.core import config as config_module
+    from app.universal.composition import CompositionCanvas, CompositionElement, SceneComposition, VisualTransform
+    from app.universal.composition_workflow import preview_scene_composition
+    from app.universal.models import AssetRef, ScenePlan
+    from PIL import Image
+
+    cfg = AppConfig(root_dir=tmp_path)
+    cfg.ensure_directories()
+    monkeypatch.setattr(config_module, "_config", cfg)
+    from app.ui.main_window import MainWindow
+    window = MainWindow(root)
+    try:
+        script = window._pages["Script"]
+        script._on_new_project()
+        scene = script._project.add_scene(Scene(title="Raster UI scene", text="Still image test"))
+        script._project_manager.mark_dirty()
+        source = png(real_ffmpeg, tmp_path / "bound-source.png", color="red")
+        editor = window._pages["Composition"]
+        asset = editor.library.import_file(source)
+        plan = ScenePlan(scene_id=scene.id, asset_refs=[AssetRef(
+            asset_id=asset.asset_id, kind=asset.kind, path=asset.location, identity=asset.content_sha256,
+        )])
+        script._project.settings["universal"] = {
+            "format_version": 1, "profile_id": None, "scene_plans": {scene.id: plan.to_dict()},
+        }
+        composition = SceneComposition(
+            composition_id=f"composition-{scene.id}", scene_id=scene.id, canvas=CompositionCanvas(32, 16),
+            elements=(CompositionElement(element_id="ui-render-element", asset_id=asset.asset_id,
+                transform=VisualTransform(x=0, y=0, width=1, height=1), fit_mode="stretch"),),
+        )
+        preview = preview_scene_composition(script._project, composition)
+        assert preview.is_valid
+        output = editor._render_png_worker(
+            script._project, composition, preview, tmp_path / "ui-composition.png", threading.Event(),
+        )
+        assert output.is_file() and output.stat().st_size > 0
+        with Image.open(output) as rendered:
+            assert rendered.format == "PNG" and rendered.size == (32, 16)
+            assert rendered.getpixel((16, 8))[:3] == (255, 0, 0)
+        assert editor._render_button.cget("text") == "Render Still PNG…"
+    finally:
+        window._on_close()
