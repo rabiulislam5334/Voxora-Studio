@@ -237,7 +237,12 @@ class VisualGenerationProviderDescriptor:
         _text(self.version, "version", max_length=64)
         if not isinstance(self.capabilities, VisualGenerationProviderCapabilities):
             raise VisualGenerationValidationError("capabilities must be VisualGenerationProviderCapabilities")
-        if isinstance(self.model_ids, (str, bytes)):\n            raise VisualGenerationValidationError("model_ids must be a sequence of model IDs")\n        try:\n            models = tuple(_identifier(item, "model_id", _MODEL_ID) for item in self.model_ids)\n        except TypeError:\n            raise VisualGenerationValidationError("model_ids must be a sequence of model IDs") from None
+        if isinstance(self.model_ids, (str, bytes)):
+            raise VisualGenerationValidationError("model_ids must be a sequence of model IDs")
+        try:
+            models = tuple(_identifier(item, "model_id", _MODEL_ID) for item in self.model_ids)
+        except TypeError:
+            raise VisualGenerationValidationError("model_ids must be a sequence of model IDs") from None
         if len(set(models)) != len(models):
             raise VisualGenerationValidationError("model_ids must not contain duplicates")
         object.__setattr__(self, "model_ids", models)
