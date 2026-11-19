@@ -45,7 +45,7 @@ def composite_transition_frames(
         # The existing timeline can quantize a short overlap to one output
         # frame. Preserve the legacy crossfade midpoint for that single frame.
         if isinstance(frame_count, int) and not isinstance(frame_count, bool) and frame_count == 1:
-            if isinstance(frame_index, bool) or frame_index != 0:
+            if isinstance(frame_index, bool) or not isinstance(frame_index, int) or frame_index != 0:
                 raise TransitionValidationError("frame_index must be zero for a one-frame transition")
             progress = 0.5
         else:
