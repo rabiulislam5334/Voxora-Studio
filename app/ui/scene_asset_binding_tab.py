@@ -54,11 +54,16 @@ def format_continuity_report(report) -> str:
 class SceneAssetBindingTab(ttk.Frame):
     """Explicit project/scene binding UI backed by the reviewed domain APIs."""
 
-    def __init__(self, master, *, config, palette) -> None:
+    def __init__(
+        self, master, *, config, palette, project_manager=None,
+        on_open_project=None, on_save_project=None,
+    ) -> None:
         super().__init__(master, style="App.TFrame", padding=18)
         self.app_config = config
         self.palette = palette
-        self.project_manager = ProjectManager()
+        self.project_manager = project_manager or ProjectManager()
+        self._on_open_project_callback = on_open_project
+        self._on_save_project_callback = on_save_project
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
         self.catalog = None
         self._preview = None
@@ -80,7 +85,7 @@ class SceneAssetBindingTab(ttk.Frame):
             row=1, column=0, sticky="w", pady=(0, 12))
         toolbar = ttk.Frame(self, style="App.TFrame")
         toolbar.grid(row=2, column=0, sticky="new", pady=(0, 10))
-        ttk.Button(toolbar, text="Open Project…", style="Primary.TButton",
+        ttk.Button(toolbar, text="Open in Script", style="Primary.TButton",
                    command=self._open_project).pack(side="left", padx=(0, 8))
         ttk.Button(toolbar, text="Save Project", style="Secondary.TButton",
                    command=self._save_project).pack(side="left", padx=(0, 8))
@@ -182,6 +187,9 @@ class SceneAssetBindingTab(ttk.Frame):
             self._status.set(f"Library unavailable: {exc}")
 
     def _open_project(self):
+        if self._on_open_project_callback is not None:
+            self._on_open_project_callback()
+            return
         if self.project_manager.dirty:
             choice = messagebox.askyesnocancel(
                 "Unsaved project changes",
@@ -213,6 +221,9 @@ class SceneAssetBindingTab(ttk.Frame):
             messagebox.showerror("Project not opened", str(exc), parent=self)
 
     def _save_project(self):
+        if self._on_save_project_callback is not None:
+            self._on_save_project_callback()
+            return
         if self.project_manager.current_path is None:
             messagebox.showinfo("No project path", "Open a saved .voxora project before saving bindings.", parent=self)
             return
@@ -221,6 +232,18 @@ class SceneAssetBindingTab(ttk.Frame):
             self._status.set(f"Project saved: {path}")
         except Exception as exc:
             messagebox.showerror("Project not saved", str(exc), parent=self)
+
+    def refresh_project(self):
+        """Refresh this workspace after the shared application project changes."""
+        self._preview = None
+        self._preview_generated_only = False
+        self._preview_image = None
+        self._populate_scenes()
+        project = self.project_manager.current_project
+        path = self.project_manager.current_path
+        suffix = Path(path).name if path else "Unsaved project"
+        self.project_label.configure(text=f"{project.name} · {suffix}")
+        self._status.set(f"Active project: {project.name}. Select a scene to manage bindings.")
 
     def _populate_scenes(self):
         for item in self.scene_tree.get_children():
@@ -290,8 +313,8 @@ class SceneAssetBindingTab(ttk.Frame):
         self._preview_generated_only = False
         project = self.project_manager.current_project
         scene_id = self._selected_scene_id()
-        if self.project_manager.current_path is None or scene_id is None or self.catalog is None:
-            messagebox.showinfo("Select a project and scene", "Open a project and select a scene first.", parent=self)
+        if scene_id is None or self.catalog is None:
+            messagebox.showinfo("Select a project and scene", "Open or create a project in the Script workspace, then select a scene.", parent=self)
             return
         try:
             role = self.role_var.get().strip() or "visual"
@@ -311,8 +334,8 @@ class SceneAssetBindingTab(ttk.Frame):
         project = self.project_manager.current_project
         scene_id = self._selected_scene_id()
         selected = self.asset_list.curselection()
-        if self.project_manager.current_path is None or scene_id is None or self.catalog is None:
-            messagebox.showinfo("Select a project and scene", "Open a project and select a scene first.", parent=self)
+        if scene_id is None or self.catalog is None:
+            messagebox.showinfo("Select a project and scene", "Open or create a project in the Script workspace, then select a scene.", parent=self)
             return
         if self.character_list.curselection():
             messagebox.showinfo("Generated images only", "Clear character selections before previewing generated images.", parent=self)
@@ -363,8 +386,8 @@ class SceneAssetBindingTab(ttk.Frame):
             messagebox.showerror("Bindings not applied", str(exc), parent=self)
 
     def _analyze_continuity(self):
-        if self.project_manager.current_path is None or self.catalog is None:
-            messagebox.showinfo("Open a project", "Open a project before running continuity analysis.", parent=self)
+        if self.catalog is None:
+            messagebox.showinfo("Open a project", "Open or create a project in the Script workspace first.", parent=self)
             return
         try:
             report = analyze_asset_continuity(self.project_manager.current_project, self.catalog)
