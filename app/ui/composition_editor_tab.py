@@ -314,6 +314,7 @@ class CompositionEditorTab(ttk.Frame):
         self.asset_combo["values"] = ()
         self.asset_var.set("")
         self._populate_layers()
+        self._update_properties()
         self._redraw()
         suffix = self.project_manager.current_path.name if self.project_manager.current_path else "Unsaved project"
         self._status.set(f"Active project: {project.name} · {suffix}. Choose a scene.")
