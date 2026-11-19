@@ -60,10 +60,10 @@ def test_raster_adapter_declares_png_only_cpu_composition_capabilities():
     adapter = RasterCompositionAdapter()
     assert adapter.descriptor.engine_id == "raster"
     assert adapter.descriptor.capabilities.output_formats == ("png",)
-    assert adapter.descriptor.capabilities.asset_kinds == ("image",)
+    assert adapter.descriptor.capabilities.asset_kinds == ("image", "generated-image")
     assert adapter.descriptor.capabilities.requires_gpu is False
     assert adapter.composition_capabilities == CompositionRenderCapabilities(
-        output_formats=("png",), asset_kinds=("image",),
+        output_formats=("png",), asset_kinds=("image", "generated-image"),
         supports_layers=True, supports_transforms=True,
         supports_opacity=True, supports_rotation=True,
     )
@@ -171,3 +171,49 @@ def test_adapter_rejects_unadvertised_output_format(tmp_path):
             composition, asset_paths=assets,
             destination=tmp_path / "wrong.jpg", output_format="jpg",
         )
+
+
+
+def test_bridge_renders_generated_image_asset_kind_after_explicit_approval(tmp_path):
+    asset_path = tmp_path / "generated.png"
+    Image.new("RGBA", (8, 4), (25, 140, 210, 255)).save(asset_path)
+    plan = ScenePlan(
+        scene_id="scene-1",
+        asset_refs=[AssetRef(
+            asset_id="asset-1", kind="generated-image", path=str(asset_path),
+            identity="generated-test-identity",
+        )],
+    )
+    project = Project(
+        id="project-1",
+        scenes=[Scene(id="scene-1", title="Generated image scene")],
+        settings={"universal": {
+            "format_version": 1, "profile_id": None,
+            "scene_plans": {"scene-1": plan.to_dict()},
+        }},
+    )
+    composition = SceneComposition(
+        composition_id="composition-1",
+        scene_id="scene-1",
+        canvas=CompositionCanvas(32, 16),
+        elements=(CompositionElement(
+            element_id="generated-element",
+            asset_id="asset-1",
+            transform=VisualTransform(x=0, y=0, width=1, height=1),
+            fit_mode="stretch",
+        ),),
+    )
+    preview = preview_scene_composition(project, composition)
+    bridge = build_builtin_composition_render_bridge()
+    destination = tmp_path / "generated-output.png"
+
+    output = bridge.render(
+        "raster", project, composition, preview,
+        asset_paths={"asset-1": asset_path},
+        destination=destination,
+        output_format="png",
+        approved=True,
+    )
+
+    with Image.open(output) as image:
+        assert image.getpixel((16, 8)) == (25, 140, 210, 255)
