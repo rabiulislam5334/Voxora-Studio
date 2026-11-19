@@ -22,13 +22,11 @@ logger = get_logger("ui.script_panel")
 class ScriptPanel(ttk.Frame):
     """Script Editor & Scene Management (Phase 3).
 
-    Owns a ProjectManager (its own Project model + file I/O); the editor
-    widgets are a *view* onto whichever scene is currently selected. The
-    model is treated as the continuous source of truth: every keystroke
-    flushes into the selected Scene object immediately (see
-    _flush_editor_to_scene), so there is no separate "did we remember to
-    save before switching" bookkeeping anywhere else in this file -- the
-    model simply never goes stale relative to the widgets.
+    Uses the application-owned ProjectSession when hosted by MainWindow.
+    The editor widgets are a *view* onto whichever scene is currently
+    selected. Every keystroke flushes into the selected Scene object
+    immediately (see _flush_editor_to_scene), keeping the shared model
+    current for the other project-aware pages.
     """
 
     def __init__(
