@@ -15,13 +15,14 @@ from app.models.scene import Scene
 from app.studio.models import StudioState, VideoSettings
 from app.universal import production_workflow
 from app.universal.asset_library import VisualAssetLibrary
+from app.universal.visual_assets import AssetProvenance
 from app.universal.composition import CompositionCanvas, CompositionElement, SceneComposition
 from app.universal.composition_workflow import apply_scene_composition, preview_scene_composition
 from app.universal.models import AssetRef, ScenePlan, UniversalState
 from app.workers.narration import NarrationResult, SceneAudio, SceneRequest
 
 
-def _make_project(tmp_path: Path):
+def _make_project(tmp_path: Path, *, generated_image_scenes=()):
     library = VisualAssetLibrary(tmp_path / "library")
     assets = {}
     for scene_id, color in (
@@ -30,8 +31,15 @@ def _make_project(tmp_path: Path):
     ):
         source = tmp_path / f"{scene_id}.png"
         Image.new("RGBA", (64, 64), color).save(source)
+        is_generated = scene_id in generated_image_scenes
         assets[scene_id] = library.import_file(
-            source, asset_id=f"asset-{scene_id}",
+            source,
+            asset_id=f"asset-{scene_id}",
+            kind="generated-image" if is_generated else "image",
+            provenance=(
+                AssetProvenance(source="generated:stable-diffusion-cpp")
+                if is_generated else None
+            ),
         )
 
     project = Project(
@@ -122,6 +130,59 @@ class _NarrationJob:
             duration_ticks=total_ticks,
         )
 
+
+
+def test_universal_produce_renders_generated_images_through_motion_crossfade_and_audio(tmp_path):
+    async def scenario():
+        generated_scenes = {"scene-1", "scene-2"}
+        project, library = _make_project(
+            tmp_path, generated_image_scenes=generated_scenes,
+        )
+        catalog = {item.asset_id: item for item in library.load_catalog().assets}
+        for scene_id in generated_scenes:
+            asset = catalog[f"asset-{scene_id}"]
+            assert asset.kind == "generated-image"
+            assert asset.provenance is not None
+            assert asset.provenance.source == "generated:stable-diffusion-cpp"
+
+        narration_paths = {
+            scene_id: _write_narration(tmp_path / "narration" / f"{scene_id}.wav")
+            for scene_id in ("scene-1", "scene-2")
+        }
+        destination = tmp_path / "output" / "generated-images.mp4"
+        ffmpeg = FFmpegTool(SettingsStore(tmp_path / "settings.json"))
+        status = ffmpeg.detect()
+        assert status.available, status.message
+
+        result = await production_workflow.run_universal_production(
+            _NarrationJob(narration_paths),
+            [_request("scene-1", 1), _request("scene-2", 2)],
+            project, ffmpeg=ffmpeg, asset_library=library,
+            narration_output_dir=tmp_path / "narration",
+            basename="generated-images", video_destination=destination,
+        )
+
+        assert destination.is_file()
+        assert destination.stat().st_size > 0
+        assert result.render.destination == destination
+        assert result.render.scene_count == 2
+        assert result.render.frame_count == 13
+        assert result.render.fps == 12
+        assert result.render.audio.video_codec == "h264"
+        assert result.render.audio.audio_codec == "aac"
+
+        media = ffmpeg.probe_structured(destination, count_packets=True)
+        video = next(stream for stream in media.streams if stream.codec_type == "video")
+        audio = next(stream for stream in media.streams if stream.codec_type == "audio")
+        assert (video.width, video.height) == (640, 360)
+        assert video.packet_count == 13
+        assert video.avg_frame_rate == "12/1"
+        assert audio.codec_name == "aac"
+        assert media.format_duration_s == pytest.approx(13 / 12, abs=0.04)
+        assert not list(destination.parent.glob(".generated-images.voxora-*.mp4"))
+        assert not list(destination.parent.glob(".voxora-universal-produce-*"))
+
+    asyncio.run(scenario())
 
 def test_universal_produce_does_not_publish_video_when_render_fails(tmp_path, monkeypatch):
     async def scenario():
