@@ -1,21 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import wave
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
+from app.audio.assembler import wav_duration_ticks
 from app.models.project import Project
 from app.models.scene import Scene
 from app.studio.models import StudioState, VideoSettings
+from app.universal import production_workflow
 from app.universal.asset_library import VisualAssetLibrary
 from app.universal.composition import CompositionElement, SceneComposition
 from app.universal.composition_workflow import apply_scene_composition, preview_scene_composition
 from app.universal.models import AssetRef, ScenePlan, UniversalState
-from app.universal import production_workflow
 from app.workers.narration import NarrationResult, SceneAudio, SceneRequest
-from app.audio.assembler import wav_duration_ticks
 
 
 def _make_project(tmp_path: Path):
@@ -61,7 +62,7 @@ def _write_narration(path: Path) -> int:
         output.setnchannels(1)
         output.setsampwidth(2)
         output.setframerate(24000)
-        output.writeframes(b"\\x00\\x00" * 2400)
+        output.writeframes(b"\x00\x00" * 2400)
     return wav_duration_ticks(path)
 
 
@@ -86,35 +87,42 @@ class _NarrationJob:
         )
 
 
-@pytest.mark.asyncio
-async def test_universal_produce_does_not_publish_video_when_render_fails(tmp_path, monkeypatch):
-    project, library = _make_project(tmp_path)
-    narration_wav = tmp_path / "narration" / "scene-1.wav"
-    _write_narration(narration_wav)
-    destination = tmp_path / "output" / "final.mp4"
-    destination.parent.mkdir(parents=True)
+def test_universal_produce_does_not_publish_video_when_render_fails(tmp_path, monkeypatch):
+    async def scenario():
+        project, library = _make_project(tmp_path)
+        narration_wav = tmp_path / "narration" / "scene-1.wav"
+        _write_narration(narration_wav)
+        destination = tmp_path / "output" / "final.mp4"
+        destination.parent.mkdir(parents=True)
 
-    def fail_render(*args, **kwargs):
-        raise production_workflow.ProjectMotionProductionError("simulated encoder validation failure")
+        def fail_render(*args, **kwargs):
+            raise production_workflow.ProjectMotionProductionError(
+                "simulated encoder validation failure"
+            )
 
-    monkeypatch.setattr(
-        production_workflow, "render_project_motion_production", fail_render,
-    )
-
-    request = SceneRequest(
-        scene_id="scene-1", scene_index=1, title="Scene 1",
-        text="A short narration.", voice_id="en-US-BrianNeural",
-        rate=1.0, pitch_hz=0, volume_percent=100,
-        sentence_pause_ms=0, paragraph_pause_ms=0, scene_pause_ms=0,
-    )
-
-    with pytest.raises(production_workflow.ProjectMotionProductionError, match="simulated encoder"):
-        await production_workflow.run_universal_production(
-            _NarrationJob(narration_wav), [request], project,
-            ffmpeg=object(), asset_library=library,
-            narration_output_dir=tmp_path / "narration",
-            basename="final", video_destination=destination,
+        monkeypatch.setattr(
+            production_workflow, "render_project_motion_production", fail_render,
         )
 
-    assert not destination.exists()
-    assert not list(destination.parent.glob(".final.voxora-*.mp4"))
+        request = SceneRequest(
+            scene_id="scene-1", scene_index=1, title="Scene 1",
+            text="A short narration.", voice_id="en-US-BrianNeural",
+            rate=1.0, pitch_hz=0, volume_percent=100,
+            sentence_pause_ms=0, paragraph_pause_ms=0, scene_pause_ms=0,
+        )
+
+        with pytest.raises(
+            production_workflow.ProjectMotionProductionError,
+            match="simulated encoder",
+        ):
+            await production_workflow.run_universal_production(
+                _NarrationJob(narration_wav), [request], project,
+                ffmpeg=object(), asset_library=library,
+                narration_output_dir=tmp_path / "narration",
+                basename="final", video_destination=destination,
+            )
+
+        assert not destination.exists()
+        assert not list(destination.parent.glob(".final.voxora-*.mp4"))
+
+    asyncio.run(scenario())
