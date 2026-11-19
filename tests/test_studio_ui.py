@@ -372,6 +372,16 @@ def test_main_window_starts_with_all_sections_and_closes(tmp_path, monkeypatch, 
     assert scene_assets.scene_tree.exists(shared_scene.id)
     assert shared_scene.id in composition._scene_ids
 
+    # Deleting the scene currently being edited in Composition must ask before
+    # discarding editor-only layout changes.
+    composition._active_scene_id = shared_scene.id
+    composition._composition_dirty = True
+    monkeypatch.setattr("app.ui.main_window.messagebox.askyesno", lambda *args, **kwargs: False)
+    assert window.project_session.can_delete_scene(shared_scene.id) is False
+    monkeypatch.setattr("app.ui.main_window.messagebox.askyesno", lambda *args, **kwargs: True)
+    assert window.project_session.can_delete_scene(shared_scene.id) is True
+    composition._composition_dirty = False
+
     window._toggle_theme()
     window._toggle_theme()
     window._on_close()
