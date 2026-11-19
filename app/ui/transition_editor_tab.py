@@ -175,6 +175,7 @@ class TransitionEditorTab(ttk.Frame):
             video = self.ctx.state.video
             self._mode_var.set("Cut" if video.transition == "cut" else "Overlap")
             self._duration_var.set(f"{video.transition_s:g}")
+            self._duration.state(["!disabled"] if video.transition == "crossfade" else ["disabled"])
             self._tree.delete(*self._tree.get_children())
             for scene in scenes[:-1]:
                 spec = self._resolved(scene.id)
