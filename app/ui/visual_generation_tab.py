@@ -88,15 +88,15 @@ class VisualGenerationTab(ttk.Frame):
         prompt_frame.columnconfigure(0, weight=1)
         self._prompt = tk.Text(
             prompt_frame, height=5, wrap="word",
-            background=palette["field_bg"], foreground=palette["fg"],
-            insertbackground=palette["fg"], relief="flat", padx=8, pady=6,
+            background=self._palette["field_bg"], foreground=self._palette["fg"],
+            insertbackground=self._palette["fg"], relief="flat", padx=8, pady=6,
         )
         self._prompt.grid(row=0, column=0, columnspan=4, sticky="ew")
         ttk.Label(prompt_frame, text="Negative prompt").grid(row=1, column=0, sticky="w", pady=(8, 2))
         self._negative = tk.Text(
             prompt_frame, height=2, wrap="word",
-            background=palette["field_bg"], foreground=palette["fg"],
-            insertbackground=palette["fg"], relief="flat", padx=8, pady=6,
+            background=self._palette["field_bg"], foreground=self._palette["fg"],
+            insertbackground=self._palette["fg"], relief="flat", padx=8, pady=6,
         )
         self._negative.grid(row=2, column=0, columnspan=4, sticky="ew")
         fields = ttk.Frame(prompt_frame, style="App.TFrame")
