@@ -4,9 +4,9 @@ A local-first desktop studio for producing Bengali and English narration and vid
 
 ## Current Phase
 
-**Phase 2 — Production reliability and visual-production foundation (in progress).**
+**Phase 3 — Universal visual-production integration (final integration phases in progress).**
 
-See [Phase 2 status](docs/architecture/PHASE_2_STATUS.md) for completed milestones, remaining hardening work, and exit criteria.
+The current work consolidates the shared project session, local visual-generation workflow, still-image composition, production catalog, and desktop navigation. The final PC acceptance test remains separate from automated CI.
 
 ## Requirements
 
@@ -49,18 +49,24 @@ python -m pytest -q tests
 - Sequential multi-scene execution with progress reporting and cancellation.
 - Audio/video assembly and final-output inspection, including stream, duration, frame-count, timestamp, and synchronization checks.
 - Video segment caching with validation before cached segments are reused.
-- Universal Core scene-plan, engine-resolution, runtime-adapter, and production-bridge contracts, while retaining compatibility with legacy projects.
+- Universal Core scene plans, shared project session, and backward-compatible `.voxora` project persistence.
+- Local Stable Diffusion.cpp image generation with explicit executable/model setup and validated asset-library import.
+- Generated-image scene binding and composition workflows with provenance checks and explicit approval.
+- CPU raster composition rendering for transparent still PNG output; animated MP4 production remains in the separate Produce pipeline.
+- Read-only catalog entries for scene-segment engines, composition renderers, and visual-generation providers.
 
 ## Not yet in scope
 
 - Additional cloud or local TTS provider integrations.
-- A complete visual scene-authoring experience and automatic creation of Universal scene plans.
+- A full project-browser page, centralized application settings page, and subtitle editing workflow.
+- Automatic AI scene planning, multi-provider/cloud visual generation, and automatic scene mutation.
 - Parallel rendering, a render scheduler, automatic engine fallback, and distributed rendering.
 - Commercial packaging and installer workflows.
 
 ## Development
 
 - Keep rendering and network work off the Tk main thread.
+- Keep scene-segment engines, composition renderers, and visual-generation providers as distinct capability contracts.
 - Preserve sequential, deterministic production unless a separately reviewed design changes that constraint.
 - Do not change cache identity, project schema, or timeline behavior without focused compatibility tests.
 - Treat cancellation, temporary-file ownership, and final-output validation as production-safety requirements.

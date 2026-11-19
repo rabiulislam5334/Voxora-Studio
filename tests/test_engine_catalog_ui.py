@@ -27,3 +27,30 @@ def test_catalog_does_not_claim_undeclared_capabilities():
     summary = format_capabilities(EngineCapabilities())
     assert summary.count("Not declared") >= 5
     assert "GPU required: No" in summary
+
+
+from app.universal.adapters.raster import RasterCompositionAdapter
+from app.universal.providers.stable_diffusion_cpp import StableDiffusionCppProvider
+from app.ui.engine_catalog_tab import EngineCatalogTab, format_composition_capabilities, format_provider_capabilities
+
+
+def test_composition_catalog_summary_is_explicitly_still_png_only():
+    summary = format_composition_capabilities(RasterCompositionAdapter())
+    assert "Output formats: png" in summary
+    assert "Output type: Still image" in summary
+    assert "Video output: Not supported" in summary
+    assert "GPU required: No" in summary
+
+
+def test_visual_provider_catalog_summary_exposes_local_provider_limits():
+    descriptor = StableDiffusionCppProvider("", "").descriptor
+    summary = format_provider_capabilities(descriptor)
+    assert "Model profiles: sd15" in summary
+    assert "Maximum dimensions: 512 × 512" in summary
+    assert "Network required: No" in summary
+    assert "API key required: No" in summary
+
+
+def test_catalog_categories_keep_engine_renderer_and_provider_contracts_separate():
+    assert set(EngineCatalogTab.CATEGORY_INFO) == {"category:segments", "category:compositions", "category:providers"}
+    assert "still" in EngineCatalogTab.CATEGORY_INFO["category:compositions"][1].lower()

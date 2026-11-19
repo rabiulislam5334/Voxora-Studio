@@ -1,8 +1,8 @@
 # Phase 3.5.6.9 — Integration Gap Audit
 
 **Audit baseline:** `main` at `8a4835595a914b4f687810bdc6fdb066fe2b3698` (PR #108 merge commit).  
-**Scope:** Read-only inspection of the current repository tree, desktop navigation, project ownership, Universal Core composition/render registries, visual-generation workflow, production workflow, architecture documentation, and related tests.  
-**No source code or project files were changed during this audit.**
+**Scope:** Historical read-only inspection of the repository before Phase 3.5.6.10.  
+**Status update:** The shared project-session finding was implemented in PR #111. The remaining renderer, catalog, navigation, and documentation findings are addressed by the combined Phase 3.5.6.11–3.5.6.12 delivery. This document remains a historical audit baseline, not a statement of current main-branch status.
 
 ## Executive summary
 
