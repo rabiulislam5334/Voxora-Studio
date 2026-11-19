@@ -161,6 +161,7 @@ class MainWindow:
             project_manager=self.project_manager,
             on_open_project=lambda: self._show_page("Script"),
             on_save_project=self._pages["Script"].save_project,
+            on_project_dirty=self._pages["Script"].refresh_project_status,
         )
         page.grid(row=0, column=0, sticky="nsew")
         return page
