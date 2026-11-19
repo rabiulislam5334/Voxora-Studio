@@ -362,10 +362,15 @@ def test_main_window_starts_with_all_sections_and_closes(tmp_path, monkeypatch, 
     assert composition.project_manager is window.project_session.manager
 
     script._on_new_project()
+    shared_scene = script._project.add_scene(Scene(title="Shared session scene"))
+    script._project_manager.mark_dirty()
+    script._rebuild_tree_rows()
     window._show_page("Scene Assets")
     window._show_page("Composition")
     assert scene_assets.project_manager.current_project is script._project
     assert composition.project_manager.current_project is script._project
+    assert scene_assets.scene_tree.exists(shared_scene.id)
+    assert shared_scene.id in composition._scene_ids
 
     window._toggle_theme()
     window._toggle_theme()
