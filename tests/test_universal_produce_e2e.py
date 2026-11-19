@@ -77,14 +77,14 @@ def _make_project(tmp_path: Path):
     return project, library
 
 
-def _write_narration(path: Path) -> int:
+def _write_narration(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as output:
         output.setnchannels(1)
         output.setsampwidth(2)
         output.setframerate(24000)
         output.writeframes(b"\x00\x00" * 2400)
-    return wav_duration_ticks(path)
+    return path
 
 
 def _request(scene_id: str, scene_index: int) -> SceneRequest:
