@@ -91,6 +91,14 @@ def test_invalid_requests_are_rejected(overrides):
         make_request(**overrides)
 
 
+def test_request_deserialization_rejects_string_sequences():
+    payload = make_request().to_dict()
+    payload["style_tags"] = "not-a-list"
+
+    with pytest.raises(VisualGenerationValidationError, match="sequence"):
+        VisualGenerationRequest.from_dict(payload)
+
+
 def test_request_rejects_unknown_schema_version():
     payload = make_request().to_dict()
     payload["request_version"] = 2
@@ -106,6 +114,11 @@ def test_provider_capabilities_validate_resource_limits_and_flags():
         VisualGenerationProviderCapabilities(supports_seed="yes")
     with pytest.raises(VisualGenerationValidationError):
         VisualGenerationProviderCapabilities(output_formats=("webp",))
+
+
+def test_provider_descriptor_rejects_string_model_sequence():
+    with pytest.raises(VisualGenerationValidationError, match="sequence"):
+        make_provider(model_ids="not-a-list")
 
 
 def test_provider_compatibility_accepts_matching_request():
