@@ -52,7 +52,7 @@ class VisualGenerationTab(ttk.Frame):
 
     def _build(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(4, weight=1)
+        self.rowconfigure(3, weight=1)
         ttk.Label(self, text="Local Image Generation", style="PageTitle.TLabel").grid(
             row=0, column=0, sticky="w", pady=(0, 4)
         )
