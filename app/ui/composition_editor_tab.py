@@ -97,7 +97,7 @@ class CompositionEditorTab(ttk.Frame):
         toolbar.grid(row=2, column=0, sticky="new", pady=(0, 8))
         for column in range(5):
             toolbar.columnconfigure(column, weight=0)
-        ttk.Button(toolbar, text="Open in Script", style="Primary.TButton",
+        ttk.Button(toolbar, text="Open Project in Script", style="Primary.TButton",
                    command=self._open_project).grid(row=0, column=0, padx=(0, 6))
         ttk.Button(toolbar, text="Save Project", style="Secondary.TButton",
                    command=self._save_project).grid(row=0, column=1, padx=6)
