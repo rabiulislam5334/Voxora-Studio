@@ -52,7 +52,7 @@ class CompositionEditorTab(ttk.Frame):
 
     def __init__(
         self, master, *, config, palette, project_manager=None,
-        on_open_project=None, on_save_project=None,
+        on_open_project=None, on_save_project=None, on_project_dirty=None,
     ) -> None:
         super().__init__(master, style="App.TFrame", padding=16)
         self.config = config
@@ -60,6 +60,7 @@ class CompositionEditorTab(ttk.Frame):
         self.project_manager = project_manager or ProjectManager()
         self._on_open_project_callback = on_open_project
         self._on_save_project_callback = on_save_project
+        self._on_project_dirty_callback = on_project_dirty or (lambda: None)
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
         self.catalog = None
         self.composition = None
@@ -294,12 +295,6 @@ class CompositionEditorTab(ttk.Frame):
             parent=self,
         ):
             return False
-        self._composition_dirty = False
-        self.composition = None
-        self.preview = None
-        self._active_scene_id = None
-        self._selected_element_id = None
-        self._clear_canvas()
         return True
 
     def refresh_project(self):
@@ -784,6 +779,7 @@ class CompositionEditorTab(ttk.Frame):
             apply_scene_composition(self.project_manager.current_project,
                                     self.composition, self.preview, approved=True)
             self.project_manager.mark_dirty()
+            self._on_project_dirty_callback()
             self.preview = None
             self._composition_dirty = False
             self._status.set("Composition applied in memory. Use Save Project to persist the .voxora file.")
