@@ -36,13 +36,19 @@ class ScriptPanel(ttk.Frame):
         config: AppConfig,
         palette: dict,
         on_status: Optional[callable] = None,
+        project_manager: Optional[ProjectManager] = None,
+        on_project_changed: Optional[callable] = None,
+        before_project_change: Optional[callable] = None,
     ) -> None:
         super().__init__(master, style="App.TFrame")
         self._config = config
         self._palette = palette
         self._on_status = on_status or (lambda text: None)
-
-        self._project_manager = ProjectManager()
+        # MainWindow injects one application-owned manager shared by every
+        # project workspace. Standalone ScriptPanel use remains supported.
+        self._project_manager = project_manager or ProjectManager()
+        self._on_project_changed = on_project_changed or (lambda: None)
+        self._before_project_change = before_project_change or (lambda: True)
         self._selected_scene_id: Optional[str] = None
 
         self._build_layout()
@@ -525,6 +531,8 @@ class ScriptPanel(ttk.Frame):
 
     def _on_new_project(self) -> None:
         self._flush_editor_to_scene()
+        if not self._before_project_change():
+            return
         if not self._confirm_discard_if_dirty():
             return
         self._project_manager.new_project()
@@ -533,10 +541,13 @@ class ScriptPanel(ttk.Frame):
         self._clear_editor()
         self._refresh_status_bar()
         self._refresh_scene_buttons_state()
+        self._on_project_changed()
         self._on_status("New project created.")
 
     def _on_open_project(self) -> None:
         self._flush_editor_to_scene()
+        if not self._before_project_change():
+            return
         if not self._confirm_discard_if_dirty():
             return
         path = filedialog.askopenfilename(
@@ -556,7 +567,12 @@ class ScriptPanel(ttk.Frame):
         scenes = sorted(self._project.scenes, key=lambda s: s.order)
         self._select_scene_in_tree(scenes[0].id if scenes else None)
         self._refresh_status_bar()
+        self._on_project_changed()
         self._on_status(f"Opened {Path(path).name}")
+
+    def save_project(self) -> None:
+        """Save the application-wide active project from any workspace."""
+        self._on_save_project()
 
     def _on_save_project(self) -> None:
         self._flush_editor_to_scene()
