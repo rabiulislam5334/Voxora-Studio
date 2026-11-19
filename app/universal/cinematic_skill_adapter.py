@@ -14,6 +14,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Callable, Optional
 
 from PIL import Image
@@ -83,6 +84,20 @@ def _renderer_factory():
     return Renderer
 
 
+def _prepare_project_context(project_dir: Path):
+    """Create the board textures required by the upstream Film look definitions."""
+    prep = project_dir / "assets" / "prep"
+    prep.mkdir(parents=True, exist_ok=True)
+    try:
+        from app.universal.cinematic_skill.prep_assets import textures
+        textures(prep)
+    except (ImportError, OSError, RuntimeError, ValueError) as exc:
+        raise CinematicSkillUnavailableError(
+            f"could not prepare local Cinematic Skill board textures: {exc}"
+        ) from exc
+    return SimpleNamespace(dir=project_dir, prep=prep)
+
+
 class CinematicSkillRenderCoordinator:
     """Render one upstream Film sequentially, then encode through Voxora FFmpeg.
 
@@ -104,6 +119,7 @@ class CinematicSkillRenderCoordinator:
         self._encoder = encoder or FFmpegFrameSequenceEncoder()
         if not callable(getattr(self._encoder, "encode", None)):
             raise TypeError("encoder must provide an encode(sequence, destination) method")
+        self._uses_upstream_renderer = renderer_factory is None
         self._renderer_factory = renderer_factory or _renderer_factory
         for name, value in (
             ("max_width", max_width),
@@ -166,14 +182,6 @@ class CinematicSkillRenderCoordinator:
             )
         target.parent.mkdir(parents=True, exist_ok=True)
 
-        try:
-            renderer_type = self._renderer_factory()
-            renderer = renderer_type(film, width=width, height=height, doc=doc)
-        except CinematicSkillUnavailableError:
-            raise
-        except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
-            raise CinematicSkillRenderError(f"could not initialise Cinematic Skill renderer: {exc}") from exc
-
         staging = Path(tempfile.mkdtemp(prefix=".voxora-cinematic-", dir=str(target.parent)))
         frames_dir = staging / "frames"
         frames_dir.mkdir()
@@ -181,9 +189,24 @@ class CinematicSkillRenderCoordinator:
         frame_paths: list[Path] = []
 
         try:
+            render_doc = doc
+            if self._uses_upstream_renderer and render_doc is None:
+                render_doc = _prepare_project_context(staging / "project")
+            try:
+                renderer_type = self._renderer_factory()
+                renderer = renderer_type(film, width=width, height=height, doc=render_doc)
+            except CinematicSkillUnavailableError:
+                raise
+            except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                raise CinematicSkillRenderError(
+                    f"could not initialise Cinematic Skill renderer: {exc}"
+                ) from exc
+
             for index in range(frame_count):
                 if _is_cancelled(cancel):
-                    raise CinematicSkillRenderCancelledError("Cinematic Skill rendering was cancelled")
+                    raise CinematicSkillRenderCancelledError(
+                        "Cinematic Skill rendering was cancelled"
+                    )
                 try:
                     frame = renderer.frame(index)
                     if isinstance(frame, Image.Image):
@@ -201,6 +224,10 @@ class CinematicSkillRenderCoordinator:
                         image.close()
                 except CinematicSkillRenderError:
                     raise
+                except SystemExit as exc:
+                    raise CinematicSkillRenderError(
+                        f"Cinematic Skill scene is not renderable: {exc}"
+                    ) from exc
                 except Exception as exc:
                     raise CinematicSkillRenderError(
                         f"Cinematic Skill failed at frame {index}: {exc}"
@@ -214,7 +241,9 @@ class CinematicSkillRenderCoordinator:
                     )
 
             if _is_cancelled(cancel):
-                raise CinematicSkillRenderCancelledError("Cinematic Skill rendering was cancelled")
+                raise CinematicSkillRenderCancelledError(
+                    "Cinematic Skill rendering was cancelled"
+                )
 
             sequence = FrameSequence(tuple(frame_paths), fps)
 
@@ -233,12 +262,18 @@ class CinematicSkillRenderCoordinator:
             except FrameSequenceCancelledError as exc:
                 raise CinematicSkillRenderCancelledError(str(exc)) from exc
             except FrameSequenceError as exc:
-                raise CinematicSkillRenderError(f"FFmpeg frame encoding failed: {exc}") from exc
+                raise CinematicSkillRenderError(
+                    f"FFmpeg frame encoding failed: {exc}"
+                ) from exc
 
             if _is_cancelled(cancel):
-                raise CinematicSkillRenderCancelledError("Cinematic Skill render was cancelled")
+                raise CinematicSkillRenderCancelledError(
+                    "Cinematic Skill render was cancelled"
+                )
             if not silent_video.is_file() or silent_video.stat().st_size <= 0:
-                raise CinematicSkillRenderError("FFmpeg encoder did not produce a non-empty MP4")
+                raise CinematicSkillRenderError(
+                    "FFmpeg encoder did not produce a non-empty MP4"
+                )
 
             digest = hashlib.sha256()
             with silent_video.open("rb") as stream:
@@ -268,7 +303,5 @@ class CinematicSkillRenderCoordinator:
                 output_sha256=digest.hexdigest(),
                 codec=getattr(encoded, "codec", "h264"),
             )
-        except CinematicSkillRenderCancelledError:
-            raise
         finally:
             shutil.rmtree(staging, ignore_errors=True)
