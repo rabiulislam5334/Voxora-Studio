@@ -348,6 +348,20 @@ class CompositionEditorTab(ttk.Frame):
             self._cancel_render_button.configure(state="disabled")
             self._status.set("Cancelling composition render…")
 
+    def confirm_close(self) -> bool:
+        if not self._rendering:
+            return True
+        return messagebox.askyesno(
+            "Composition render in progress",
+            "A still-image render is running. Cancel it and close Voxora?",
+            parent=self,
+        )
+
+    def shutdown(self) -> None:
+        # Signal the worker before MainWindow shuts down the shared AsyncBridge.
+        if self._render_cancel_event is not None:
+            self._render_cancel_event.set()
+
     def _load_catalog(self):
         try:
             self.catalog = self.library.load_catalog()
