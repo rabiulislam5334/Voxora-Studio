@@ -239,6 +239,9 @@ class SceneAssetBindingTab(ttk.Frame):
         self._preview = None
         self._preview_generated_only = False
         self._preview_image = None
+        self.asset_list.selection_clear(0, "end")
+        self.character_list.selection_clear(0, "end")
+        self.asset_preview.configure(image="", text="Select an asset to preview")
         self._populate_scenes()
         project = self.project_manager.current_project
         path = self.project_manager.current_path
