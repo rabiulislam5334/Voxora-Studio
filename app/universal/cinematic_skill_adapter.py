@@ -325,6 +325,10 @@ class CinematicSkillRenderCoordinator:
                         on_progress=mux_progress if on_progress else None,
                     )
                 except Exception as exc:
+                    if _is_cancelled(cancel):
+                        raise CinematicSkillRenderCancelledError(
+                            "Cinematic Skill narration mux was cancelled"
+                        ) from exc
                     raise CinematicSkillRenderError(
                         f"Voxora narration/audio mux failed: {exc}"
                     ) from exc
