@@ -32,3 +32,22 @@ def test_guard_exception_fails_closed():
 
     session.add_change_guard(broken_guard)
     assert session.can_replace_project() is False
+
+
+def test_scene_delete_guard_can_block_deletion():
+    session = ProjectSession()
+    checked = []
+    session.add_scene_delete_guard(lambda scene_id: checked.append(scene_id) or False)
+
+    assert session.can_delete_scene("scene-1") is False
+    assert checked == ["scene-1"]
+
+
+def test_scene_delete_guard_exception_fails_closed():
+    session = ProjectSession()
+
+    def broken_guard(_scene_id):
+        raise RuntimeError("dialog failed")
+
+    session.add_scene_delete_guard(broken_guard)
+    assert session.can_delete_scene("scene-1") is False
