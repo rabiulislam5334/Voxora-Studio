@@ -84,6 +84,7 @@ class StudioPanel(ttk.Frame):
         self._tabs = {
             "voice": self.voice, "audio": self.audio_tab, "scenes": self.scenes_tab,
             "video": self.video_tab, "produce": self.produce_tab, "profiles": self.profile_tab,
+            "transitions": self.transitions_tab,
         }
         for key, label in (("voice", "Voice & Narration"), ("audio", "Audio & Music"),
                            ("scenes", "Scenes & Timeline"), ("video", "Video Settings"), ("produce", "Produce"),
