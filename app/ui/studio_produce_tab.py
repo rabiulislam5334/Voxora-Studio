@@ -146,7 +146,8 @@ class ProduceTab(ttk.Frame):
         issues = validate_production(
             scenes, self._ctx.state,
             ffmpeg_ready=voice.ffmpeg_ready(), voice_selected=bool(voice.selected_voice_id()),
-            render_video=self._video_var.get(), export_audio=self._audio_var.get(),
+            render_video=self._video_var.get() and not self._universal_var.get(),
+            export_audio=self._audio_var.get() or self._universal_var.get(),
         )
         if self._universal_var.get() and not self._video_var.get():
             issues.append(ValidationIssue(ERROR, "Universal motion workflow requires MP4 video export."))
