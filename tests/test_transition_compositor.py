@@ -11,10 +11,10 @@ from app.universal.transition_compositor import (
 from app.universal.transitions import TransitionSpec
 
 
-def _frames():
+def _frames(size=(4, 4)):
     return (
-        Image.new("RGBA", (4, 4), (255, 0, 0, 255)),
-        Image.new("RGBA", (4, 4), (0, 0, 255, 255)),
+        Image.new("RGBA", size, (255, 0, 0, 255)),
+        Image.new("RGBA", size, (0, 0, 255, 255)),
     )
 
 
@@ -132,7 +132,7 @@ def test_advanced_transition_frames_encode_to_verified_mp4(tmp_path, effect):
     ffprobe = shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
         pytest.skip("FFmpeg and FFprobe are required for this integration test")
-    outgoing, incoming = _frames()
+    outgoing, incoming = _frames((16, 16))
     paths = []
     try:
         spec = (TransitionSpec(effect="dip_to_color", duration_ticks=10, color_rgb=(8, 16, 24))
@@ -154,7 +154,7 @@ def test_advanced_transition_frames_encode_to_verified_mp4(tmp_path, effect):
 
     assert result.frame_count == 5
     assert result.fps == 5
-    assert result.width == 4 and result.height == 4
+    assert result.width == 16 and result.height == 16
     assert result.codec == "h264"
     assert result.duration_seconds == pytest.approx(1.0)
 
