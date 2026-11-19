@@ -201,7 +201,7 @@ Exit: original requirements are traceable; no phase starts from an isolated chat
 02.8 Caption layout/readability: profile-aware typography, line length, reading speed, safe margins, speaker labels/highlight modes and configurable caption-off export.
 02.9 Caption QC: missing/duplicated words, overlap, timing drift, punctuation, clipping and font fallback.
 
-**Existing foundation:** Edge TTS provider, voice discovery/preview, narration parsing, pause handling, chunking, narration generation and audio assembly. Do not rewrite these. First inventory exact gaps and preserve tested behavior.
+**Existing foundation:** Edge TTS provider, voice discovery/preview, narration parsing, pause handling, chunking, narration generation and audio assembly. Do not rewrite these. First inventory exact gaps and preserve tested behavior. **Scheduling boundary:** keep the current Edge TTS implementation available, but defer advanced Bengali TTS quality work (Bangladesh-accented male voice tuning, Bengali text normalization, pronunciation dictionary, narration presets, long-form voice quality controls and dedicated Bengali audio QC) to the final VXP-14 stage. Do not pull this work forward into VXP-02 or make it a dependency of automatic video generation.
 
 ### VXP-03 — Channel profiles and creative rules (R-3; SC-08)
 
@@ -378,6 +378,22 @@ All these workflows reuse the same Core and render/audio systems; they are not s
 
 Target hardware: Windows 10, Intel i5-8250U, 8 GB RAM, NVIDIA 940MX 4 GB + Intel UHD 620, 1 TB HDD. Prefer sequential jobs, low-resolution previews, lazy loading, bounded caches and CPU fallback. Do not promise high-end 3D or local video diffusion on this machine.
 
+### VXP-14 — Advanced Bengali TTS and natural male narration (FINAL DEFERRED WORKSTREAM)
+
+**Priority rule: this is the final planned enhancement workstream, not a prerequisite for the core video generator.** Do not begin VXP-14 until the end-to-end Auto Produce path, AI Production Director, required visual production/animation adapters, final rendering and their target-PC acceptance priorities have been addressed. This workstream must not delay or block the script + supplied narration audio → finished video outcome.
+
+14.1 Preserve and reuse the existing Edge TTS provider, voice discovery/preview, narration parser, pause handling, chunking and audio assembly; no duplicate narration engine.  
+14.2 Evaluate the free bn-BD-PradeepNeural Bangladesh-accented male voice as the primary candidate, subject to availability and listening-based quality acceptance.  
+14.3 Bengali script normalization for numbers, dates, abbreviations, punctuation, sentence boundaries and mixed Bengali/English terms.  
+14.4 User-editable Bengali pronunciation dictionary for names, places, scientific terms and Islamic/Arabic vocabulary.  
+14.5 Narration presets for documentary, storytelling, educational and respectful Islamic narration; expose only controls supported by the provider.  
+14.6 Long-form narration reliability: sentence-aware chunking, stable joins, natural pauses, selective retry, cache and export validation.  
+14.7 Bengali speech quality checks and a repeatable listening benchmark for pronunciation, prosody, pacing, clipping, omissions and long-form consistency.  
+14.8 Keep the solution free-first and API-key-free where practical; disclose online-service dependence, access limits and policy changes. Do not assume Edge TTS is a guaranteed unlimited or permanent public API.  
+14.9 Treat offline/local Bengali models as optional future research only after license, commercial-use rights, memory use and target-PC performance are verified.
+
+**Acceptance boundary:** existing Edge TTS workflows remain functional throughout the project. VXP-14 is complete only when the enhanced Bengali male narration is measurably better on a representative listening set, long-form generation is reliable, and no paid API is required for the accepted free-first path.
+
 ## 5. Completed-work registry — do not rebuild
 
 This registry records delivered PR scope, not completion of the entire associated product system.
@@ -454,6 +470,7 @@ Exact PR mapping for some older foundations still needs Git-history reconciliati
 - Documentary source workflow, map/data graphics, cartoon/character animation tiers and colorization.
 - Real Stable Diffusion inference and sustained target-PC performance acceptance.
 - Installer/packaging/release hardening.
+- Advanced natural Bengali male TTS enhancement beyond the existing Edge TTS foundation; intentionally deferred to final VXP-14.
 
 ## 6. Open decision and technical-spike register
 
@@ -534,6 +551,7 @@ A phase is DONE only when:
 8. Design Sound & Voice System contracts and the smallest testable vertical slices.
 9. Define the Auto Produce production-plan schema and end-to-end acceptance fixture.
 10. Implement only the next approved small phase.
+11. After the core automatic video-generation workflow and its visual/animation/rendering acceptance priorities, schedule VXP-14 as the final deferred workstream; do not advance Bengali TTS ahead of those priorities.
 
 Do not start an unrelated feature phase while VXP-00 traceability and the next dependency decision are unresolved.
 
