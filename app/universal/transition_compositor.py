@@ -34,6 +34,8 @@ def composite_transition_frames(
         raise TransitionCompositorError("transition frames must have identical dimensions")
     if outgoing.mode != incoming.mode:
         raise TransitionCompositorError("transition frames must have identical image modes")
+    if outgoing.mode not in {"RGB", "RGBA"}:
+        raise TransitionCompositorError("transition frames must use RGB or RGBA mode")
     if not isinstance(spec, TransitionSpec):
         raise TransitionCompositorError("spec must be a validated TransitionSpec")
     if spec.effect == "cut":
