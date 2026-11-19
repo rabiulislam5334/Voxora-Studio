@@ -546,14 +546,14 @@ class ScriptPanel(ttk.Frame):
 
     def _on_open_project(self) -> None:
         self._flush_editor_to_scene()
-        if not self._before_project_change():
-            return
         if not self._confirm_discard_if_dirty():
             return
         path = filedialog.askopenfilename(
             title="Open Project", filetypes=[("Voxora Project", f"*{PROJECT_EXTENSION}"), ("All Files", "*.*")]
         )
         if not path:
+            return
+        if not self._before_project_change():
             return
         try:
             self._project_manager.open(Path(path))
@@ -702,6 +702,10 @@ class ScriptPanel(ttk.Frame):
 
     def mark_project_dirty(self) -> None:
         self._mark_dirty()
+
+    def refresh_project_status(self) -> None:
+        """Refresh Script's dirty/saved indicators after another workspace edits the project."""
+        self._refresh_status_bar()
 
     def get_scenes(self) -> List[Scene]:
         """All scenes in order, with the editor's latest text flushed in."""
