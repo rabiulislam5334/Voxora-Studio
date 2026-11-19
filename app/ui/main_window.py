@@ -119,6 +119,7 @@ class MainWindow:
         # Script first: the studio workspace reads scenes from it.
         self._pages["Script"] = self._build_script_page()
         self.project_session.add_change_guard(self._confirm_composition_discard)
+        self.project_session.add_scene_delete_guard(self._confirm_composition_scene_delete)
         # One workspace (tabs) behind five sidebar entries: Voice, Audio,
         # Timeline, Video, Produce. The same panel object serves all of them.
         studio = self._build_studio_page(script_source=self._pages["Script"])
@@ -242,6 +243,21 @@ class MainWindow:
             "Discard composition edits",
             "The Composition page has unapplied layout edits. Discard them before "
             "switching projects?",
+            parent=self.root,
+        )
+
+    def _confirm_composition_scene_delete(self, scene_id: str) -> bool:
+        composition = self._pages.get("Composition")
+        if (
+            composition is None
+            or not getattr(composition, "_composition_dirty", False)
+            or getattr(composition, "_active_scene_id", None) != scene_id
+        ):
+            return True
+        return messagebox.askyesno(
+            "Discard composition edits",
+            "The scene being deleted has unapplied composition edits. "
+            "Discard them before deleting this scene?",
             parent=self.root,
         )
 
