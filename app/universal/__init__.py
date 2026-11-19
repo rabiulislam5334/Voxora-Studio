@@ -493,3 +493,24 @@ __all__ += [
     "TransitionCompositorError",
     "composite_transition_frames",
 ]
+
+
+from app.universal.visual_generation import (
+    VISUAL_GENERATION_PROVIDER_VERSION,
+    VISUAL_GENERATION_REQUEST_VERSION,
+    VisualGenerationProviderCapabilities,
+    VisualGenerationProviderDescriptor,
+    VisualGenerationProviderRegistry,
+    VisualGenerationRequest,
+    VisualGenerationValidationError,
+)
+
+__all__ += [
+    "VISUAL_GENERATION_PROVIDER_VERSION",
+    "VISUAL_GENERATION_REQUEST_VERSION",
+    "VisualGenerationProviderCapabilities",
+    "VisualGenerationProviderDescriptor",
+    "VisualGenerationProviderRegistry",
+    "VisualGenerationRequest",
+    "VisualGenerationValidationError",
+]
