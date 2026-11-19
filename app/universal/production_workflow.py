@@ -432,3 +432,180 @@ __all__ = [
     "build_project_motion_production_plan",
     "render_project_motion_production",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Narration → plan → motion render orchestration used by the desktop Produce tab
+# ---------------------------------------------------------------------------
+
+import asyncio
+import os
+import shutil
+import uuid
+from dataclasses import replace
+from decimal import Decimal
+
+from app.core.timebase import seconds_to_ticks
+from app.workers.narration import NarrationJob, NarrationResult, SceneRequest
+
+
+@dataclass(frozen=True)
+class UniversalProductionProgress:
+    fraction: float
+    stage: str
+    message: str
+
+
+@dataclass(frozen=True)
+class UniversalProductionResult:
+    narration: NarrationResult
+    render: MotionTimelineRenderResult
+    audio_path: Optional[Path]
+    warnings: tuple[str, ...]
+
+
+async def run_universal_production(
+    narration_job: NarrationJob,
+    requests: tuple[SceneRequest, ...] | list[SceneRequest],
+    project: Project,
+    ffmpeg: FFmpegTool,
+    asset_library: VisualAssetLibrary,
+    narration_output_dir: Path,
+    basename: str,
+    video_destination: Path,
+    *,
+    audio_destination: Optional[Path] = None,
+    audio_format: str = "mp3",
+    overwrite: bool = False,
+    cancel: Optional[CancelToken] = None,
+    on_progress: Optional[Callable[[UniversalProductionProgress], None]] = None,
+) -> UniversalProductionResult:
+    """Run narration generation, plan approval, motion render, and safe publication.
+
+    The user invoking Produce is the explicit render approval. Video is first
+    rendered to a unique sibling staging file; the requested destination is
+    atomically published only after the renderer validates the final MP4.
+    """
+    if not isinstance(project, Project):
+        raise ProjectMotionProductionError("project must be a Project")
+    if not requests:
+        raise ProjectMotionProductionError("at least one scene must contain speakable narration")
+    if audio_format not in ("mp3", "wav"):
+        raise ProjectMotionProductionError("audio_format must be mp3 or wav")
+    if on_progress is not None and not callable(on_progress):
+        raise ProjectMotionProductionError("on_progress must be callable")
+    token = cancel or CancelToken()
+
+    def report(fraction: float, stage: str, message: str) -> None:
+        if on_progress is not None:
+            on_progress(UniversalProductionProgress(
+                max(0.0, min(1.0, fraction)), stage, message,
+            ))
+
+    narration = await narration_job.run(
+        requests,
+        output_dir=Path(narration_output_dir),
+        basename=basename,
+        cancel=token,
+        on_progress=lambda event: report(
+            0.25 * event.fraction, "Narration", event.message,
+        ),
+    )
+    token.raise_if_cancelled("Universal Produce cancelled after narration.")
+
+    durations = {
+        item.scene_id: item.duration_ticks
+        for item in narration.scene_audio
+    }
+    pauses = {
+        item.scene_id: seconds_to_ticks(Decimal(item.pause_ms) / Decimal(1000))
+        for item in narration.scene_audio
+    }
+    report(0.25, "Planning", "Validating saved compositions and generating scene motion.")
+    plan = build_project_motion_production_plan(
+        project, durations, narration_pause_ticks=pauses,
+    )
+    warnings = list(narration.warnings)
+    warnings.extend(
+        item.message for item in plan.composition_plan.diagnostics
+        if item.severity in ("warning", "review")
+    )
+    report(0.28, "Planning", f"Prepared {len(plan.scene_motions)} animated scenes.")
+
+    target = Path(video_destination).expanduser()
+    if target.suffix.lower() != ".mp4":
+        raise ProjectMotionProductionError("video destination must use .mp4")
+    if target.is_symlink() or (target.exists() and not overwrite):
+        raise ProjectMotionProductionError("video destination exists or is a symlink")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    stage = target.with_name(f".{target.stem}.voxora-{uuid.uuid4().hex}.mp4")
+    try:
+        render = await asyncio.to_thread(
+            render_project_motion_production,
+            project,
+            plan,
+            {item.scene_id: item.wav_path for item in narration.scene_audio},
+            durations,
+            stage,
+            ffmpeg,
+            asset_library,
+            narration_pause_ticks=pauses,
+            cancel=token,
+            on_progress=lambda fraction, message: report(
+                0.28 + 0.70 * max(0.0, min(1.0, fraction)),
+                "Rendering", message,
+            ),
+        )
+        token.raise_if_cancelled("Universal Produce cancelled before publishing the MP4.")
+        if target.exists():
+            if not overwrite:
+                raise ProjectMotionProductionError(
+                    "video destination appeared during rendering; refusing to overwrite it"
+                )
+            os.replace(stage, target)
+        else:
+            try:
+                os.link(stage, target)
+            except FileExistsError:
+                raise ProjectMotionProductionError(
+                    "video destination appeared during rendering; refusing to overwrite it"
+                ) from None
+            stage.unlink()
+        render = replace(render, destination=target)
+    finally:
+        stage.unlink(missing_ok=True)
+
+    exported_audio: Optional[Path] = None
+    if audio_destination is not None:
+        audio_target = Path(audio_destination).expanduser()
+        source_audio = narration.mp3_path if audio_format == "mp3" else narration.wav_path
+        if audio_target.suffix.lower() != f".{audio_format}":
+            warnings.append("Audio export was skipped because the destination extension does not match its format.")
+        elif audio_target.is_symlink() or (audio_target.exists() and not overwrite):
+            warnings.append("Audio export was skipped because the destination exists or is a symlink.")
+        else:
+            audio_target.parent.mkdir(parents=True, exist_ok=True)
+            part = audio_target.with_name(f".{audio_target.name}.{uuid.uuid4().hex}.part")
+            try:
+                shutil.copyfile(source_audio, part)
+                if audio_target.exists():
+                    os.replace(part, audio_target)
+                else:
+                    try:
+                        os.link(part, audio_target)
+                    except FileExistsError:
+                        raise FileExistsError("audio destination appeared during export")
+                    part.unlink()
+                exported_audio = audio_target
+            except OSError as exc:
+                warnings.append(f"Audio export failed: {exc}")
+            finally:
+                part.unlink(missing_ok=True)
+
+    report(1.0, "Finished", "Universal motion video export complete.")
+    return UniversalProductionResult(
+        narration=narration,
+        render=render,
+        audio_path=exported_audio,
+        warnings=tuple(warnings),
+    )
