@@ -73,7 +73,7 @@ class CompositionEditorTab(ttk.Frame):
         self._drag_transform = None
         self._canvas_origin = (0, 0)
         self._canvas_size = (960, 540)
-        self._status = tk.StringVar(value="Open a .voxora project to edit a scene composition.")
+        self._status = tk.StringVar(value="Open a project from the Script page to edit a scene composition.")
         self._build()
         self._load_catalog()
 
@@ -223,24 +223,41 @@ class CompositionEditorTab(ttk.Frame):
 
     def refresh_project(self):
         project = self.project_manager.current_project
-        if project is self._project_ref:
-            return
-        self._project_ref = project
+        changed_project = project is not self._project_ref
+        previous_scene_id = self._active_scene_id
         ordered = sorted(project.scenes, key=lambda item: item.order)
         self._scene_ids = [scene.id for scene in ordered]
         self.scene_combo["values"] = [
             f"{scene.title}  [{scene.id}]" for scene in ordered
         ]
-        self.scene_var.set("")
-        self.composition = None
-        self.preview = None
-        self._composition_dirty = False
-        self._active_scene_id = None
-        self._selected_element_id = None
-        self._clear_canvas()
-        self._populate_layers()
+        self._project_ref = project
+
+        if changed_project:
+            self.scene_var.set("")
+            self.composition = None
+            self.preview = None
+            self._composition_dirty = False
+            self._active_scene_id = None
+            self._selected_element_id = None
+            self._clear_canvas()
+            self._populate_layers()
+        elif previous_scene_id in self._scene_ids:
+            self.scene_combo.current(self._scene_ids.index(previous_scene_id))
+        else:
+            # A scene was removed while this page was inactive.
+            self.scene_var.set("")
+            self.composition = None
+            self.preview = None
+            self._composition_dirty = False
+            self._active_scene_id = None
+            self._selected_element_id = None
+            self._clear_canvas()
+            self._populate_layers()
+
         self._status.set(
             f"Active project: {project.name}. Choose a scene to edit its composition."
+            if self._active_scene_id is None
+            else f"Active project: {project.name}. Composition scene is ready."
         )
 
     def _load_scene(self, _event=None):
