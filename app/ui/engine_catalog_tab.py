@@ -98,7 +98,7 @@ class EngineCatalogTab(ttk.Frame):
         self._name = ttk.Label(details, text="Select a capability to inspect its metadata.", style="App.TLabel", wraplength=380)
         self._name.grid(row=1, column=0, sticky="w", pady=(8, 6))
         self._details = tk.Text(details, height=14, wrap="word", state="disabled",
-            background=palette["field_bg"], foreground=palette["fg"], insertbackground=palette["fg"],
+            background=self._palette["field_bg"], foreground=self._palette["fg"], insertbackground=self._palette["fg"],
             relief="flat", padx=9, pady=8)
         self._details.grid(row=2, column=0, sticky="nsew")
         ttk.Label(self, text="Catalog entries are informational only. Production engine/provider choice remains explicit in its own workflow.",
