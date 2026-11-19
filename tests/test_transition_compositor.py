@@ -126,7 +126,8 @@ def test_compositor_rejects_mismatched_frames_and_cut():
         wrong_mode.close()
 
 
-def test_advanced_transition_frames_encode_to_verified_mp4(tmp_path):
+@pytest.mark.parametrize("effect", ["wipe_left", "dip_to_color"])
+def test_advanced_transition_frames_encode_to_verified_mp4(tmp_path, effect):
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
@@ -134,7 +135,8 @@ def test_advanced_transition_frames_encode_to_verified_mp4(tmp_path):
     outgoing, incoming = _frames()
     paths = []
     try:
-        spec = TransitionSpec(effect="wipe_left", duration_ticks=10)
+        spec = (TransitionSpec(effect="dip_to_color", duration_ticks=10, color_rgb=(8, 16, 24))
+                if effect == "dip_to_color" else TransitionSpec(effect=effect, duration_ticks=10))
         for index in range(5):
             frame = composite_transition_frames(outgoing, incoming, spec, index, 5)
             path = tmp_path / f"frame_{index:06d}.png"
