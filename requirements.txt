@@ -2,3 +2,4 @@
 edge-tts>=6.1.9
 pygame>=2.6.1
 mutagen>=1.47.0
+Pillow>=10.0.0
