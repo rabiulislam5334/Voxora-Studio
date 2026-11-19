@@ -329,6 +329,14 @@ def assert_motion_timeline_plan_current(
         composition_plan, scene_motions,
         transition_specs=dict(plan.transition_specs),
     )
+    # Project-derived plans also bind the persisted Transition Editor settings
+    # fingerprint. Preserve that separately validated snapshot while comparing
+    # the motion inputs; assert_project_transition_settings_current() verifies
+    # that the project's current settings still match it.
+    current = replace(
+        current,
+        transition_settings_fingerprint=plan.transition_settings_fingerprint,
+    )
     if current != plan:
         raise MotionTimelinePlanError(
             "motion timeline plan is stale; rebuild and review it before rendering"
