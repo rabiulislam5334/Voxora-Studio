@@ -177,8 +177,8 @@ class VisualGenerationRequest:
             output_format=data.get("output_format", "png"),
             image_count=data.get("image_count", 1),
             seed=data.get("seed"),
-            style_tags=tuple(data.get("style_tags", ())),
-            reference_asset_ids=tuple(data.get("reference_asset_ids", ())),
+            style_tags=data.get("style_tags", ()),
+            reference_asset_ids=data.get("reference_asset_ids", ()),
             metadata=data.get("metadata", {}),
         )
 
@@ -237,7 +237,7 @@ class VisualGenerationProviderDescriptor:
         _text(self.version, "version", max_length=64)
         if not isinstance(self.capabilities, VisualGenerationProviderCapabilities):
             raise VisualGenerationValidationError("capabilities must be VisualGenerationProviderCapabilities")
-        models = tuple(_identifier(item, "model_id", _MODEL_ID) for item in self.model_ids)
+        if isinstance(self.model_ids, (str, bytes)):\n            raise VisualGenerationValidationError("model_ids must be a sequence of model IDs")\n        try:\n            models = tuple(_identifier(item, "model_id", _MODEL_ID) for item in self.model_ids)\n        except TypeError:\n            raise VisualGenerationValidationError("model_ids must be a sequence of model IDs") from None
         if len(set(models)) != len(models):
             raise VisualGenerationValidationError("model_ids must not contain duplicates")
         object.__setattr__(self, "model_ids", models)
