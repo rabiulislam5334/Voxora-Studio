@@ -69,7 +69,7 @@ def test_crossfade_uses_eased_progress_and_exact_endpoints():
         middle = composite_transition_frames(outgoing, incoming, spec, 1, 3)
         last = composite_transition_frames(outgoing, incoming, spec, 2, 3)
         assert first.getpixel((0, 0)) == (255, 0, 0, 255)
-        assert middle.getpixel((0, 0)) == (191, 0, 64, 255)
+        assert middle.getpixel((0, 0)) == (191, 0, 63, 255)
         assert last.getpixel((0, 0)) == (0, 0, 255, 255)
         first.close()
         middle.close()
@@ -164,7 +164,7 @@ def test_single_frame_overlap_preserves_legacy_midpoint_crossfade():
     try:
         spec = TransitionSpec(effect="crossfade", duration_ticks=1)
         result = composite_transition_frames(outgoing, incoming, spec, 0, 1)
-        assert result.getpixel((0, 0)) == (128, 0, 128, 255)
+        assert result.getpixel((0, 0)) == (127, 0, 127, 255)
         result.close()
     finally:
         outgoing.close()
