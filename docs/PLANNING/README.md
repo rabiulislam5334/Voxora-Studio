@@ -196,7 +196,10 @@ Exit: original requirements are traceable; no phase starts from an isolated chat
 02.3 Mixed-language and pronunciation analysis for Bengali/English.  
 02.4 Narration jobs: chunking, retry, cache, cancellation and per-scene audio.  
 02.5 Actual narration timing extraction (audio duration and provider word timestamps).  
-02.6 Subtitle/caption generation (SRT/VTT, punctuation and timing validation).
+02.6 Script-assisted caption pipeline: supplied script is the text source; supplied narration is the timing master. Use forced alignment/word timestamps, sentence-aware segmentation, ASR discrepancy verification and uncertainty flags; export SRT/VTT and burned-in captions.
+02.7 Multilingual caption correctness: Bengali Unicode/যুক্তাক্ষর, English and mixed-language text; Arabic/English parallel tracks where a profile requires them.
+02.8 Caption layout/readability: profile-aware typography, line length, reading speed, safe margins, speaker labels/highlight modes and configurable caption-off export.
+02.9 Caption QC: missing/duplicated words, overlap, timing drift, punctuation, clipping and font fallback.
 
 **Existing foundation:** Edge TTS provider, voice discovery/preview, narration parsing, pause handling, chunking, narration generation and audio assembly. Do not rewrite these. First inventory exact gaps and preserve tested behavior.
 
@@ -245,6 +248,10 @@ Preserve recovered rules: first scene role is intro; last scene is outro only wi
 | 06.5 | Implement selected adapter in isolation | BLOCKED by 06.3 |
 | 06.6 | Preview/render parity and deterministic tests | BLOCKED by 06.5 |
 | 06.7 | FFmpeg handoff, cache, cancellation and resource limits | BLOCKED by 06.5 |
+| 06.8 | Audit and adapt the MIT-licensed [Cinematic Skill](https://github.com/Moh4696/cinematic-skill): beat tables, word-synchronised visual cues, camera choreography, Skia drawing, maps/cards/archive layouts, sound cue lists, caption finishing and render review | PLANNED |
+| 06.9 | Advanced animation grammar: keyframes, easing, camera rigs, parallax/depth layers, masks, particles, shape/text animation, 2D character/Stickman rigs, transitions and reusable motion presets | PLANNED |
+| 06.10 | Render-quality tiers and benchmark: draft/proxy/final, resolution/FPS, anti-aliasing, typography, frame pacing, memory ceiling, deterministic output and preview/final parity | PLANNED |
+| 06.11 | Cinematic Skill adapter/prototype using Voxora's existing project, script and supplied-audio contracts; no duplicate project, audio or render pipeline | PLANNED |
 
 **TS-02 completed evidence (user workload, not universal benchmark):**
 - Motion Canvas: 29-second animation rendered in 39 seconds; visual quality judged weak.
@@ -285,6 +292,11 @@ Edge TTS does not currently provide expressive style/emotion controls through th
 08.8 Optional local image/video generation providers.  
 08.9 Visual continuity, provenance, licensing, source attribution and factual/illustrative/reconstruction labels.  
 08.10 Profile-aware style selection across documentary photography, animation, maps, sketch, infographic, scientific/3D visualization and procedural graphics.
+08.11 Advanced 2D animation: keyframed transforms, easing curves, camera choreography, layered parallax, depth staging, masks, shape morphs, kinetic typography, animated maps, diagrams, particles and compositing.
+08.12 Character animation: reusable 2D rigs, pose libraries, expression/action systems, multi-character blocking, lip-sync where supported and narration-beat synchronization.
+08.13 Cinematic code-rendering toolkit: evaluate/adapt Skia-based drawing, designed-world/evidence-board layouts, continuous camera journeys, word-timed highlights, stamps, routes, counters and spotlight cues from Cinematic Skill.
+08.14 Render finishing: anti-aliasing, motion blur where affordable, colour/look pipeline, typography/font fallback, frame pacing, caption-safe composition, sound cue alignment and final-frame validation.
+08.15 Animation/render quality tiers: low-memory preview, draft and final profiles with deterministic settings and capability-aware graceful degradation.
 
 **Already delivered in part:** composition domain/editor, CPU raster PNG renderer, motion/camera contracts and frame rendering, motion-to-MP4 bridge, transitions, generated-image provider and binding. PNG still composition is not animated video; motion-framework selection remains separate.
 
@@ -298,6 +310,9 @@ Edge TTS does not currently provide expressive style/emotion controls through th
 09.6 Resume/retry policy for failed jobs.  
 09.7 Automated output validation and actionable diagnostics.  
 09.8 Export profiles and reproducibility manifest.
+09.9 Render quality controls: output resolution, FPS, codec/bitrate, pixel format, scaling/anti-aliasing, audio loudness and caption burn-in; expose only validated capabilities.
+09.10 Frame-level QC and visual review artifacts: contact sheets/keyframes, blank/black/frozen-frame checks, dropped/duplicate frames, text clipping, caption safe area and scene transition integrity.
+09.11 Memory-aware render scheduling: bounded concurrency, sequential fallback on the target PC, per-stage resource estimates, resumable frame batches and safe cleanup; parallel render only when measured headroom allows.
 
 Do not introduce parallel rendering or silent engine fallback without a separate measured design. Extend the existing sequential Universal Produce pipeline.
 
@@ -316,6 +331,10 @@ This is the main automation milestone. It integrates existing engines; it must n
 10.9 One-action Generate Video: validate inputs → align voice/script → plan → visuals → motion → sound → render → QC.  
 10.10 Optional review and selective regeneration of a scene/shot; never make editing a prerequisite.  
 10.11 Failure recovery and deterministic rerun from cached successful stages.
+10.12 Automatic cinematic direction: convert narration beats into camera paths, visual focal points, timed highlights, map/document/card reveals, kinetic typography and sound/caption cues.
+10.13 Select the best compatible animation/render adapter per shot (2D, Stickman, map, infographic, 2.5D, code-drawn cinematic scene or optional 3D); keep one unified production graph.
+10.14 Auto-select render quality tier from output request and measured hardware budget; render proxy for review if useful, then final MP4 without user timeline assembly.
+10.15 Integrate caption alignment, caption styling, SRT/VTT sidecars and burned-in caption QC into the same Auto Produce job.
 
 **Generate Video acceptance:** with a matching script + supplied narration audio + profile, and optionally a Claude visual-direction package, one user action produces a playable final MP4. The narration track is preserved as the primary voice track; visuals, scene changes, motion, captions and optional sound design align to its actual timing. Without an external prompt package, Voxora creates the scene/shot prompts itself. No manual timeline editing or per-scene asset attachment is required. Missing providers/assets yield explicit profile-compatible fallback or actionable errors, never fake success.
 
@@ -428,7 +447,10 @@ Exact PR mapping for some older foundations still needs Git-history reconciliati
 - Full ElevenLabs-inspired expressive voice and sound design studio.
 - Full multitrack audio timeline, SFX/ambience/character vocals, smart cue placement, ducking and mastering.
 - Full user-facing NLE/manual multitrack editor (explicitly not a product goal); only optional production review/correction UX is in scope.
-- Automated captions/subtitle workflow.
+- Automated captions/subtitle workflow (script-first forced alignment, multilingual typography, SRT/VTT, burned-in rendering and QC).
+- Production-grade advanced animation grammar, reusable character rigs and full cinematic camera/motion direction.
+- Cinematic Skill audit/adaptation and its Skia-based rendering techniques integrated with Voxora's existing audio, project, motion and FFmpeg contracts.
+- Final render-quality tiers, memory-aware scheduling and target-PC visual-quality acceptance.
 - Documentary source workflow, map/data graphics, cartoon/character animation tiers and colorization.
 - Real Stable Diffusion inference and sustained target-PC performance acceptance.
 - Installer/packaging/release hardening.
@@ -506,9 +528,12 @@ A phase is DONE only when:
 2. Close the VXP-00 source-recovery gap: exact 29 Modular Systems and precise R-stage definitions from their original source.
 3. Complete the requirement-to-implementation traceability matrix against merged PRs and current Core code.
 4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment.
-5. Design Sound & Voice System contracts and the smallest testable vertical slices.
-6. Define the Auto Produce production-plan schema and end-to-end acceptance fixture.
-7. Implement only the next approved small phase.
+5. Audit Cinematic Skill source, MIT licence, dependencies and workflow; prototype its highest-value code-rendering, camera and beat-sync techniques against Voxora's supplied narration and existing FFmpeg pipeline.
+6. Design the script-first Auto Caption pipeline and multilingual caption acceptance matrix.
+7. Define advanced animation/render quality acceptance criteria and integrate them into the Auto Produce production graph.
+8. Design Sound & Voice System contracts and the smallest testable vertical slices.
+9. Define the Auto Produce production-plan schema and end-to-end acceptance fixture.
+10. Implement only the next approved small phase.
 
 Do not start an unrelated feature phase while VXP-00 traceability and the next dependency decision are unresolved.
 
