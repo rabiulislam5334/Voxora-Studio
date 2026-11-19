@@ -23,6 +23,13 @@ from app.studio.validation import ERROR, INFO, WARNING, ValidationIssue, has_err
 from app.ui.studio_context import StudioContext, fmt_seconds
 from app.workers.cancel import CancelToken
 from app.universal.models import UniversalState
+from app.universal.asset_library import VisualAssetLibrary
+from app.universal.production_workflow import (
+    ProjectMotionProductionError,
+    UniversalProductionProgress,
+    UniversalProductionResult,
+    run_universal_production,
+)
 from app.workers.production import (
     ProductionJob,
     ProductionOptions,
@@ -46,6 +53,7 @@ class ProduceTab(ttk.Frame):
         self.running = False
         self._last_dir: Optional[Path] = None
         self._video_var = tk.BooleanVar(value=True)
+        self._universal_var = tk.BooleanVar(value=False)
         self._audio_var = tk.BooleanVar(value=False)
         self._format_var = tk.StringVar(value="mp3")
         self._folder_var = tk.StringVar(value=str(ctx.config.output_dir))
@@ -75,6 +83,11 @@ class ProduceTab(ttk.Frame):
         ttk.Entry(opts, textvariable=self._name_var, width=40).grid(row=2, column=1, columnspan=2, sticky="w", pady=(6, 0))
         ttk.Label(opts, text="(without extension; existing files are never replaced without asking)",
                   style="Muted.TLabel").grid(row=2, column=3, sticky="w", padx=6, pady=(6, 0))
+        ttk.Checkbutton(
+            opts,
+            text="Universal motion workflow (saved scene compositions; CPU frame rendering, max 900 frames per scene)",
+            variable=self._universal_var,
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 0))
 
         ttk.Label(self, text="Checklist", style="SectionTitle.TLabel").grid(row=3, column=0, sticky="w", padx=16, pady=(10, 2))
         box = ttk.Frame(self, style="App.TFrame")
@@ -133,8 +146,20 @@ class ProduceTab(ttk.Frame):
         issues = validate_production(
             scenes, self._ctx.state,
             ffmpeg_ready=voice.ffmpeg_ready(), voice_selected=bool(voice.selected_voice_id()),
-            render_video=self._video_var.get(), export_audio=self._audio_var.get(),
+            render_video=self._video_var.get() and not self._universal_var.get(),
+            export_audio=self._audio_var.get() or self._universal_var.get(),
         )
+        if self._universal_var.get() and not self._video_var.get():
+            issues.append(ValidationIssue(ERROR, "Universal motion workflow requires MP4 video export."))
+        if self._universal_var.get() and self._video_var.get():
+            try:
+                from app.universal.composition_timeline import build_composition_timeline_plan
+                preview_plan = build_composition_timeline_plan(self._ctx.project(), {})
+                for diagnostic in preview_plan.diagnostics:
+                    if diagnostic.severity == "error":
+                        issues.append(ValidationIssue(ERROR, diagnostic.message))
+            except (TypeError, ValueError) as exc:
+                issues.append(ValidationIssue(ERROR, f"Universal composition preflight failed: {exc}"))
         folder, _video, _audio = self._outputs()
         try:
             folder.mkdir(parents=True, exist_ok=True)
@@ -178,10 +203,13 @@ class ProduceTab(ttk.Frame):
             return
         folder, video_path, audio_path = self._outputs()
         existing = [p for p in (video_path, audio_path) if p is not None and p.exists()]
-        confirmed, self._confirmed_overwrite = self._confirmed_overwrite, False
-        if existing and not confirmed and not messagebox.askyesno("Replace existing file?", "These files already exist:\n\n" +
-                                                "\n".join(str(p) for p in existing) + "\n\nReplace them?"):
-            return
+        confirmed = self._confirmed_overwrite
+        self._confirmed_overwrite = False
+        if existing and not confirmed:
+            if not messagebox.askyesno("Replace existing file?", "These files already exist:\n\n" +
+                                      "\n".join(str(p) for p in existing) + "\n\nReplace them?"):
+                return
+            confirmed = True
 
         scenes = self._ctx.scenes()
         narrated = [s for s in scenes if s.text.strip()]
@@ -196,6 +224,9 @@ class ProduceTab(ttk.Frame):
             for s in scenes
         ]
         job = ProductionJob(self._ctx.voice.narration_job, self._ctx.ffmpeg, self._ctx.video_cache, self._ctx.config.temp_dir)
+        if self._universal_var.get():
+            self._start_universal(requests, video_path, audio_path, folder, overwrite=confirmed)
+            return
         options = ProductionOptions(
             render_video=self._video_var.get(), export_audio=self._audio_var.get(),
             video_output=video_path, audio_output=audio_path, audio_format=self._format_var.get(),
@@ -214,6 +245,67 @@ class ProduceTab(ttk.Frame):
                     cancel=self._token, on_progress=lambda p: self._ctx.bridge.dispatch(self._apply_progress, p)),
             on_success=self._on_done, on_error=self._on_failed,
         )
+
+    def _start_universal(self, requests, video_path, audio_path, folder: Path, *, overwrite: bool) -> None:
+        if video_path is None:
+            self._message.configure(text="Choose MP4 video export for the Universal motion workflow.")
+            return
+        self._ctx.voice.stop_playback()
+        self._last_dir = folder
+        self._token = CancelToken()
+        self.running = True
+        self._ctx.voice.set_external_busy(True)
+        self._set_running(True)
+        self._progress.configure(value=0)
+        self._stage.configure(text="Starting Universal Produce...")
+        self._message.configure(text="Generating narration, validating scene compositions, and preparing motion.")
+        library = VisualAssetLibrary(Path(self._ctx.config.assets_dir) / "visual_library")
+        coroutine = run_universal_production(
+            self._ctx.voice.narration_job,
+            tuple(requests),
+            self._ctx.project(),
+            self._ctx.ffmpeg,
+            library,
+            self._ctx.config.generated_audio_dir,
+            self._safe_name(self._name_var.get()),
+            video_path,
+            audio_destination=audio_path,
+            audio_format=self._format_var.get(),
+            overwrite=overwrite,
+            cancel=self._token,
+            on_progress=lambda progress: self._ctx.bridge.dispatch(
+                self._apply_universal_progress, progress,
+            ),
+        )
+        self._ctx.bridge.run_coroutine(
+            coroutine, on_success=self._on_universal_done, on_error=self._on_failed,
+        )
+
+    def _apply_universal_progress(self, progress: UniversalProductionProgress) -> None:
+        if not self.running:
+            return
+        self._progress.configure(value=progress.fraction * 100)
+        self._stage.configure(text=f"{progress.stage} - {int(progress.fraction * 100)}%")
+        self._message.configure(text=progress.message)
+
+    def _on_universal_done(self, result: UniversalProductionResult) -> None:
+        self._finish()
+        for audio in result.narration.scene_audio:
+            self._ctx.known_durations[audio.scene_id] = audio.duration_s
+        self._progress.configure(value=100)
+        self._stage.configure(text="Finished")
+        lines = [f"Video: {result.render.destination}"]
+        if result.audio_path:
+            lines.append(f"Audio: {result.audio_path}")
+        message = f"Universal motion export complete. Length {fmt_seconds(result.render.duration_seconds)}. "
+        message += f"Scenes: {result.render.scene_count}; {result.render.frame_count} frames at {result.render.fps} fps."
+        if result.warnings:
+            message += "\nNotes: " + " ".join(result.warnings)
+        self._message.configure(text=message)
+        self._open_btn.configure(state="normal")
+        self._ctx.on_status("Universal production finished.")
+        self._ctx.refresh_scenes()
+        messagebox.showinfo("Universal production complete", "\n".join(lines) + f"\n\n{message}")
 
     def _apply_progress(self, progress: ProductionProgress) -> None:
         if not self.running:
@@ -268,7 +360,7 @@ class ProduceTab(ttk.Frame):
             self._message.configure(text=str(error) if "saved" in str(error) else "Cancelled. No output file was created.")
             self._ctx.on_status("Production cancelled.")
             return
-        known = (ProductionError, MediaError, FFmpegError, NarrationError, TTSProviderError, ConfigurationError)
+        known = (ProductionError, MediaError, FFmpegError, NarrationError, TTSProviderError, ConfigurationError, ProjectMotionProductionError)
         text = str(error) if isinstance(error, known) else f"Unexpected error: {error}"
         self._stage.configure(text="Failed")
         self._message.configure(text=text)
