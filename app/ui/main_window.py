@@ -28,9 +28,9 @@ _POLL_INTERVAL_MS = 120
 
 _PAGE_DESCRIPTIONS: Dict[str, str] = {
     "Dashboard": "Overview of your projects and current TTS provider status.",
-    "Projects": "The project browser will be implemented in a later phase.",
-    "Subtitles": "SRT subtitle generation will be implemented in Phase 8.",
-    "Settings": "Application and provider settings will be implemented incrementally.",
+    "Projects": "The project browser is planned. Create, open, and save the active project from the Script workspace.",
+    "Subtitles": "Planned: SRT subtitle generation and subtitle editing.",
+    "Settings": "Planned: centralized application preferences. Local image-generation setup is available under Image Generation.",
 }
 
 
@@ -104,9 +104,10 @@ class MainWindow:
             top_bar, text="Toggle Theme", style="Nav.TButton", command=self._toggle_theme
         ).grid(row=0, column=2, padx=(0, 8), pady=10)
 
-        ttk.Button(
-            top_bar, text="Export", style="Primary.TButton", command=self._on_export
-        ).grid(row=0, column=3, padx=(0, 16), pady=10)
+        self._export_button = ttk.Button(
+            top_bar, text="Open Produce", style="Primary.TButton", command=self._on_export
+        )
+        self._export_button.grid(row=0, column=3, padx=(0, 16), pady=10)
 
     def _build_pages(self) -> None:
         for name, description in _PAGE_DESCRIPTIONS.items():
@@ -149,8 +150,10 @@ class MainWindow:
         return page
 
     def _build_composition_editor_page(self) -> CompositionEditorTab:
-        page = CompositionEditorTab(self.content, config=self.config, palette=self.palette,
-                                    project_session=self.project_session)
+        page = CompositionEditorTab(
+            self.content, config=self.config, palette=self.palette,
+            project_session=self.project_session, async_bridge=self.async_bridge,
+        )
         page.grid(row=0, column=0, sticky="nsew")
         return page
 
@@ -215,8 +218,8 @@ class MainWindow:
         cards.grid(row=3, column=0, sticky="w", padx=24, pady=(0, 24))
 
         card_info = [
-            ("Projects", "0 saved locally"),
-            ("Recent Project", "None yet"),
+            ("Project Browser", "Planned"),
+            ("Project Workspace", "Script page"),
             ("TTS Provider", self.tts_manager.get_provider_name()),
             ("Application Status", "Ready"),
         ]
@@ -275,6 +278,8 @@ class MainWindow:
         if hasattr(page, "show_section"):
             page.show_section(name)
         self._current_page = name
+        project = self.project_session.manager.current_project
+        self.project_label.configure(text=project.name if project is not None else "Untitled Project")
         self.status_bar.set_text(name)
         logger.debug("Navigated to page: %s", name)
 
@@ -287,13 +292,20 @@ class MainWindow:
     # ---------- actions ----------
 
     def _on_new_project(self) -> None:
-        self.status_bar.set_text("New project — full flow implemented in a later phase.")
+        self._show_page("Script")
+        self._pages["Script"]._on_new_project()
+        project = self.project_session.manager.current_project
+        self.project_label.configure(text=project.name if project is not None else "Untitled Project")
 
     def _on_open_project(self) -> None:
-        self.status_bar.set_text("Open project — full flow implemented in a later phase.")
+        self._show_page("Script")
+        self._pages["Script"]._on_open_project()
+        project = self.project_session.manager.current_project
+        self.project_label.configure(text=project.name if project is not None else "Untitled Project")
 
     def _on_export(self) -> None:
-        self.status_bar.set_text("Export — implemented once the audio/video pipelines exist.")
+        # Navigation only; the user reviews the Produce checklist and starts the job there.
+        self._show_page("Produce")
 
     def _toggle_theme(self) -> None:
         self.theme_name = "light" if self.theme_name == "dark" else "dark"
