@@ -118,3 +118,64 @@ def test_missing_optional_runtime_is_reported_without_paid_fallback(tmp_path):
     )
     with pytest.raises(CinematicSkillUnavailableError, match="optional local runtime"):
         coordinator.render(FakeFilm(), tmp_path / "unavailable.mp4")
+
+
+
+def test_original_narration_is_muxed_only_through_voxora_audio_contract(tmp_path):
+    class FakeAudioMuxer:
+        def __init__(self):
+            self.received = None
+
+        def render(self, silent_video, narration_wav, audio_settings, destination,
+                   timeline_plan, *, cancel=None, on_progress=None):
+            self.received = (
+                silent_video, narration_wav, audio_settings, timeline_plan,
+            )
+            assert silent_video.is_file()
+            assert narration_wav == narration
+            Path(destination).write_bytes(b"final-video-with-original-audio")
+            if on_progress:
+                on_progress(1.0, "mux complete")
+            return SimpleNamespace(video_codec="h264", audio_codec="aac")
+
+    encoder = FakeEncoder()
+    muxer = FakeAudioMuxer()
+    narration = tmp_path / "user-narration.wav"
+    narration.write_bytes(b"original-narration-bytes")
+    settings = object()
+    plan = SimpleNamespace(fps=10, width=64, height=36, total_frames=2)
+    coordinator = CinematicSkillRenderCoordinator(
+        encoder=encoder,
+        renderer_factory=lambda: FakeRenderer,
+    )
+
+    result = coordinator.render(
+        FakeFilm(),
+        tmp_path / "with-audio.mp4",
+        width=64,
+        height=36,
+        narration_wav=narration,
+        audio_settings=settings,
+        timeline_plan=plan,
+        audio_muxer=muxer,
+    )
+
+    assert result.audio_included is True
+    assert result.destination.read_bytes() == b"final-video-with-original-audio"
+    assert muxer.received[1] == narration
+    assert muxer.received[2] is settings
+    assert muxer.received[3] is plan
+
+
+def test_partial_audio_mux_arguments_are_rejected(tmp_path):
+    coordinator = CinematicSkillRenderCoordinator(
+        encoder=FakeEncoder(),
+        renderer_factory=lambda: FakeRenderer,
+    )
+    with pytest.raises(CinematicSkillRenderError, match="must be supplied together"):
+        coordinator.render(
+            FakeFilm(),
+            tmp_path / "partial-audio.mp4",
+            narration_wav=tmp_path / "voice.wav",
+        )
+    assert not (tmp_path / "partial-audio.mp4").exists()
