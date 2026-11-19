@@ -394,6 +394,48 @@ Target hardware: Windows 10, Intel i5-8250U, 8 GB RAM, NVIDIA 940MX 4 GB + Intel
 
 **Acceptance boundary:** existing Edge TTS workflows remain functional throughout the project. VXP-14 is complete only when the enhanced Bengali male narration is measurably better on a representative listening set, long-form generation is reliable, and no paid API is required for the accepted free-first path.
 
+## 4A. Candidate open-source integrations — audit before adoption
+
+This is a **candidate registry**, not an implementation commitment. These projects must not be installed wholesale or treated as production-ready Voxora dependencies merely because they are open source. The goal is to extract reusable capabilities through narrow adapters while preserving Voxora's supplied-script + supplied-narration → finished-MP4 product workflow and its existing project/audio/render contracts.
+
+### Candidate catalogue
+
+| Candidate | Potential Voxora capability | Proposed treatment | Status / constraints |
+|---|---|---|---|
+| [Cinematic Skill](https://github.com/Moh4696/cinematic-skill) | Code-driven cinematic scenes, beat/word-aware visual direction, camera choreography and visual finishing (verify actual repository capabilities) | Highest-priority source audit; reuse compatible code or build a thin adapter; compare output against Voxora's existing FFmpeg pipeline | AUDIT FIRST; MIT licence reported by project, verify exact files/dependencies and current licence before reuse |
+| [OpenMontage](https://github.com/OpenMontageInc/OpenMontage) | Agentic production workflow, pipeline manifests, tool/skill orchestration, documentary footage acquisition and quality gates | Study architecture and reusable workflow patterns; do not replace Voxora's Core, project model or user-supplied narration flow | AUDIT FIRST; official repository currently identifies AGPL-3.0. No code copying/linking/distribution decision until licence and dependency review |
+| [ComfyUI](https://github.com/Comfy-Org/ComfyUI) | Node-based image/video generation workflows and model/provider orchestration | Optional external visual-generation adapter; keep model execution optional and resource-aware | RESEARCH; repository is GPL-3.0; review redistribution/integration implications and each model/weight licence separately |
+| [Synfig Studio](https://github.com/synfig/synfig) | 2D vector animation, interpolation and reusable character motion | Evaluate whether its rendering/animation capabilities can be driven headlessly or via a narrow interchange adapter | CANDIDATE; inspect current licence, automation surface, export and Windows resource use |
+| [Animate / StykAnimate](https://github.com/abubakrabdulahadov/Animate) | Stick-figure posing, keyframes, motion paths, camera movement and frame/video export | Evaluate as a specialized Stickman asset/animation workflow; verify project format and headless automation before integration | CANDIDATE; confirm upstream identity, licence, project-format stability and export automation |
+| [OpenToonz](https://github.com/opentoonz/opentoonz) | Traditional 2D/cartoon production and frame-based animation | Research reusable pipeline/export concepts for the Cartoon & Animated Stories profile | CANDIDATE; likely better as optional external tool than a bundled runtime until automation and licence are reviewed |
+| [MapLibre GL JS](https://github.com/maplibre/maplibre-gl-js) | Documentary maps, routes, borders, locations, terrain and geographic motion | Build a map-scene adapter with deterministic camera/time controls; audit tile/data source licences separately | CANDIDATE; validate offline rendering, screenshot/video capture and data attribution |
+| [Manim Community](https://github.com/ManimCommunity/manim) | Mathematical, scientific and explanatory animations | Specialized scene renderer for Science & Discovery / Educational Explainer shots | CANDIDATE; measure render speed, typography, memory and deterministic export on target PC |
+| [WhisperX](https://github.com/m-bain/whisperX) | Speech transcription, word timestamps and forced alignment | Optional narration-analysis/caption adapter; script remains semantic source and supplied audio remains timing master | CANDIDATE; benchmark Bengali alignment specifically; do not assume English alignment quality transfers to Bengali |
+| [Audio Separator](https://github.com/nomadkaraoke/python-audio-separator) | Voice/music/stem separation for audio cleanup and sound-design workflows | Optional audio utility behind capability detection; never alter the supplied narration without explicit policy | CANDIDATE; verify model licences, disk/GPU/RAM requirements and audio-quality impact |
+| [Motion Canvas](https://github.com/motion-canvas/motion-canvas), [HyperFrames](https://github.com/HyperFrames](https://github.com/HyperFrames), [Remotion](https://github.com/remotion-dev/remotion) | Code-driven motion graphics and composition | Reuse the completed TS-02 benchmark evidence; do not repeat the same benchmark. Decide adapter only after the formal matrix | BENCHMARK PARTIAL; primary framework decision remains open |
+
+### Integration rules and acceptance gates
+
+1. **Source and licence audit:** record canonical upstream URL, exact commit/tag, licence file, transitive dependencies, model/weight/data licences, attribution duties and redistribution obligations. A repository licence does not automatically license its models, datasets, fonts, footage or generated assets.
+2. **Capability audit:** identify the exact reusable modules, public APIs/CLI, automation/headless support, input/output formats, platform support and maintenance status. Verify claims against source code rather than repository marketing copy.
+3. **Architecture fit:** use adapters or isolated subprocesses where appropriate. Do not duplicate Voxora's ProjectSession, asset registry, narration pipeline, composition contracts, Render Orchestrator or FFmpeg final assembly.
+4. **Hardware gate:** measure peak RAM/VRAM, CPU use, disk footprint, render time and graceful CPU fallback on the documented Windows 10 / i5-8250U / 8 GB RAM / NVIDIA 940MX target PC. Heavy generation may remain an optional remote or higher-end-machine provider.
+5. **Visual-quality gate:** render representative Stickman, 2D cartoon, map, scientific explainer and documentary scenes; assess motion smoothness, character continuity, Bengali typography, camera control and narration synchronization.
+6. **End-to-end gate:** one supplied script + matching narration audio + channel profile must produce a complete playable MP4 without manual per-scene asset assignment or timeline editing. Validate audio preservation, duration, captions where enabled, visual coverage, black frames and provenance.
+7. **Adoption decision:** classify each project as REUSE CODE, ADAPTER, EXTERNAL OPTIONAL TOOL, NATIVE IMPLEMENTATION, REFERENCE ONLY or REJECT. No dependency is added until its specific acceptance and licence gates pass.
+
+### Audit sequence
+
+1. Cinematic Skill — exact source/architecture/licence audit and a small Voxora-compatible prototype.
+2. OpenMontage — workflow/tool/quality-gate architecture audit, with AGPL boundary explicitly reviewed.
+3. ComfyUI — optional provider/workflow adapter and model-licence audit.
+4. Stickman and 2D animation candidates — Animate/StykAnimate, Synfig and OpenToonz capability/export comparison.
+5. MapLibre and Manim — documentary/science specialized visual adapters.
+6. WhisperX and Audio Separator — narration alignment and optional audio processing.
+7. Reconcile all findings with the existing TS-02 Motion Canvas / HyperFrames / Remotion benchmark; do not rerun completed tests without a changed requirement.
+
+**Current status:** all entries above are candidates or audit targets only. None is represented as integrated, installed, tested or accepted in Voxora by this planning entry. This registry does not change the core Auto Produce priority or advance the deferred VXP-14 Bengali TTS workstream.
+ 
 ## 5. Completed-work registry — do not rebuild
 
 This registry records delivered PR scope, not completion of the entire associated product system.
