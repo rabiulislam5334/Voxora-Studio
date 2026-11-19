@@ -150,6 +150,15 @@ class ProduceTab(ttk.Frame):
         )
         if self._universal_var.get() and not self._video_var.get():
             issues.append(ValidationIssue(ERROR, "Universal motion workflow requires MP4 video export."))
+        if self._universal_var.get() and self._video_var.get():
+            try:
+                from app.universal.composition_timeline import build_composition_timeline_plan
+                preview_plan = build_composition_timeline_plan(self._ctx.project(), {})
+                for diagnostic in preview_plan.diagnostics:
+                    if diagnostic.severity == "error":
+                        issues.append(ValidationIssue(ERROR, diagnostic.message))
+            except (TypeError, ValueError) as exc:
+                issues.append(ValidationIssue(ERROR, f"Universal composition preflight failed: {exc}"))
         folder, _video, _audio = self._outputs()
         try:
             folder.mkdir(parents=True, exist_ok=True)
