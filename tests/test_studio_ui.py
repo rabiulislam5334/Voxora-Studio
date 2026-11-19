@@ -418,6 +418,7 @@ def test_composition_editor_renders_still_png_from_managed_bound_asset(tmp_path,
     monkeypatch.setattr(config_module, "_config", cfg)
     from app.ui.main_window import MainWindow
     window = MainWindow(root)
+    monkeypatch.setattr("app.ui.script_panel.messagebox.askyesno", lambda *args, **kwargs: True)
     try:
         script = window._pages["Script"]
         script._on_new_project()
