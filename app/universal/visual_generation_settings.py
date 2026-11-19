@@ -42,7 +42,8 @@ class LocalImageGenerationSettings:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "LocalImageGenerationSettings":
-        if not isinstance(value, Mapping) or value.get("version") != SETTINGS_VERSION:
+        if (not isinstance(value, Mapping) or isinstance(value.get("version"), bool)
+                or value.get("version") != SETTINGS_VERSION):
             raise VisualGenerationSettingsError("Unsupported local image-generation settings format")
         return cls(
             executable_path=value.get("executable_path", ""),
