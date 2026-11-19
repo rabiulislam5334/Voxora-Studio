@@ -12,6 +12,7 @@ from app.core.logger import get_logger
 from app.models.project import Project
 from app.models.scene import Scene
 from app.projects.manager import PROJECT_EXTENSION, ProjectManager
+from app.projects.session import ProjectSession
 from app.text.importer import import_txt_file, split_into_scenes
 from app.text.wordcount import count_characters, count_words, estimate_duration_seconds, format_duration
 
@@ -36,13 +37,15 @@ class ScriptPanel(ttk.Frame):
         config: AppConfig,
         palette: dict,
         on_status: Optional[callable] = None,
+        project_session: Optional[ProjectSession] = None,
     ) -> None:
         super().__init__(master, style="App.TFrame")
         self._config = config
         self._palette = palette
         self._on_status = on_status or (lambda text: None)
 
-        self._project_manager = ProjectManager()
+        self._project_session = project_session
+        self._project_manager = project_session.manager if project_session is not None else ProjectManager()
         self._selected_scene_id: Optional[str] = None
 
         self._build_layout()
@@ -525,6 +528,8 @@ class ScriptPanel(ttk.Frame):
 
     def _on_new_project(self) -> None:
         self._flush_editor_to_scene()
+        if self._project_session is not None and not self._project_session.can_replace_project():
+            return
         if not self._confirm_discard_if_dirty():
             return
         self._project_manager.new_project()
@@ -543,6 +548,8 @@ class ScriptPanel(ttk.Frame):
             title="Open Project", filetypes=[("Voxora Project", f"*{PROJECT_EXTENSION}"), ("All Files", "*.*")]
         )
         if not path:
+            return
+        if self._project_session is not None and not self._project_session.can_replace_project():
             return
         try:
             self._project_manager.open(Path(path))
