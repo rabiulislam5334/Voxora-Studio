@@ -97,6 +97,26 @@ The recovered Rev 0.4 Master Specification defines:
 - Keep MS-01…MS-29 as **source transcription pending** until the exact original list is located.
 - The VXP phases below organize recovered requirements; they do not invent canonical MS IDs.
 
+### Master roadmap stage mapping (original R IDs preserved)
+
+| Master stage | Original scope | Main VXP mapping |
+|---|---|---|
+| R-1 | Existing verified foundations / first usable video | VXP-01, VXP-02, VXP-09 baseline |
+| R-2 | Core reliability and data integrity | VXP-01 |
+| R-3 | Profiles, assets and Script Intelligence | VXP-02, VXP-03, VXP-04 |
+| R-4 | Scene Planning and Director | VXP-05 |
+| R-5 | Timeline and manual editing foundations | VXP-12 |
+| R-6 | Audio and Sound Design Studio | VXP-07 |
+| R-7 | Script-to-video and audio-to-video | VXP-09, VXP-10 |
+| R-8 | Hybrid media and colorization | VXP-08, VXP-11 |
+| R-9 | Cartoon, story and short-film engines | VXP-11 |
+| R-10 | Documentary and prompt/code production engines | VXP-08, VXP-11 |
+| R-11 | Advanced optional AI integrations and higher-end features | VXP-08.8, VXP-11.8, future provider work |
+| R-12 | Basic Motion Graphics foundation | VXP-06, VXP-08 |
+| R-13 | Advanced Motion Graphics | VXP-06, VXP-08, VXP-11 |
+
+R-stage numbers are Master Specification IDs, not an instruction that every later stage must wait for every earlier stage. Follow the dependency column and the original Rev 0.4 workstream rules. The automatic first-video path must not wait for a complete manual NLE or advanced 3D.
+
 ## 3. Status vocabulary and delivery rules
 
 | Status | Meaning |
