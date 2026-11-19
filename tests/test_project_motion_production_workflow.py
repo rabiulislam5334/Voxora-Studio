@@ -151,6 +151,23 @@ def test_aligned_narration_pads_each_scene_to_its_timeline_slot_and_final_video_
     )
 
 
+def test_aligned_narration_rounds_cumulative_slot_boundaries_to_samples(tmp_path):
+    project = _project()
+    studio = StudioState(video=VideoSettings(
+        fps=24, transition="cut", default_duration_s=0.777777,
+    ))
+    studio.write_to(project.settings)
+    plan = build_composition_timeline_plan(project, {})
+    output = tmp_path / "rounded.wav"
+
+    assemble_aligned_narration_wav(plan, {}, {}, output)
+
+    with wave.open(str(output), "rb") as reader:
+        samples = reader.getnframes()
+    expected = round(plan.total_ticks * 24000 / 141120000)
+    assert samples == expected
+
+
 def test_aligned_narration_inserts_silence_for_unspoken_scenes(tmp_path):
     project = _project()
     duration_a = seconds_to_ticks(0.1)
