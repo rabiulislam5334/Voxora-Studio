@@ -18,7 +18,7 @@ class RasterCompositionAdapter:
             display_name="CPU Raster Composition Renderer",
             version="1.0.0",
             capabilities=EngineCapabilities(
-                scene_kinds=("composition",), asset_kinds=("image",),
+                scene_kinds=("composition",), asset_kinds=("image", "generated-image"),
                 output_formats=("png",), requires_gpu=False,
                 supports_draft_render=True, max_concurrent_jobs=1,
                 estimated_memory_mb=256,
