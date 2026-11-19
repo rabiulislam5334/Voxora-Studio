@@ -43,6 +43,8 @@ from app.universal.frame_sequence import (
 )
 from app.universal.models import UniversalState
 from app.universal.motion import SceneMotion
+from app.universal.transitions import TransitionSpec
+from app.universal.transition_compositor import composite_transition_frames
 from app.universal.motion_raster_renderer import (
     MotionRasterRenderCancelledError,
     MotionRasterRenderError,
@@ -86,6 +88,7 @@ class MotionTimelinePlan:
     total_frames: int
     transition: str
     transition_frames: tuple[int, ...]
+    transition_specs: tuple[tuple[str, TransitionSpec], ...]
     scenes: tuple[MotionSceneTimelineSlot, ...]
     motion_fingerprint: str
     plan_fingerprint: str
@@ -117,6 +120,8 @@ def _digest(payload: object) -> str:
 def build_motion_timeline_plan(
     composition_plan: CompositionTimelinePlan,
     scene_motions: Mapping[str, SceneMotion],
+    *,
+    transition_specs: Optional[Mapping[str, TransitionSpec]] = None,
 ) -> MotionTimelinePlan:
     """Bind one immutable motion definition to each scene's exact frame slot.
 
@@ -149,6 +154,19 @@ def build_motion_timeline_plan(
     ordered_slots = tuple(sorted(
         composition_plan.slots, key=lambda item: (item.frame_start, item.scene_order, item.scene_id)
     ))
+    if transition_specs is None:
+        supplied_transition_specs = {}
+    elif isinstance(transition_specs, Mapping):
+        supplied_transition_specs = dict(transition_specs)
+    else:
+        raise MotionTimelinePlanError("transition_specs must map outgoing scene IDs to TransitionSpec values")
+    expected_transition_ids = {slot.scene_id for slot in ordered_slots[:-1]}
+    unknown_transition_ids = sorted(set(supplied_transition_specs) - expected_transition_ids)
+    if unknown_transition_ids:
+        raise MotionTimelinePlanError(
+            "transition specifications reference scenes without outgoing transitions: "
+            + ", ".join(unknown_transition_ids)
+        )
     expected_ids = {slot.scene_id for slot in ordered_slots}
     supplied_ids = set(scene_motions)
     if any(not isinstance(scene_id, str) or not scene_id.strip() for scene_id in supplied_ids):
@@ -222,9 +240,12 @@ def build_motion_timeline_plan(
             "scene motion intervals do not cover the complete composition timeline"
         )
     if composition_plan.transition == "cut":
+        if supplied_transition_specs:
+            raise MotionTimelinePlanError("cut timelines cannot define overlap transition specifications")
         if any(overlap_frames):
             raise MotionTimelinePlanError("cut transitions cannot contain overlapping scene frames")
         transition_frames = tuple(0 for _ in ordered_slots[:-1])
+        resolved_transition_specs = ()
     else:
         if len(ordered_slots) < 2:
             raise MotionTimelinePlanError("crossfade requires at least two scenes")
@@ -240,6 +261,24 @@ def build_motion_timeline_plan(
             for index in range(len(ordered_slots) - 1)
         ):
             raise MotionTimelinePlanError("crossfade overlaps cannot span more than adjacent scenes")
+        resolved = []
+        for slot in ordered_slots[:-1]:
+            spec = supplied_transition_specs.get(
+                slot.scene_id,
+                TransitionSpec(effect="crossfade", duration_ticks=composition_plan.transition_ticks),
+            )
+            if not isinstance(spec, TransitionSpec):
+                raise MotionTimelinePlanError(
+                    f"transition for scene {slot.scene_id!r} must be a TransitionSpec"
+                )
+            if spec.effect == "cut":
+                raise MotionTimelinePlanError("cut cannot be used for an overlapping transition")
+            if spec.duration_ticks != composition_plan.transition_ticks:
+                raise MotionTimelinePlanError(
+                    f"transition for scene {slot.scene_id!r} duration must match the approved timeline overlap"
+                )
+            resolved.append((slot.scene_id, spec))
+        resolved_transition_specs = tuple(resolved)
 
     motion_fingerprint = _digest(motion_payload)
     payload = {
@@ -248,6 +287,10 @@ def build_motion_timeline_plan(
         "total_frames": composition_plan.total_frames,
         "transition": composition_plan.transition,
         "transition_frames": transition_frames,
+        "transition_specs": [
+            {"outgoing_scene_id": scene_id, "spec": spec.to_dict()}
+            for scene_id, spec in resolved_transition_specs
+        ],
         "motion_fingerprint": motion_fingerprint,
         "scenes": [
             {
@@ -265,6 +308,7 @@ def build_motion_timeline_plan(
         total_frames=composition_plan.total_frames,
         transition=composition_plan.transition,
         transition_frames=transition_frames,
+        transition_specs=resolved_transition_specs,
         scenes=tuple(scene_slots),
         motion_fingerprint=motion_fingerprint,
         plan_fingerprint=_digest(payload),
@@ -279,7 +323,10 @@ def assert_motion_timeline_plan_current(
     """Reject stale or modified motion inputs before and during rendering."""
     if not isinstance(plan, MotionTimelinePlan):
         raise MotionTimelinePlanError("plan must be a MotionTimelinePlan")
-    current = build_motion_timeline_plan(composition_plan, scene_motions)
+    current = build_motion_timeline_plan(
+        composition_plan, scene_motions,
+        transition_specs=dict(plan.transition_specs),
+    )
     if current != plan:
         raise MotionTimelinePlanError(
             "motion timeline plan is stale; rebuild and review it before rendering"
@@ -341,6 +388,42 @@ def _blend_transition_frames(
                 blended.save(destination, format="PNG", optimize=False)
             finally:
                 blended.close()
+        finally:
+            outgoing.close()
+            incoming.close()
+
+
+
+def _composite_transition_frames(
+    outgoing_path: Path,
+    incoming_path: Path,
+    destination: Path,
+    width: int,
+    height: int,
+    spec: TransitionSpec,
+    frame_index: int,
+    frame_count: int,
+) -> None:
+    """Normalize each scene frame to RGBA, then apply its approved transition."""
+    with Image.open(outgoing_path) as outgoing_image, Image.open(incoming_path) as incoming_image:
+        outgoing = outgoing_image.convert("RGBA")
+        incoming = incoming_image.convert("RGBA")
+        try:
+            if outgoing.size != (width, height):
+                resized = outgoing.resize((width, height), resample=Image.Resampling.LANCZOS)
+                outgoing.close()
+                outgoing = resized
+            if incoming.size != (width, height):
+                resized = incoming.resize((width, height), resample=Image.Resampling.LANCZOS)
+                incoming.close()
+                incoming = resized
+            result = composite_transition_frames(
+                outgoing, incoming, spec, frame_index, frame_count,
+            )
+            try:
+                result.save(destination, format="PNG", optimize=False)
+            finally:
+                result.close()
         finally:
             outgoing.close()
             incoming.close()
@@ -547,16 +630,14 @@ class MotionTimelineRenderCoordinator:
                             or overlap <= 0
                         ):
                             raise MotionTimelineRenderError("scene overlap does not match approved transition")
-                        if overlap == 1:
-                            alpha = 0.5
-                        else:
-                            alpha = (output_index - incoming.frame_start) / (overlap - 1)
                         first_path = scene_frame_paths[outgoing.scene_id][output_index - outgoing.frame_start]
                         second_path = scene_frame_paths[incoming.scene_id][output_index - incoming.frame_start]
                         output_path = frame_dir / f"frame_{output_index:06d}.png"
-                        _blend_transition_frames(
+                        transition_spec = dict(motion_plan.transition_specs)[outgoing.scene_id]
+                        _composite_transition_frames(
                             first_path, second_path, output_path,
-                            composition_plan.width, composition_plan.height, alpha,
+                            composition_plan.width, composition_plan.height,
+                            transition_spec, output_index - incoming.frame_start, overlap,
                         )
                     else:
                         slot = active[0]

@@ -6,6 +6,7 @@ from app.universal.composition_timeline import (
     CompositionTimelinePlan,
 )
 from app.universal.motion import MotionKeyframe, MotionTrack, SceneMotion
+from app.universal.transitions import TransitionSpec
 from app.universal.motion_timeline import (
     MotionTimelinePlanError,
     assert_motion_timeline_plan_current,
@@ -274,3 +275,62 @@ def test_crossfade_frame_compositor_normalizes_output_dimensions(tmp_path):
 
     with Image.open(destination) as result:
         assert result.size == (8, 6)
+
+
+def test_motion_timeline_plan_binds_advanced_transition_specs_into_fingerprint():
+    composition = _composition_plan(
+        transition="crossfade",
+        slots=(
+            _slot("scene-a", 0, 0, 3, segment_end=4),
+            _slot("scene-b", 1, 3, 6),
+        ),
+    )
+    motions = {
+        "scene-a": _motion("scene-a", duration=4),
+        "scene-b": _motion("scene-b", duration=3),
+    }
+    spec = TransitionSpec(
+        effect="wipe_left", duration_ticks=composition.transition_ticks,
+        easing="ease_in_out",
+    )
+
+    plan = build_motion_timeline_plan(
+        composition, motions, transition_specs={"scene-a": spec},
+    )
+
+    assert plan.transition_specs == (("scene-a", spec),)
+    assert_motion_timeline_plan_current(composition, motions, plan)
+
+
+def test_motion_timeline_plan_rejects_transition_spec_duration_mismatch():
+    composition = _composition_plan(
+        transition="crossfade",
+        slots=(
+            _slot("scene-a", 0, 0, 3, segment_end=4),
+            _slot("scene-b", 1, 3, 6),
+        ),
+    )
+    motions = {
+        "scene-a": _motion("scene-a", duration=4),
+        "scene-b": _motion("scene-b", duration=3),
+    }
+    with pytest.raises(MotionTimelinePlanError, match="duration must match"):
+        build_motion_timeline_plan(
+            composition, motions,
+            transition_specs={
+                "scene-a": TransitionSpec(effect="dip_to_color", duration_ticks=2,
+                                          color_rgb=(0, 0, 0)),
+            },
+        )
+
+
+def test_motion_timeline_plan_rejects_transition_specs_for_non_outgoing_scenes():
+    composition = _composition_plan(transition="crossfade")
+    motions = {"scene-a": _motion("scene-a"), "scene-b": _motion("scene-b")}
+    with pytest.raises(MotionTimelinePlanError, match="without outgoing transitions"):
+        build_motion_timeline_plan(
+            composition, motions,
+            transition_specs={
+                "scene-b": TransitionSpec(effect="wipe_left", duration_ticks=1),
+            },
+        )
