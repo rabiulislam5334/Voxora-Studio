@@ -319,8 +319,9 @@ def assemble_aligned_narration_wav(
         raise ProjectMotionProductionError("aligned narration destination already exists or is a symlink")
     target.parent.mkdir(parents=True, exist_ok=True)
 
+    staged = target.with_name(f".{target.name}.{uuid.uuid4().hex}.stage.wav")
     try:
-        with WavBuilder(target, sample_rate) as builder:
+        with WavBuilder(staged, sample_rate) as builder:
             for slot in slots:
                 scene_id = slot.scene_id
                 source_value = scene_audio_paths.get(scene_id)
@@ -359,12 +360,20 @@ def assemble_aligned_narration_wav(
             required_samples = ticks_to_samples(required_ticks, sample_rate, rounding="ceil")
             if builder.frames < required_samples:
                 builder.add_silence_samples(required_samples - builder.frames)
+        try:
+            os.link(staged, target)
+        except FileExistsError:
+            raise ProjectMotionProductionError(
+                "aligned narration destination appeared during assembly; refusing to overwrite it"
+            ) from None
+        staged.unlink()
     except ProjectMotionProductionError:
-        target.unlink(missing_ok=True)
         raise
     except (OSError, ValueError) as exc:
-        target.unlink(missing_ok=True)
         raise ProjectMotionProductionError(f"could not assemble aligned narration WAV: {exc}") from exc
+    finally:
+        staged.unlink(missing_ok=True)
+        staged.with_name(staged.name + ".part").unlink(missing_ok=True)
     return target
 
 
