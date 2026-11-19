@@ -352,6 +352,21 @@ def test_main_window_starts_with_all_sections_and_closes(tmp_path, monkeypatch, 
     for name in ("Dashboard", "Script", "Voice", "Audio", "Timeline", "Video", "Produce", "Subtitles", "Settings"):
         window._show_page(name)
         root.update()
+
+    # All project-aware pages must point at the same application-owned manager.
+    script = window._pages["Script"]
+    scene_assets = window._pages["Scene Assets"]
+    composition = window._pages["Composition"]
+    assert script._project_manager is window.project_session.manager
+    assert scene_assets.project_manager is window.project_session.manager
+    assert composition.project_manager is window.project_session.manager
+
+    script._on_new_project()
+    window._show_page("Scene Assets")
+    window._show_page("Composition")
+    assert scene_assets.project_manager.current_project is script._project
+    assert composition.project_manager.current_project is script._project
+
     window._toggle_theme()
     window._toggle_theme()
     window._on_close()
