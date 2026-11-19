@@ -206,9 +206,10 @@ Exit: original requirements are traceable; no phase starts from an isolated chat
 03.2 Profile precedence: built-in → user → project override.  
 03.3 Capability preferences and fallback policy.  
 03.4 Per-profile narration, visual, motion, audio and export defaults.  
-03.5 Profile editor, validation, import/export and compatibility tests.
+03.5 Profile editor, validation, import/export and compatibility tests.  
+03.6 Profile catalogue and creative rules for all 14 planned channels (CP-01–CP-14); detailed definitions live in [Channel & Visual Production Profiles](./CHANNEL_VISUAL_PRODUCTION_PROFILES.md).
 
-Profiles are data, not hard-coded branches in the Universal Core. A profile cannot require a paid provider.
+Profiles are data, not hard-coded branches in the Universal Core. A profile cannot require a paid provider. The 14 profiles cover Quasivanta, Veltracis, Sizzjin, Drowsehaven, Rihvaya, Niq Exposed, Deep Ocean Creatures, Crime Documentary, Educational Explainer, Inventions & Discoveries, Cartoon & Animated Stories, Biography & Famous Personalities, Animals & Wildlife, and Science & Discovery. Current and future channels share the same Universal Core and production engines.
 
 ### VXP-04 — Asset library and provenance (R-3; SC-02)
 
@@ -279,10 +280,11 @@ Edge TTS does not currently provide expressive style/emotion controls through th
 08.3 Raster still renderer (PNG) and preview validation.  
 08.4 Motion composition and animation through the selected adapter.  
 08.5 Maps, charts, timelines, diagrams and data-driven graphics.  
-08.6 Sketch/whiteboard/2D/2.5D parallax styles.  
-08.7 Character/stickman/pose/expression animation tiers.  
+08.6 Sketch/whiteboard/hand-drawn illustration, 2D cartoon, 2.5D parallax and layered camera movement.  
+08.7 First-class character and Stickman animation: reusable character identity, rigs/poses/expressions/actions, multi-character interaction, continuity and narration/dialogue synchronization.  
 08.8 Optional local image/video generation providers.  
-08.9 Visual continuity, provenance, licensing and factual/illustrative labels.
+08.9 Visual continuity, provenance, licensing, source attribution and factual/illustrative/reconstruction labels.  
+08.10 Profile-aware style selection across documentary photography, animation, maps, sketch, infographic, scientific/3D visualization and procedural graphics.
 
 **Already delivered in part:** composition domain/editor, CPU raster PNG renderer, motion/camera contracts and frame rendering, motion-to-MP4 bridge, transitions, generated-image provider and binding. PNG still composition is not animated video; motion-framework selection remains separate.
 
@@ -320,27 +322,30 @@ This is the main automation milestone. It integrates existing engines; it must n
 ### VXP-11 — Hybrid media, documentary, cartoon and specialized workflows (R-8/R-9/R-10)
 
 11.1 Hybrid stills, clips, graphics, overlays and optional 2.5D.  
-11.2 Documentary research/source tracking and factual review.  
-11.3 Maps, archival material, timelines and reconstruction labels.  
-11.4 Cartoon/character library, reusable poses, props and locations.  
-11.5 Dialogue-free-but-not-silent comedy with non-verbal vocals.  
-11.6 Story/short-film continuity and beat timing.  
-11.7 Colorization/artwork tools and non-destructive layers.  
-11.8 Optional advanced 3D/AI integrations (future research).
+11.2 Documentary research, real-photo/footage acquisition, source/license/provenance tracking and factual review.  
+11.3 Maps, archival material, timelines, evidence/document graphics and clearly labelled reconstructions.  
+11.4 Cartoon/character library, reusable poses, props, locations, character identity and continuity.  
+11.5 First-class Stickman animation and reusable pose/action/expression systems.  
+11.6 Dialogue-free-but-not-silent comedy with non-verbal vocals.  
+11.7 Story/short-film continuity, multi-character interaction, lip-sync where supported and narration-synchronized beat timing.  
+11.8 Biography production: verified real-person portraits/archives, chronological life timelines, achievements/legacy graphics and labelled illustrative reconstruction.  
+11.9 Animal/wildlife production: species-accurate illustration, anatomy/behavior visualization, habitats and documentary footage.  
+11.10 Scientific visualization: 2D/3D concepts, diagrams, simulations, units/data and evidence-vs-hypothesis labelling.  
+11.11 Colorization/artwork tools and non-destructive layers.  
+11.12 Optional advanced 3D/AI integrations (future research).
 
 All these workflows reuse the same Core and render/audio systems; they are not separate applications.
 
-### VXP-12 — Timeline, editor UX and production review (R-5)
+### VXP-12 — Internal timeline/composition model and optional production review (R-5)
 
-12.1 Timeline data model using canonical project timebase.  
-12.2 Video/image/graphics/audio/caption tracks.  
-12.3 Clip trim/split/move, markers, mute/solo/lock.  
-12.4 Undo/redo and non-destructive editing.  
-12.5 Synchronized storyboard/shot-list and timeline views.  
-12.6 Low-resolution proxy preview and memory-aware playback.  
-12.7 UI toolkit prototype/decision if Tkinter becomes a bottleneck.
+12.1 Internal timeline/timebase model using canonical project timebase.  
+12.2 Internal video/image/graphics/audio/caption tracks for synchronization and rendering.  
+12.3 Optional shot-list/storyboard review and limited corrections where useful.  
+12.4 Selective regeneration, accept/reject and non-destructive production proposals.  
+12.5 Low-resolution proxy preview and memory-aware playback.  
+12.6 UI toolkit prototype/decision if Tkinter becomes a bottleneck.
 
-The full manual timeline is not a prerequisite for the first automatic video. The Director can create a draft timeline model and render it through the existing pipeline first.
+**Explicit product boundary:** Voxora is an automated video generator, not a user-facing NLE. Internal tracks and composition data are implementation details. A full manual multitrack timeline editor, clip trim/split/move workflow, and manual assembly are not planned acceptance requirements. Auto Produce must create a finished MP4 without the user opening or editing a timeline. Optional review/corrections must never become a prerequisite.
 
 ### VXP-13 — Reliability, performance, security and distribution
 
@@ -422,7 +427,7 @@ Exact PR mapping for some older foundations still needs Git-history reconciliati
 - Final Motion Canvas/HyperFrames/Remotion selection and production adapter integration.
 - Full ElevenLabs-inspired expressive voice and sound design studio.
 - Full multitrack audio timeline, SFX/ambience/character vocals, smart cue placement, ducking and mastering.
-- Full editable multitrack timeline.
+- Full user-facing NLE/manual multitrack editor (explicitly not a product goal); only optional production review/correction UX is in scope.
 - Automated captions/subtitle workflow.
 - Documentary source workflow, map/data graphics, cartoon/character animation tiers and colorization.
 - Real Stable Diffusion inference and sustained target-PC performance acceptance.
@@ -507,7 +512,13 @@ A phase is DONE only when:
 
 Do not start an unrelated feature phase while VXP-00 traceability and the next dependency decision are unresolved.
 
-## 10. Source documents and provenance
+## 10. Channel and visual production profile catalogue
+
+The 14 planned channel profiles and their creative rules, preferred visual treatments, factual safeguards, and acceptance mapping are maintained in [CHANNEL_VISUAL_PRODUCTION_PROFILES.md](./CHANNEL_VISUAL_PRODUCTION_PROFILES.md). This catalogue is part of the planning baseline; it does not claim that all listed engines are implemented. One Universal Visual Production Engine and shared specialized engines serve all profiles.
+
+**Profile coverage:** Quasivanta; Veltracis; Sizzjin; Drowsehaven; Rihvaya; Niq Exposed; Deep Ocean Creatures; Crime Documentary; Educational Explainer; Inventions & Discoveries; Cartoon & Animated Stories; Biography & Famous Personalities; Animals & Wildlife; Science & Discovery.
+
+## 11. Source documents and provenance
 
 - VOXORA_MASTER_SPECIFICATION_REV_0.3.md — original consolidated architecture and roadmap.
 - VOXORA_MASTER_SPECIFICATION_REV_0.4.md — current-state overlay; includes TS-01 completion, AI Production Director direction and TS-02 candidate research.
