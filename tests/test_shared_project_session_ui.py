@@ -94,6 +94,8 @@ def test_project_replacement_refreshes_both_visual_workspaces(shared_workspaces)
     manager.mark_dirty()
     scene_assets.refresh_project()
     composition.refresh_project()
+    # This test focuses on workspace refresh, not the discard-confirmation dialog.
+    manager.dirty = False
 
     script._on_new_project()
     root.update()
