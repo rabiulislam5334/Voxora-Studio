@@ -42,9 +42,16 @@ def composite_transition_frames(
         raise TransitionCompositorError("cut transitions do not have overlap frames")
 
     try:
-        progress = transition_progress(
-            frame_index, frame_count, easing=spec.easing,
-        )
+        # The existing timeline can quantize a short overlap to one output
+        # frame. Preserve the legacy crossfade midpoint for that single frame.
+        if isinstance(frame_count, int) and not isinstance(frame_count, bool) and frame_count == 1:
+            if isinstance(frame_index, bool) or frame_index != 0:
+                raise TransitionValidationError("frame_index must be zero for a one-frame transition")
+            progress = 0.5
+        else:
+            progress = transition_progress(
+                frame_index, frame_count, easing=spec.easing,
+            )
     except TransitionValidationError as exc:
         raise TransitionCompositorError(str(exc)) from exc
 
