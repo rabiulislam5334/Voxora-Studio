@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Optional, Sequence
@@ -20,7 +21,10 @@ class CinematicSkillTimingError(ValueError):
 def _time(value, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise CinematicSkillTimingError(f"{name} must be a finite number")
-    result = float(value)
+    try:
+        result = float(value)
+    except (OverflowError, ValueError):
+        raise CinematicSkillTimingError(f"{name} must be a finite non-negative number") from None
     if not math.isfinite(result) or result < 0:
         raise CinematicSkillTimingError(f"{name} must be a finite non-negative number")
     return result
@@ -90,6 +94,8 @@ class CinematicSkillNarrationDoc:
         if isinstance(lines, (str, bytes)) or not lines:
             raise CinematicSkillTimingError("at least one narration line is required")
         parsed = tuple(lines)
+        if not parsed:
+            raise CinematicSkillTimingError("at least one narration line is required")
         if not all(isinstance(item, CinematicLineCue) for item in parsed):
             raise CinematicSkillTimingError("lines must contain CinematicLineCue values")
         ids = [item.line_id for item in parsed]
@@ -148,9 +154,16 @@ class CinematicSkillNarrationDoc:
             line = self.lines[line_id]
         except KeyError:
             raise CinematicSkillTimingError(f"unknown narration line ID: {line_id}") from None
+        def normalize_token(value: str) -> str:
+            return "".join(
+                char for char in value.casefold()
+                if not unicodedata.category(char).startswith("P")
+            )
+
+        wanted = normalize_token(word)
         matches = [
             cue for cue in line.word_timings
-            if cue.word.casefold() == word.casefold()
+            if normalize_token(cue.word) == wanted
         ]
         if nth >= len(matches):
             raise CinematicSkillTimingError(
@@ -188,7 +201,10 @@ class CinematicSkillNarrationDoc:
 
     def map(self, name: str):
         """Load a pre-approved local map payload prepared for this project."""
-        if not isinstance(name, str) or not name.strip() or Path(name).name != name:
+        if (
+            not isinstance(name, str) or not name.strip()
+            or Path(name).name != name or "/" in name or "\\" in name
+        ):
             raise CinematicSkillTimingError("map name must be a simple file stem")
         path = self.prep / f"map_{name}.json"
         try:
