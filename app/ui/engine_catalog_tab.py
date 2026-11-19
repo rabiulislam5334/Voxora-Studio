@@ -119,10 +119,11 @@ class EngineCatalogTab(ttk.Frame):
         entry = self._entries.get(selected_id)
         if entry is None: return
         kind, descriptor, diagnostic = entry
-        identity = descriptor.provider_id if kind == "provider" else descriptor.engine_id
-        self._name.configure(text=f"{descriptor.display_name}  ·  {identity}")
-        lines = [f"Category: {kind.replace('_', ' ').title()}", f"Version: {descriptor.version}",
-                 f"Availability: {'Available' if descriptor.available else 'Unavailable / not configured'}"]
+        metadata = descriptor.descriptor if kind == "composition_renderer" else descriptor
+        identity = metadata.provider_id if kind == "provider" else metadata.engine_id
+        self._name.configure(text=f"{metadata.display_name}  ·  {identity}")
+        lines = [f"Category: {kind.replace('_', ' ').title()}", f"Version: {metadata.version}",
+                 f"Availability: {'Available' if metadata.available else 'Unavailable / not configured'}"]
         if diagnostic: lines.extend(("", f"Diagnostic: {diagnostic}"))
         if kind == "segment_engine": lines.extend(("", format_capabilities(descriptor.capabilities)))
         elif kind == "composition_renderer": lines.extend(("", format_composition_capabilities(descriptor)))
