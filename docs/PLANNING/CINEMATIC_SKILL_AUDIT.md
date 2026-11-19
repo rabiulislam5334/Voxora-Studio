@@ -116,3 +116,33 @@ The next implementation slice should be an isolated vertical prototype, not a br
 - Verify every Wikimedia sample asset's current file-page rights and do not bundle unverified media.
 - Validate font licences and attribution/notice retention in the intended desktop packaging.
 - Prototype the Voxora timing adapter and target-PC render before making a final adoption decision.
+
+
+## 9. Implemented Voxora adapter slice (PR branch)
+
+The first source-reuse implementation is now present on the planning PR branch:
+
+- `app/universal/cinematic_skill/engine.py`: upstream `scripts/engine.py` vendored from the recorded upstream revision without rewriting its drawing logic.
+- `app/universal/cinematic_skill/prep_assets.py`: upstream procedural texture/asset preparation helper vendored so the Film's board looks can be generated locally rather than relying on missing downloaded textures.
+- `app/universal/cinematic_skill/LICENSE`: upstream MIT notice retained.
+- `app/universal/cinematic_skill_adapter.py`: Voxora-owned, single-worker frame adapter. It renders one Film frame at a time, stages numbered PNGs, delegates H.264 encoding and verification to Voxora's existing `FFmpegFrameSequenceEncoder`, atomically publishes a silent MP4, enforces a 1080p default ceiling, supports cancellation/progress, and cleans temporary files.
+- `requirements-cinematic-skill.txt`: optional local runtime only; no paid endpoint, API key, account, credits or subscription. Pillow is already a core Voxora dependency.
+
+The adapter intentionally accepts an already-constructed upstream `Film`. It does **not yet** turn a script into a Film, derive scene/shot layouts, map Voxora's measured word timestamps into the upstream `Doc` contract, or attach narration. It emits a silent MP4 so the existing Voxora narration/audio-mux workflow remains authoritative. This is a real renderer adapter slice, not end-to-end Auto Produce integration.
+
+### Dependency/licence notes for the optional local runtime
+
+- `skia-python`: upstream package metadata and its source repository identify BSD-3-Clause; it binds Google's Skia, which is BSD-3-Clause. Retain both notices for redistribution.
+- `numpy`: project source licence is BSD-3-Clause. Some prebuilt wheels include additional bundled numerical/runtime components with their own notices (the NumPy project documents OpenBLAS and GCC runtime components for applicable wheels). The exact Windows wheel and bundled notices must be checked for the actual pinned release before packaging.
+- `Pillow`: HPND licence; retain its licence notice if redistributed.
+- `FFmpeg`: Voxora reuses the user's already-installed FFmpeg executable and does not bundle a new binary in this change. Any future packaged FFmpeg build needs a separate exact-build configuration/licence audit.
+- No SciPy is required by this adapter; the upstream optional SciPy-only sound-effects path is not imported or adopted here.
+
+The optional requirements are intentionally not added to core `requirements.txt` or `pyproject.toml`. They must not be installed automatically on machines that do not opt into the Cinematic Skill engine.
+
+### Verification state
+
+- Source files and adapter tests have been added to the PR branch.
+- CI has not yet been confirmed for the latest PR head at the time this report was updated.
+- No real Skia render, FFmpeg encode, Bengali typography check, memory benchmark or target-Windows-PC acceptance is claimed.
+- The adapter is an initial integration boundary. The next implementation step is the narration timing bridge and a deterministic Film builder driven by Voxora's script/shot plan, followed by an actual 20–30 second render on the target machine.
