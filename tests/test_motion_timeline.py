@@ -90,7 +90,7 @@ def test_motion_timeline_plan_binds_exact_scene_frame_ranges_deterministically()
     assert plan.fps == 3
     assert len(plan.motion_fingerprint) == 64
     assert plan.transition == "cut"
-    assert plan.transition_frames == 0
+    assert plan.transition_frames == (0,)
     assert len(plan.plan_fingerprint) == 64
     assert build_motion_timeline_plan(composition, motions) == plan
 
@@ -154,11 +154,32 @@ def test_motion_timeline_plan_binds_crossfade_overlap_frames():
     plan = build_motion_timeline_plan(composition, motions)
 
     assert plan.transition == "crossfade"
-    assert plan.transition_frames == 1
+    assert plan.transition_frames == (1,)
     assert [(item.frame_start, item.frame_end, item.segment_frame_end) for item in plan.scenes] == [
         (0, 3, 4), (3, 6, 6),
     ]
     assert [item.frame_count for item in plan.scenes] == [4, 3]
+
+
+def test_motion_timeline_plan_preserves_per_transition_frame_rounding():
+    composition = _composition_plan(
+        transition="crossfade",
+        slots=(
+            _slot("scene-a", 0, 0, 3, segment_end=4),
+            _slot("scene-b", 1, 3, 6, segment_end=8),
+            _slot("scene-c", 2, 6, 9),
+        ),
+        total_frames=9,
+    )
+    motions = {
+        "scene-a": _motion("scene-a", duration=4),
+        "scene-b": _motion("scene-b", duration=5),
+        "scene-c": _motion("scene-c", duration=3),
+    }
+
+    plan = build_motion_timeline_plan(composition, motions)
+
+    assert plan.transition_frames == (1, 2)
 
 
 def test_motion_timeline_plan_rejects_crossfade_motion_without_overlap_frames():
