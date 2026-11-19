@@ -482,3 +482,14 @@ __all__ += [
     "transition_boundary",
     "transition_progress",
 ]
+
+
+from app.universal.transition_compositor import (
+    TransitionCompositorError,
+    composite_transition_frames,
+)
+
+__all__ += [
+    "TransitionCompositorError",
+    "composite_transition_frames",
+]
