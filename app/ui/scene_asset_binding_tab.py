@@ -56,7 +56,7 @@ class SceneAssetBindingTab(ttk.Frame):
 
     def __init__(
         self, master, *, config, palette, project_manager=None,
-        on_open_project=None, on_save_project=None,
+        on_open_project=None, on_save_project=None, on_project_dirty=None,
     ) -> None:
         super().__init__(master, style="App.TFrame", padding=18)
         self.app_config = config
@@ -64,6 +64,7 @@ class SceneAssetBindingTab(ttk.Frame):
         self.project_manager = project_manager or ProjectManager()
         self._on_open_project_callback = on_open_project
         self._on_save_project_callback = on_save_project
+        self._on_project_dirty_callback = on_project_dirty or (lambda: None)
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
         self.catalog = None
         self._preview = None
@@ -378,6 +379,7 @@ class SceneAssetBindingTab(ttk.Frame):
                     self._preview, approved=True,
                 )
             self.project_manager.mark_dirty()
+            self._on_project_dirty_callback()
             self._preview = None
             self._preview_generated_only = False
             self._on_scene_select()
