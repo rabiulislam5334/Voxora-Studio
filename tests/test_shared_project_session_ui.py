@@ -122,3 +122,20 @@ def test_shared_project_mutations_are_visible_without_reopening(shared_workspace
         "source": "scene-assets"
     }
     assert "Unsaved changes" in script._status_unsaved_label.cget("text")
+
+
+
+def test_unapplied_composition_draft_is_preserved_when_switch_is_cancelled(shared_workspaces, monkeypatch):
+    _, _, _, _, composition, _ = shared_workspaces
+    import app.ui.composition_editor_tab as module
+
+    composition._composition_dirty = True
+    monkeypatch.setattr(module.messagebox, "askyesno", lambda *args, **kwargs: False)
+    assert composition.confirm_project_switch() is False
+    assert composition._composition_dirty is True
+
+    monkeypatch.setattr(module.messagebox, "askyesno", lambda *args, **kwargs: True)
+    assert composition.confirm_project_switch() is True
+    # Confirmation alone does not destroy the draft; a successful project
+    # replacement triggers refresh_project(), which clears it.
+    assert composition._composition_dirty is True
