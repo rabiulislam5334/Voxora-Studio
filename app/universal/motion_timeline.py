@@ -1,9 +1,10 @@
 """Timeline-aware multi-scene motion rendering for Universal projects.
 
 This opt-in pipeline combines approved scene compositions, per-scene motion,
-the immutable composition timeline, the existing frame-sequence encoder, and
-the existing Studio audio mixer/muxer. Motion remains caller-supplied until a
-separate persistence/editor phase is implemented.
+persisted Transition Editor settings, the immutable composition timeline,
+the frame-sequence encoder, and the existing Studio audio mixer/muxer.
+Motion remains caller-supplied; transition overrides are loaded from Studio
+project settings and revalidated before rendering.
 """
 from __future__ import annotations
 
