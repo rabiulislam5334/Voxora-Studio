@@ -255,6 +255,7 @@ class SceneAssetBindingTab(ttk.Frame):
     def _invalidate_preview(self, *_args):
         if self._preview is not None:
             self._preview = None
+            self._preview_generated_only = False
             self._set_report("Selection changed. Create a new binding preview before applying.")
 
     def _on_asset_select(self, _event=None):
@@ -286,6 +287,7 @@ class SceneAssetBindingTab(ttk.Frame):
             self.asset_preview.configure(image="", text=f"Preview unavailable: {exc}")
 
     def _preview_bindings(self):
+        self._preview_generated_only = False
         project = self.project_manager.current_project
         scene_id = self._selected_scene_id()
         if self.project_manager.current_path is None or scene_id is None or self.catalog is None:
