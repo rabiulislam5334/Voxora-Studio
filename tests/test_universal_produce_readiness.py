@@ -36,7 +36,7 @@ def make_project(tmp_path: Path, *, import_asset: bool = True, duration_s: float
         "scene-1": ScenePlan(
             scene_id="scene-1",
             asset_refs=[AssetRef(
-                "asset-1", "image",
+                "asset-1", asset.kind if asset else "image",
                 path=asset.location if asset else "assets/missing.png",
                 identity=asset.content_sha256 if asset else "a" * 64,
             )],
