@@ -11,6 +11,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from app.projects.manager import ProjectManager
+from app.projects.session import ProjectSession
 from app.universal.asset_library import VisualAssetLibrary
 from app.universal.composition import (
     CompositionCanvas,
@@ -50,11 +51,14 @@ def move_transform(transform: VisualTransform, dx: float, dy: float) -> VisualTr
 class CompositionEditorTab(ttk.Frame):
     """A lightweight local drag-and-drop composition editor."""
 
-    def __init__(self, master, *, config, palette) -> None:
+    def __init__(self, master, *, config, palette, project_session: ProjectSession | None = None) -> None:
         super().__init__(master, style="App.TFrame", padding=16)
         self.config = config
         self.palette = palette
-        self.project_manager = ProjectManager()
+        self.project_session = project_session
+        self.project_manager = project_session.manager if project_session is not None else ProjectManager()
+        self._project_ref = None
+        self._scene_ids = []
         self.library = VisualAssetLibrary(Path(config.assets_dir) / "visual_library")
         self.catalog = None
         self.composition = None
@@ -90,8 +94,8 @@ class CompositionEditorTab(ttk.Frame):
         toolbar.grid(row=2, column=0, sticky="new", pady=(0, 8))
         for column in range(5):
             toolbar.columnconfigure(column, weight=0)
-        ttk.Button(toolbar, text="Open Project…", style="Primary.TButton",
-                   command=self._open_project).grid(row=0, column=0, padx=(0, 6))
+        ttk.Button(toolbar, text="Refresh Active Project", style="Primary.TButton",
+                   command=self.refresh_project).grid(row=0, column=0, padx=(0, 6))
         ttk.Button(toolbar, text="Save Project", style="Secondary.TButton",
                    command=self._save_project).grid(row=0, column=1, padx=6)
         ttk.Button(toolbar, text="Refresh Library", style="Secondary.TButton",
@@ -214,63 +218,30 @@ class CompositionEditorTab(ttk.Frame):
             self._status.set(f"Visual library unavailable: {exc}")
 
     def _open_project(self):
-        from tkinter import filedialog
-        if self._composition_dirty and not messagebox.askyesno(
-            "Discard composition edits",
-            "The current composition has unapplied editor changes. Discard them and open another project?",
-            parent=self,
-        ):
+        """Compatibility alias: project selection is centralized on Script."""
+        self.refresh_project()
+
+    def refresh_project(self):
+        project = self.project_manager.current_project
+        if project is self._project_ref:
             return
-        if self.project_manager.dirty:
-            choice = messagebox.askyesnocancel(
-                "Unsaved composition changes",
-                "Save the current project before opening another one?\n\n"
-                "Yes = Save, No = Discard changes, Cancel = Stay here.",
-                parent=self,
-            )
-            if choice is None:
-                return
-            if choice:
-                try:
-                    if self.project_manager.current_path is None:
-                        save_path = filedialog.asksaveasfilename(
-                            parent=self, title="Save Voxora project",
-                            defaultextension=".voxora",
-                            filetypes=(("Voxora projects", "*.voxora"),),
-                        )
-                        if not save_path:
-                            return
-                        self.project_manager.save(Path(save_path))
-                    else:
-                        self.project_manager.save()
-                except Exception as exc:
-                    messagebox.showerror("Project not saved", str(exc), parent=self)
-                    return
-        path = filedialog.askopenfilename(
-            parent=self, title="Open Voxora project",
-            initialdir=str(self.config.projects_dir),
-            filetypes=(("Voxora projects", "*.voxora"), ("All files", "*.*")),
+        self._project_ref = project
+        ordered = sorted(project.scenes, key=lambda item: item.order)
+        self._scene_ids = [scene.id for scene in ordered]
+        self.scene_combo["values"] = [
+            f"{scene.title}  [{scene.id}]" for scene in ordered
+        ]
+        self.scene_var.set("")
+        self.composition = None
+        self.preview = None
+        self._composition_dirty = False
+        self._active_scene_id = None
+        self._selected_element_id = None
+        self._clear_canvas()
+        self._populate_layers()
+        self._status.set(
+            f"Active project: {project.name}. Choose a scene to edit its composition."
         )
-        if not path:
-            return
-        try:
-            self.project_manager.open(Path(path))
-            project = self.project_manager.current_project
-            self.scene_combo["values"] = [
-                f"{scene.title}  [{scene.id}]" for scene in sorted(project.scenes, key=lambda item: item.order)
-            ]
-            self._scene_ids = [
-                scene.id for scene in sorted(project.scenes, key=lambda item: item.order)
-            ]
-            self.scene_var.set("")
-            self.composition = None
-            self.preview = None
-            self._composition_dirty = False
-            self._active_scene_id = None
-            self._clear_canvas()
-            self._status.set(f"Opened {Path(path).name}. Choose a scene.")
-        except Exception as exc:
-            messagebox.showerror("Project not opened", str(exc), parent=self)
 
     def _load_scene(self, _event=None):
         if self.project_manager.current_project is None:
