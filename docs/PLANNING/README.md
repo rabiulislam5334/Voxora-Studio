@@ -336,6 +336,8 @@ This is the main automation milestone. It integrates existing engines; it must n
 10.14 Auto-select render quality tier from output request and measured hardware budget; render proxy for review if useful, then final MP4 without user timeline assembly.
 10.15 Integrate caption alignment, caption styling, SRT/VTT sidecars and burned-in caption QC into the same Auto Produce job.
 
+**10.3 implementation update (PR in progress):** `app/universal/cinematic_skill_auto_produce.py` now orchestrates supplied script + supplied audio → FFprobe duration validation → optional local Stable-ts alignment → deterministic Cinematic Skill Film → H.264 render → supplied-audio AAC mux. This is a runnable vertical-slice service, not yet wired into the Produce UI and not yet the semantic AI Director. The current visual output is deterministic timed cards; semantic shots, automatic visuals, captions and sound design remain open. See [VXP-10.3 implementation notes](../architecture/VXP_10_3_SUPPLIED_SCRIPT_NARRATION_AUTO_PRODUCE.md).
+
 **Generate Video acceptance:** with a matching script + supplied narration audio + profile, and optionally a Claude visual-direction package, one user action produces a playable final MP4. The narration track is preserved as the primary voice track; visuals, scene changes, motion, captions and optional sound design align to its actual timing. Without an external prompt package, Voxora creates the scene/shot prompts itself. No manual timeline editing or per-scene asset attachment is required. Missing providers/assets yield explicit profile-compatible fallback or actionable errors, never fake success.
 
 ### VXP-11 — Hybrid media, documentary, cartoon and specialized workflows (R-8/R-9/R-10)
