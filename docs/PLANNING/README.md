@@ -248,10 +248,10 @@ Preserve recovered rules: first scene role is intro; last scene is outro only wi
 | 06.5 | Implement selected adapter in isolation | BLOCKED by 06.3 |
 | 06.6 | Preview/render parity and deterministic tests | BLOCKED by 06.5 |
 | 06.7 | FFmpeg handoff, cache, cancellation and resource limits | BLOCKED by 06.5 |
-| 06.8 | Audit and adapt [Cinematic Skill](https://github.com/Moh4696/cinematic-skill): beat tables, word-cued visuals, camera choreography, Skia drawing, maps/cards/archive layouts, sound cues, captions and render review | CODE ADAPTER ADDED — CI, optional runtime and target-PC verification pending |
+| 06.8 | Audit and adapt [Cinematic Skill](https://github.com/Moh4696/cinematic-skill): beat tables, word-cued visuals, camera choreography, Skia drawing, maps/cards/archive layouts, sound cues, captions and render review | UPSTREAM ENGINE + VOXORA ADAPTER + DETERMINISTIC NARRATION-TO-FILM BUILDER ADDED — real Skia render and target-PC verification pending |
 | 06.9 | Advanced animation grammar: keyframes, easing, camera rigs, parallax/depth layers, masks, particles, shape/text animation, 2D character/Stickman rigs, transitions and reusable motion presets | PLANNED |
 | 06.10 | Render-quality tiers and benchmark: draft/proxy/final, resolution/FPS, anti-aliasing, typography, frame pacing, memory ceiling, deterministic output and preview/final parity | PLANNED |
-| 06.11 | Cinematic Skill adapter/prototype using Voxora's existing project, script and supplied-audio contracts; no duplicate project, audio or render pipeline | IN PROGRESS — Film-to-MP4 adapter, original narration mux path and exact Unicode word-timing Doc bridge added; automatic Film/shot builder and trusted aligner remain open |
+| 06.11 | Cinematic Skill adapter/prototype using Voxora's existing project, script and supplied-audio contracts; no duplicate project, audio or render pipeline | IN PROGRESS — upstream Film-to-MP4 adapter, original narration mux, exact Unicode word-timing bridge and deterministic line-to-Film builder added; semantic AI shot planning, trusted aligner and real target-PC render remain open |
 
 **TS-02 completed evidence (user workload, not universal benchmark):**
 - Motion Canvas: 29-second animation rendered in 39 seconds; visual quality judged weak.
@@ -402,7 +402,7 @@ This is a **candidate registry**, not an implementation commitment. These projec
 
 | Candidate | Potential Voxora capability | Proposed treatment | Status / constraints |
 |---|---|---|---|
-| [Cinematic Skill](https://github.com/Moh4696/cinematic-skill) | Python/Skia designed-world renderer: continuous camera, spotlight, maps, cards, prints, counters, word-cued visual events, procedural SFX and captions | Vendored upstream engine + procedural board textures; Voxora single-worker adapter encodes through its FFmpeg pipeline and can mux the original narration through CompositionAudioMuxer | ADAPTER + EXACT TIMING BRIDGE ADDED — optional BSD/HPND runtime notices and exact wheel packaging still require review; automatic script/shot Film builder, trusted word aligner and target-PC acceptance remain open; see [audit report](./CINEMATIC_SKILL_AUDIT.md) |
+| [Cinematic Skill](https://github.com/Moh4696/cinematic-skill) | Python/Skia designed-world renderer: continuous camera, spotlight, maps, cards, prints, counters, word-cued visual events, procedural SFX and captions | Vendored upstream engine + procedural board textures; Voxora single-worker adapter encodes through its FFmpeg pipeline and can mux the original narration through CompositionAudioMuxer | ADAPTER + EXACT TIMING BRIDGE + DETERMINISTIC NARRATION-TO-FILM BUILDER ADDED — optional runtime/binary notices and exact wheel packaging still require review; semantic shot planner, trusted word aligner, real Skia MP4 and target-PC acceptance remain open; see [audit report](./CINEMATIC_SKILL_AUDIT.md) |
 | [OpenMontage](https://github.com/OpenMontageInc/OpenMontage) | Agentic production workflow, pipeline manifests, tool/skill orchestration, documentary footage acquisition and quality gates | Study architecture and reusable workflow patterns; do not replace Voxora's Core, project model or user-supplied narration flow | AUDIT FIRST; official repository currently identifies AGPL-3.0. No code copying/linking/distribution decision until licence and dependency review |
 | [ComfyUI](https://github.com/Comfy-Org/ComfyUI) | Node-based image/video generation workflows and model/provider orchestration | Optional external visual-generation adapter; keep model execution optional and resource-aware | RESEARCH; repository is GPL-3.0; review redistribution/integration implications and each model/weight licence separately |
 | [Synfig Studio](https://github.com/synfig/synfig) | 2D vector animation, interpolation and reusable character motion | Evaluate whether its rendering/animation capabilities can be driven headlessly or via a narrow interchange adapter | CANDIDATE; inspect current licence, automation surface, export and Windows resource use |
@@ -440,7 +440,7 @@ No candidate in this registry is currently certified as passing this policy. The
 
 ### Audit sequence
 
-1. Cinematic Skill — upstream renderer is vendored with its MIT notice and a Voxora Film-to-silent-MP4 adapter; next complete exact runtime/binary clearance and connect Voxora shot/timing contracts (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
+1. Cinematic Skill — upstream renderer is vendored with its MIT notice, Voxora Film-to-MP4 adapter, exact timing bridge and deterministic narration-line-to-Film builder; next complete runtime/binary clearance, semantic shot planning and real target-PC render (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
 2. OpenMontage — workflow/tool/quality-gate architecture audit, with AGPL boundary explicitly reviewed.
 3. ComfyUI — optional provider/workflow adapter and model-licence audit.
 4. Stickman and 2D animation candidates — Animate/StykAnimate, Synfig and OpenToonz capability/export comparison.
@@ -521,7 +521,7 @@ Exact PR mapping for some older foundations still needs Git-history reconciliati
 - Full user-facing NLE/manual multitrack editor (explicitly not a product goal); only optional production review/correction UX is in scope.
 - Automated captions/subtitle workflow (script-first forced alignment, multilingual typography, SRT/VTT, burned-in rendering and QC).
 - Production-grade advanced animation grammar, reusable character rigs and full cinematic camera/motion direction.
-- Cinematic Skill audit/adaptation and its Skia-based rendering techniques integrated with Voxora's existing audio, project, motion and FFmpeg contracts.
+- Cinematic Skill audit/adaptation, upstream Skia engine, Voxora render adapter, exact timing bridge and deterministic narration-line-to-Film builder integrated; semantic shot planning, trusted alignment and target-PC acceptance remain open.
 - Final render-quality tiers, memory-aware scheduling and target-PC visual-quality acceptance.
 - Documentary source workflow, map/data graphics, cartoon/character animation tiers and colorization.
 - Real Stable Diffusion inference and sustained target-PC performance acceptance.
@@ -601,7 +601,7 @@ A phase is DONE only when:
 2. Close the VXP-00 source-recovery gap: exact 29 Modular Systems and precise R-stage definitions from their original source.
 3. Complete the requirement-to-implementation traceability matrix against merged PRs and current Core code.
 4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment.
-5. Complete exact Cinematic Skill dependency/binary licence clearance; implement the script/shot-to-Film and narration-timing bridge, then render and review a 20–30 second sequence on the target PC (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
+5. Complete exact Cinematic Skill dependency/binary licence clearance and trusted free word alignment; evolve the deterministic narration-line-to-Film builder toward semantic script/shot planning, then render and review a 20–30 second sequence on the target PC (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
 6. Design the script-first Auto Caption pipeline and multilingual caption acceptance matrix.
 7. Define advanced animation/render quality acceptance criteria and integrate them into the Auto Produce production graph.
 8. Design Sound & Voice System contracts and the smallest testable vertical slices.
