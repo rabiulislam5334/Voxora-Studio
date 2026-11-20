@@ -160,7 +160,7 @@ def _matches(text: str, term: str) -> int:
     return len(re.findall(pattern, text, flags=re.IGNORECASE))
 
 
-def _classify(text: str, profile: ChannelProfile) -> tuple[DirectorIntent, str, float, tuple[str, ...], tuple[str, ...]]:
+def _classify(text: str) -> tuple[DirectorIntent, str, float, tuple[str, ...], tuple[str, ...]]:
     normalized = text.casefold()
     scores = []
     for index, (intent, shot_type, terms, cues) in enumerate(_RULES):
@@ -237,7 +237,7 @@ class ProductionDirector:
         for index, beat in enumerate(timing_proposal.beats, start=1):
             unit = unit_by_id[beat.narration_unit_ids[0]]
             narration_text = source.text_for_unit(unit).strip()
-            intent, shot_type, confidence, rationale, cues = _classify(narration_text, profile)
+            intent, shot_type, confidence, rationale, cues = _classify(narration_text)
             prompt_parts = [
                 f"{shot_type.replace('_', ' ')} visual for: {narration_text}",
                 f"Visual language: {style_family}.",
@@ -269,6 +269,7 @@ class ProductionDirector:
             paragraph_start = bool(groups and re.search(r"\\n[ \\t]*\\n", unit_text))
             if (not groups or len(groups[-1]) >= self.config.max_shots_per_scene
                     or _scene_family(groups[-1][-1].intent) != _scene_family(shot.intent)
+                    or groups[-1][-1].timing.basis != shot.timing.basis
                     or paragraph_start):
                 groups.append([])
             groups[-1].append(shot)
@@ -290,11 +291,7 @@ class ProductionDirector:
             }[family]
             start_ms = min(shot.timing.start_ms for shot in group)
             end_ms = max(shot.timing.end_ms for shot in group)
-            basis = (
-                group[0].timing.basis
-                if all(shot.timing.basis == group[0].timing.basis for shot in group)
-                else group[0].timing.basis
-            )
+            basis = group[0].timing.basis
             scenes.append(DirectorScene(
                 scene_id=f"scene-{index:04d}",
                 title=_short_title(scene_text),
