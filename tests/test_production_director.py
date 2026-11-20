@@ -50,10 +50,6 @@ def test_director_creates_stable_profile_aware_scene_and_shot_plan():
 
 
 def test_director_preserves_measured_timing_and_narration_unit_mapping():
-    source = segment_narration(
-        "The ship crossed the ocean. A letter described the logbook.",
-        source_id="script-02",
-    )
     from app.universal.storyboard import TimingInterval
     source = segment_narration(
         "The ship crossed the ocean. A letter described the route.",
