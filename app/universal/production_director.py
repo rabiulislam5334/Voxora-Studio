@@ -167,7 +167,7 @@ def _classify(text: str) -> tuple[DirectorIntent, str, float, tuple[str, ...], t
         matched = tuple(term for term in terms if _matches(normalized, term))
         if matched:
             scores.append((len(matched), -index, intent, shot_type, matched, cues))
-    years = tuple(re.findall(r"(?<!\\w)(?:1[0-9]{3}|20[0-9]{2})(?!\\w)", normalized))
+    years = tuple(re.findall(r"(?<!\w)(?:1[0-9]{3}|20[0-9]{2})(?!\w)", normalized))
     if years:
         scores.append((
             len(years), -len(_RULES), DirectorIntent.TIMELINE, "timeline",
