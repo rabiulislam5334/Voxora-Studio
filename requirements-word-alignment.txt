@@ -1,0 +1,5 @@
+# Optional local word alignment (experimental, zero-cost; never core-installed).
+# Stable-ts is MIT-licensed, but upstream was archived on 2026-05-30.
+# CPU-only PyTorch/torchaudio wheels should be installed first for this PC;
+# see the audit document before enabling this optional runtime.
+stable-ts==2.0.0
