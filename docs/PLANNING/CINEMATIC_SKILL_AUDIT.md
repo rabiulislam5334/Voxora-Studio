@@ -147,3 +147,15 @@ The optional requirements are intentionally not added to core `requirements.txt`
 - CI has not yet been confirmed for the latest PR head at the time this report was updated.
 - No real Skia render, FFmpeg encode, Bengali typography check, memory benchmark or target-Windows-PC acceptance is claimed.
 - The exact-timestamp Doc bridge is now present, but it needs a trusted word-alignment producer and a deterministic Film builder driven by Voxora's script/shot plan. The next step is that Film builder plus an actual 20–30 second render on the target machine.
+
+
+## 10. Narration-to-Film builder slice (PR #113)
+
+A deterministic builder now converts the existing Voxora narration timing document into an upstream `Film`:
+
+- `app/universal/cinematic_skill_builder.py` creates one timed moving-board card per narration line by default. It can also accept explicit `card`, `title`, and `counter` shot directives.
+- Camera and spotlight keys are generated from each line's measured start time. Items fade at the corresponding line end; the builder does not retime or rewrite the narration.
+- Optional emphasized words are scheduled only through the timing bridge's exact `doc.W()` timestamp. Missing word timing remains a hard error; there is no character-share estimate.
+- Long text is rejected with a request to split the narration into shorter timed lines; it is never silently truncated. The optional Skia/NumPy runtime is lazy-loaded, so core Voxora tests do not require it.
+
+**Scope boundary:** this is a first deterministic narration-line-to-Film builder, not semantic AI shot planning. It does not yet infer maps, documentary evidence, image selection, character actions, or channel-specific shot grammar from script meaning. It creates a useful animated board/card sequence from the narration text and supplied timing. The next acceptance gate remains a real 20–30 second MP4 rendered with Skia and the original narration WAV, followed by visual/audio QC on the target Windows PC. CI unit tests use a fake engine and do not prove real Skia rendering or visual quality.
