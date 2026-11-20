@@ -140,3 +140,32 @@ def test_model_loader_is_lazy_and_receives_cpu_and_cache_settings(tmp_path):
         audio_duration_seconds=1.0,
     )
     assert calls == [("tiny", {"device": "cpu", "download_root": str(tmp_path / "models")})]
+
+def test_alignment_rejects_declared_audio_duration_shorter_than_last_word(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    model = FakeModel([FakeSegment(words(["Hello"], 0.1))])
+
+    with pytest.raises(CinematicSkillAlignmentError, match="duration_seconds"):
+        StableTsNarrationAligner(model=model).align(
+            script="Hello",
+            audio_path=audio,
+            language="en",
+            project_dir=tmp_path,
+            audio_duration_seconds=0.2,
+        )
+
+
+def test_alignment_supports_unicode_script_tokens(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    model = FakeModel([FakeSegment(words(["বাংলা", "ভাষা।"], 0.1))])
+
+    doc = StableTsNarrationAligner(model=model).align(
+        script="বাংলা ভাষা।",
+        audio_path=audio,
+        language="bn",
+        project_dir=tmp_path,
+        audio_duration_seconds=1.0,
+    )
+    assert doc.W(1, "ভাষা") == pytest.approx(0.35)
