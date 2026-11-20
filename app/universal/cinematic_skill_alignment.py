@@ -197,7 +197,7 @@ class StableTsNarrationAligner:
                 ) from exc
 
         try:
-            return CinematicSkillNarrationDoc(project_dir, cues)
+            return CinematicSkillNarrationDoc(project_dir, cues, duration_seconds=duration)
         except CinematicSkillTimingError as exc:
             raise CinematicSkillAlignmentError(
                 f"could not create narration timing document: {exc}"
