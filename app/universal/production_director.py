@@ -12,7 +12,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 from app.universal.profiles.models import ChannelProfile
 from app.universal.storyboard import (
@@ -149,7 +149,7 @@ _RULES = (
     (DirectorIntent.MAP, "map", ("map", "route", "border", "continent", "country", "city", "region", "island", "ocean", "river", "coast", "north", "south", "east", "west", "across"), ("map reveal", "route trace", "location highlight")),
     (DirectorIntent.DIAGRAM, "diagram", ("gravity", "orbit", "molecule", "cell", "dna", "energy", "force", "system", "process", "signal", "frequency", "temperature", "pressure", "wave", "percent", "data", "equation"), ("diagram build", "highlight relationship", "label key element")),
     (DirectorIntent.EVIDENCE, "evidence", ("document", "record", "letter", "photograph", "evidence", "report", "artifact", "manuscript", "logbook", "newspaper", "archive", "inscription", "source"), ("document reveal", "slow detail pan", "highlight evidence")),
-    (DirectorIntent.TIMELINE, "timeline", ("century", "decade", "year", "before", "after", "later", "earlier", "in 18", "in 19", "in 20", "in 21", "timeline", "on this day"), ("timeline marker", "date emphasis", "chronological transition")),
+    (DirectorIntent.TIMELINE, "timeline", ("century", "decade", "year", "before", "after", "later", "earlier", "timeline", "on this day"), ("timeline marker", "date emphasis", "chronological transition")),
     (DirectorIntent.CHARACTER_ACTION, "character_action", ("walked", "runs", "ran", "opened", "closed", "looked", "turned", "stood", "whispered", "entered", "left", "reached", "carried", "followed", "disappeared"), ("character action", "reaction pose", "motivated camera move")),
     (DirectorIntent.ENVIRONMENT, "environment", ("forest", "desert", "mountain", "ocean", "sky", "room", "street", "island", "planet", "cave", "village", "city", "storm", "shore", "valley"), ("establishing view", "atmospheric movement", "depth/parallax")),
 )
@@ -167,6 +167,12 @@ def _classify(text: str) -> tuple[DirectorIntent, str, float, tuple[str, ...], t
         matched = tuple(term for term in terms if _matches(normalized, term))
         if matched:
             scores.append((len(matched), -index, intent, shot_type, matched, cues))
+    years = tuple(re.findall(r"(?<!\\w)(?:1[0-9]{3}|20[0-9]{2})(?!\\w)", normalized))
+    if years:
+        scores.append((
+            len(years), -len(_RULES), DirectorIntent.TIMELINE, "timeline",
+            years, ("timeline marker", "date emphasis", "chronological transition"),
+        ))
     if not scores:
         return (
             DirectorIntent.ILLUSTRATIVE,
@@ -265,7 +271,6 @@ class ProductionDirector:
         groups: list[list[DirectorShot]] = []
         for shot in shots:
             unit = unit_by_id[shot.narration_unit_ids[0]]
-            unit_text = source.text_for_unit(unit)
             paragraph_start = bool(groups and re.search(r"\n[ \t]*\n", source.text_for_unit(unit_by_id[groups[-1][-1].narration_unit_ids[-1]])))
             if (not groups or len(groups[-1]) >= self.config.max_shots_per_scene
                     or _scene_family(groups[-1][-1].intent) != _scene_family(shot.intent)
