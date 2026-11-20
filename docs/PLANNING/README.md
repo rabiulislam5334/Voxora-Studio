@@ -1,6 +1,6 @@
 # Voxora Studio — Master Product Plan & Delivery Registry
 
-> Status: Active planning baseline (PR #114)
+> Status: Active planning baseline (PR #115 merged; registry reconciliation in progress)
 > Canonical location: docs/PLANNING/README.md
 > Last reconciled: 2026-11-20
 
@@ -496,6 +496,7 @@ This registry records delivered PR scope, not completion of the entire associate
 | #112 | Composition editor PNG render, capability catalog, navigation/docs integration | VXP-08.3/00 | PNG still, not animated MP4 |
 | #113 | Cinematic Skill source/adapter, exact timing bridge, deterministic Film builder and optional local alignment | VXP-06.8/06.11 | Real Skia render, model accuracy and target-PC acceptance remain open |
 | #114 | Supplied script + supplied narration Auto Produce vertical slice | VXP-10.3 | Orchestration service only; no semantic Director, UI wiring, automatic visuals, captions or sound design |
+| #115 | Deterministic AI Production Director core: scene/shot planning, profile-aware visual prompts and review flags | VXP-10.4 | Rule/keyword heuristics only; no LLM, semantic beat analysis, visual sourcing/generation, animation or render routing |
 
 **PR #110:** an earlier shared-project-session implementation remains open in the latest issue listing, while PR #111 is the merged canonical delivery. Treat #110 as superseded/duplicate pending explicit repository cleanup; do not implement or merge a second copy.
 
@@ -519,7 +520,7 @@ Exact PR mapping for some older foundations still needs Git-history reconciliati
 
 ### 5.3 Explicitly not complete
 
-- Full semantic AI Production Director and fully automatic script-to-finished-video workflow. A deterministic, rule-based VXP-10.4 planning foundation is in progress; it is not equivalent to a production-grade semantic Director.
+- Full semantic AI Production Director and fully automatic script-to-finished-video workflow. A deterministic, rule-based VXP-10.4 planning foundation is merged in PR #115; it is not equivalent to a production-grade semantic Director.
 - Production-quality automatic semantic scene/shot breakdown.
 - Automatic visual selection/acquisition/generation for every shot.
 - Final Motion Canvas/HyperFrames/Remotion selection and production adapter integration.
@@ -604,7 +605,7 @@ A phase is DONE only when:
 
 ## 9. Current next sequence
 
-1. Finalize this plan and reconcile its PR registry against repository history.
+1. Reconcile the PR registry against repository history, including merged PR #115 and its exact implementation boundary.
 2. Close the VXP-00 source-recovery gap: exact 29 Modular Systems and precise R-stage definitions from their original source.
 3. Complete the requirement-to-implementation traceability matrix against merged PRs and current Core code.
 4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment.
@@ -613,7 +614,7 @@ A phase is DONE only when:
 7. Define advanced animation/render quality acceptance criteria and integrate them into the Auto Produce production graph.
 8. Design Sound & Voice System contracts and the smallest testable vertical slices.
 9. Define the Auto Produce production-plan schema and end-to-end acceptance fixture.
-10. Implement only the next approved small phase.
+10. Implement only the next approved small phase, after the VXP-00 traceability and dependency gates above are resolved.
 11. After the core automatic video-generation workflow and its visual/animation/rendering acceptance priorities, schedule VXP-14 as the final deferred workstream; do not advance Bengali TTS ahead of those priorities.
 
 Do not start an unrelated feature phase while VXP-00 traceability and the next dependency decision are unresolved.
