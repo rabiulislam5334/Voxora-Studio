@@ -146,7 +146,7 @@ def test_alignment_rejects_declared_audio_duration_shorter_than_last_word(tmp_pa
     audio.write_bytes(b"fake audio")
     model = FakeModel([FakeSegment(words(["Hello"], 0.1))])
 
-    with pytest.raises(CinematicSkillAlignmentError, match="duration_seconds"):
+    with pytest.raises(CinematicSkillAlignmentError, match="after the supplied audio"):
         StableTsNarrationAligner(model=model).align(
             script="Hello",
             audio_path=audio,
