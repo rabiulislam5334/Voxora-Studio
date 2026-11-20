@@ -1,0 +1,5 @@
+# Optional, zero-cost local runtime for the MIT Cinematic Skill renderer.
+# No paid API, subscription, hosted endpoint or model download is required.
+# Pillow is already a core Voxora dependency.
+numpy>=1.24,<3
+skia-python>=87.6,<145
