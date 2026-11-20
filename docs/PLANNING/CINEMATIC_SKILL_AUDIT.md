@@ -191,3 +191,26 @@ The adapter uses [jianfch/stable-ts](https://github.com/jianfch/stable-ts) behin
 - Current tests use a fake model and validate contracts only. They do not prove Stable-ts installation, real word alignment accuracy, Bangla/Arabic performance, target-PC memory use or commercial redistribution clearance.
 
 **Next validation:** run a short English narration/script pair and a Bangla pair on the target Windows PC, inspect every word boundary against the waveform, record peak RAM and processing time, and retain the model/output provenance. Do not make this optional aligner mandatory until these checks pass.
+
+
+## 12. Supplied-script + supplied-audio Auto Produce orchestration (VXP-10.3)
+
+A first executable orchestration service has been added in `app/universal/cinematic_skill_auto_produce.py`:
+
+1. Accept a complete script and an existing narration audio file (the workflow does not invoke TTS).
+2. Probe the supplied file with the existing FFmpeg tool and require a readable audio stream and duration.
+3. Run the optional local Stable-ts aligner against the exact script and audio.
+4. Build a deterministic Cinematic Skill Film from the measured line/word cues.
+5. Render through the existing single-worker Cinematic Skill coordinator.
+6. Attach the supplied narration audio as AAC with a dedicated FFmpeg mux adapter. The spoken samples are not time-stretched or shifted; only the final frame-quantization tail may be padded with silence.
+7. Clean temporary alignment and mux files and refuse to overwrite an existing output.
+
+### Current limitations
+
+- This service is not yet wired into the Produce UI or project/channel-profile workflow.
+- The Film builder still emits deterministic moving-board cards; it is not semantic scene/shot planning.
+- Automatic documentary visual acquisition, generated illustrations, Stickman/character animation, captions, BGM/SFX, profile-based engine routing and final automated QC are not included in this vertical slice.
+- The dedicated mux adapter currently attaches narration only; it does not yet invoke the existing multitrack audio mixer.
+- The tests use injected fake aligner/renderer implementations. They do not prove actual Stable-ts inference, Skia rendering, audio mux quality on Windows, or Bengali alignment quality.
+
+**Acceptance sequence:** exact PR-head Windows + Ubuntu CI → target-PC 30–60 second English MP4 with supplied narration → inspect H.264/AAC streams and visual/audio sync → separate Bangla alignment benchmark → integrate the service into the Produce UI only after the local render path is verified. This is an incremental working slice, not a claim that full Auto Produce is complete.
