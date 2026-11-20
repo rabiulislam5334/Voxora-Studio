@@ -186,7 +186,9 @@ class CinematicSkillAutoProduceWorkflow:
             raise CinematicSkillAutoProduceError("supplied file has no readable audio stream or duration")
         if on_progress:
             on_progress(0.08, "Aligning script to narration locally")
-        workspace = Path(tempfile.mkdtemp(prefix="voxora-auto-produce-", dir=str(Path(project_dir).expanduser())))
+        project_root = Path(project_dir).expanduser().resolve()
+        project_root.mkdir(parents=True, exist_ok=True)
+        workspace = Path(tempfile.mkdtemp(prefix="voxora-auto-produce-", dir=str(project_root)))
         try:
             doc = self._aligner.align(
                 script=script,
