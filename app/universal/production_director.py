@@ -156,7 +156,7 @@ _RULES = (
 
 
 def _matches(text: str, term: str) -> int:
-    pattern = r"(?<!\\w)" + re.escape(term) + r"(?!\\w)"
+    pattern = r"(?<!\w)" + re.escape(term) + r"(?!\w)"
     return len(re.findall(pattern, text, flags=re.IGNORECASE))
 
 
@@ -195,7 +195,7 @@ def _short_title(text: str, limit: int = 8) -> str:
     words = text.strip().split()
     if not words:
         return "Visual sequence"
-    title = " ".join(words[:limit]).strip(" \\t\\r\\n.,;:!?")
+    title = " ".join(words[:limit]).strip(" \t\r\n.,;:!?")
     return title + ("…" if len(words) > limit else "")
 
 
@@ -266,7 +266,7 @@ class ProductionDirector:
         for shot in shots:
             unit = unit_by_id[shot.narration_unit_ids[0]]
             unit_text = source.text_for_unit(unit)
-            paragraph_start = bool(groups and re.search(r"\\n[ \\t]*\\n", unit_text))
+            paragraph_start = bool(groups and re.search(r"\n[ \t]*\n", source.text_for_unit(unit_by_id[groups[-1][-1].narration_unit_ids[-1]])))
             if (not groups or len(groups[-1]) >= self.config.max_shots_per_scene
                     or _scene_family(groups[-1][-1].intent) != _scene_family(shot.intent)
                     or groups[-1][-1].timing.basis != shot.timing.basis
