@@ -50,7 +50,7 @@ def test_word_lookup_is_unicode_aware_and_does_not_estimate_missing_words(tmp_pa
 
 
 def test_invalid_or_out_of_line_word_timing_is_rejected(tmp_path):
-    with pytest.raises(CinematicSkillTimingError, match="inside its parent line"):
+    with pytest.raises(CinematicSkillTimingError, match="inside their parent line"):
         CinematicLineCue(
             1, 1.0, 2.0, "hello",
             (CinematicWordCue("hello", 0.5, 1.5),),
