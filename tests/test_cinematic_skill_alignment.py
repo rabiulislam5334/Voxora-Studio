@@ -54,7 +54,7 @@ def test_aligns_script_lines_and_preserves_measured_word_times(tmp_path):
         audio_duration_seconds=4.0,
     )
 
-    assert doc.duration == pytest.approx(2.95)
+    assert doc.duration == pytest.approx(4.0)  # includes trailing narration silence
     assert doc.W(1, "Voyager") == pytest.approx(0.45)
     assert doc.W(2, "interstellar") == pytest.approx(2.5)
     args, kwargs = model.calls[0]
