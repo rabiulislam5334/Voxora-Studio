@@ -1,6 +1,6 @@
 # Voxora Studio — Master Product Plan & Delivery Registry
 
-> Status: Active planning baseline (PR #113)
+> Status: Active planning baseline (PR #114)
 > Canonical location: docs/PLANNING/README.md
 > Last reconciled: 2026-11-20
 
@@ -170,7 +170,7 @@ R-stage IDs remain those of the Master Specification. **VXP IDs** are proposed s
 | 00.1 | Recover Rev 0.3/0.4, R-1…R-13, SC/TS decisions | PARTIAL — Rev 0.4 recovered |
 | 00.2 | Transcribe exact 29 Modular Systems | BLOCKED — exact source list not yet recovered |
 | 00.3 | Establish phase/PR/completion registry | IN PROGRESS — this document |
-| 00.4 | Map merged PRs to requirements, tests and remaining gaps | PARTIAL — PR #80–112 feature-group mapping |
+| 00.4 | Map merged PRs to requirements, tests and remaining gaps | PARTIAL — PR #80–114 feature-group mapping |
 | 00.5 | Freeze duplicate-work/change-control rules | PLANNED |
 
 Exit: original requirements are traceable; no phase starts from an isolated chat idea.
@@ -336,7 +336,9 @@ This is the main automation milestone. It integrates existing engines; it must n
 10.14 Auto-select render quality tier from output request and measured hardware budget; render proxy for review if useful, then final MP4 without user timeline assembly.
 10.15 Integrate caption alignment, caption styling, SRT/VTT sidecars and burned-in caption QC into the same Auto Produce job.
 
-**10.3 implementation update (PR in progress):** `app/universal/cinematic_skill_auto_produce.py` now orchestrates supplied script + supplied audio → FFprobe duration validation → optional local Stable-ts alignment → deterministic Cinematic Skill Film → H.264 render → supplied-audio AAC mux. This is a runnable vertical-slice service, not yet wired into the Produce UI and not yet the semantic AI Director. The current visual output is deterministic timed cards; semantic shots, automatic visuals, captions and sound design remain open. See [VXP-10.3 implementation notes](../architecture/VXP_10_3_SUPPLIED_SCRIPT_NARRATION_AUTO_PRODUCE.md).
+**10.3 implementation update (PR #114 merged):** `app/universal/cinematic_skill_auto_produce.py` now orchestrates supplied script + supplied audio → FFprobe duration validation → optional local Stable-ts alignment → deterministic Cinematic Skill Film → H.264 render → supplied-audio AAC mux. This is a runnable vertical-slice service, not yet wired into the Produce UI and not yet the semantic AI Director. The current visual output is deterministic timed cards; semantic shots, automatic visuals, captions and sound design remain open. See [VXP-10.3 implementation notes](../architecture/VXP_10_3_SUPPLIED_SCRIPT_NARRATION_AUTO_PRODUCE.md).
+
+**10.4 implementation update (PR #115 in progress):** The first deterministic Production Director core is being added in app/universal/production_director.py. It consumes exact narration units plus the selected ChannelProfile and emits stable, reviewable scene/shot proposals with timing provenance, conservative visual-intent classification, profile style/constraints, bounded scene grouping and the recovered intro/body/outro rule. This is a local, dependency-free planning foundation—not an LLM or a claim of human-level semantic understanding. It does not acquire/generate assets or render. See [VXP-10.4 implementation notes](../architecture/VXP_10_4_PRODUCTION_DIRECTOR_CORE.md).
 
 **Generate Video acceptance:** with a matching script + supplied narration audio + profile, and optionally a Claude visual-direction package, one user action produces a playable final MP4. The narration track is preserved as the primary voice track; visuals, scene changes, motion, captions and optional sound design align to its actual timing. Without an external prompt package, Voxora creates the scene/shot prompts itself. No manual timeline editing or per-scene asset attachment is required. Missing providers/assets yield explicit profile-compatible fallback or actionable errors, never fake success.
 
@@ -492,6 +494,8 @@ This registry records delivered PR scope, not completion of the entire associate
 | #109 | Phase 3.5.6.9 integration gap audit | VXP-00 | Documentation/audit |
 | #111 | Shared application-owned ProjectSession across workspaces | VXP-01.1 | Merged; no schema migration |
 | #112 | Composition editor PNG render, capability catalog, navigation/docs integration | VXP-08.3/00 | PNG still, not animated MP4 |
+| #113 | Cinematic Skill source/adapter, exact timing bridge, deterministic Film builder and optional local alignment | VXP-06.8/06.11 | Real Skia render, model accuracy and target-PC acceptance remain open |
+| #114 | Supplied script + supplied narration Auto Produce vertical slice | VXP-10.3 | Orchestration service only; no semantic Director, UI wiring, automatic visuals, captions or sound design |
 
 **PR #110:** an earlier shared-project-session implementation remains open in the latest issue listing, while PR #111 is the merged canonical delivery. Treat #110 as superseded/duplicate pending explicit repository cleanup; do not implement or merge a second copy.
 
@@ -515,7 +519,7 @@ Exact PR mapping for some older foundations still needs Git-history reconciliati
 
 ### 5.3 Explicitly not complete
 
-- AI Production Director and fully automatic script-to-finished-video workflow.
+- Full semantic AI Production Director and fully automatic script-to-finished-video workflow. A deterministic, rule-based VXP-10.4 planning foundation is in progress; it is not equivalent to a production-grade semantic Director.
 - Production-quality automatic semantic scene/shot breakdown.
 - Automatic visual selection/acquisition/generation for every shot.
 - Final Motion Canvas/HyperFrames/Remotion selection and production adapter integration.
