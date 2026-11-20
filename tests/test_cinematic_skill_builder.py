@@ -127,3 +127,10 @@ def test_counter_rejects_non_integer_values(tmp_path):
         CinematicSkillFilmBuilder(engine_module=fake_engine()).build(
             doc, [CinematicSkillShot(1, kind="counter", counter_value=3.5)]
         )
+
+def test_unsupported_visual_kind_is_rejected(tmp_path):
+    doc = make_doc(tmp_path)
+    with pytest.raises(CinematicSkillFilmBuildError, match="unsupported visual kind"):
+        CinematicSkillFilmBuilder(engine_module=fake_engine()).build(
+            doc, [CinematicSkillShot(1, kind="unverified_magic")]
+        )
