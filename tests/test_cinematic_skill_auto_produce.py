@@ -98,7 +98,7 @@ def test_supplied_script_and_audio_are_orchestrated_without_tts(tmp_path, monkey
     assert render_kwargs["timeline_plan"].total_frames == 48
     assert render_kwargs["audio_muxer"].__class__ is SuppliedNarrationMuxer
     assert progress[0][1] == "Inspecting supplied narration"
-    assert progress[-1][1] == "Cinematic Skill MP4 complete"
+    assert any(message == "Rendering and assembling MP4" for _fraction, message in progress)
     assert not list((tmp_path / "project").glob("voxora-auto-produce-*"))
 
 
