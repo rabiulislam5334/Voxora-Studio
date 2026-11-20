@@ -90,6 +90,7 @@ class CinematicSkillNarrationDoc:
         lines: Sequence[CinematicLineCue],
         *,
         prep_dir: Optional[str | Path] = None,
+        duration_seconds: Optional[float] = None,
     ) -> None:
         if isinstance(lines, (str, bytes)) or not lines:
             raise CinematicSkillTimingError("at least one narration line is required")
@@ -118,7 +119,16 @@ class CinematicSkillNarrationDoc:
             }
             for item in parsed
         }
-        self.duration = max(item.end_seconds for item in parsed)
+        measured_end = max(item.end_seconds for item in parsed)
+        if duration_seconds is None:
+            self.duration = measured_end
+        else:
+            declared_duration = _time(duration_seconds, "duration_seconds")
+            if declared_duration < measured_end:
+                raise CinematicSkillTimingError(
+                    "duration_seconds must not be shorter than the final narration cue"
+                )
+            self.duration = declared_duration
         self.timing = {
             "total_duration": self.duration,
             "segments": [self.seg[item.line_id] for item in parsed],
