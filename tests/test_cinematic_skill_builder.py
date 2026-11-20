@@ -71,7 +71,7 @@ def test_builds_one_narration_synchronised_card_per_line(tmp_path):
     assert [item.kwargs["title"] for item in film.items] == [
         "KEY IDEA 01", "KEY IDEA 02",
     ]
-    assert film.items[0].kwargs["lines"] == ("The Voyager crossed the", "heliopause.")
+    assert film.items[0].kwargs["lines"] == ("The Voyager crossed the heliopause.",)
     assert film.items[0].kwargs["t_in"] == 0.0
     assert film.items[0].kwargs["t_out"] == 2.0
 
