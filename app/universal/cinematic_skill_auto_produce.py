@@ -22,6 +22,10 @@ from app.universal.cinematic_skill_adapter import (
 )
 from app.universal.cinematic_skill_alignment import StableTsNarrationAligner
 from app.universal.cinematic_skill_builder import CinematicSkillFilmBuilder
+from app.universal.director_auto_produce_handoff import (
+    DirectorHandoffError,
+    build_cinematic_skill_handoff,
+)
 from app.workers.cancel import CancelToken
 
 
@@ -165,6 +169,10 @@ class CinematicSkillAutoProduceWorkflow:
         width: int = 1280,
         height: int = 720,
         look: str = "studio",
+        director_plan=None,
+        source_unit_ids=None,
+        profile_id: Optional[str] = None,
+        director_plan_approved: bool = False,
         cancel: Optional[CancelToken] = None,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> CinematicSkillAutoProduceResult:
@@ -201,7 +209,29 @@ class CinematicSkillAutoProduceWorkflow:
                 cancel.raise_if_cancelled()
             if on_progress:
                 on_progress(0.18, "Building narration-led film")
-            film = self._film_builder.build(doc, look=look, fps=fps)
+            if director_plan is None:
+                if source_unit_ids is not None or profile_id is not None or director_plan_approved:
+                    raise CinematicSkillAutoProduceError(
+                        "Director handoff metadata was supplied without a DirectorPlan"
+                    )
+                film = self._film_builder.build(doc, look=look, fps=fps)
+            else:
+                try:
+                    director_shots = build_cinematic_skill_handoff(
+                        director_plan,
+                        script=script,
+                        profile_id=profile_id,
+                        narration_doc=doc,
+                        source_unit_ids=source_unit_ids or (),
+                        approved=director_plan_approved,
+                    )
+                except DirectorHandoffError as exc:
+                    raise CinematicSkillAutoProduceError(
+                        f"Director plan cannot enter Auto Produce: {exc}"
+                    ) from exc
+                film = self._film_builder.build(
+                    doc, shots=director_shots, look=look, fps=fps,
+                )
             frame_count = max(1, math.ceil(float(film.duration) * film.fps - 1e-9))
             timeline = SimpleNamespace(
                 fps=film.fps, width=width, height=height, total_frames=frame_count,
