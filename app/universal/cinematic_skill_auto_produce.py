@@ -170,7 +170,7 @@ class CinematicSkillAutoProduceWorkflow:
         height: int = 720,
         look: str = "studio",
         director_plan=None,
-        source_unit_ids=None,
+        narration_source=None,
         profile_id: Optional[str] = None,
         director_plan_approved: bool = False,
         cancel: Optional[CancelToken] = None,
@@ -210,7 +210,7 @@ class CinematicSkillAutoProduceWorkflow:
             if on_progress:
                 on_progress(0.18, "Building narration-led film")
             if director_plan is None:
-                if source_unit_ids is not None or profile_id is not None or director_plan_approved:
+                if narration_source is not None or profile_id is not None or director_plan_approved:
                     raise CinematicSkillAutoProduceError(
                         "Director handoff metadata was supplied without a DirectorPlan"
                     )
@@ -222,7 +222,7 @@ class CinematicSkillAutoProduceWorkflow:
                         script=script,
                         profile_id=profile_id,
                         narration_doc=doc,
-                        source_unit_ids=source_unit_ids or (),
+                        narration_source=narration_source,
                         approved=director_plan_approved,
                     )
                 except DirectorHandoffError as exc:
