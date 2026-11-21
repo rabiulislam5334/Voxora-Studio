@@ -13,6 +13,17 @@ from app.universal.cinematic_skill_auto_produce import (
     CinematicSkillAutoProduceWorkflow,
     SuppliedNarrationMuxer,
 )
+from app.universal.cinematic_skill_timing import (
+    CinematicLineCue,
+    CinematicSkillNarrationDoc,
+)
+from app.universal.director_visual_acquisition import (
+    DirectorVisualResolution,
+    ShotVisualResolution,
+)
+from app.universal.narration_segmentation import segment_narration
+from app.universal.production_director import ProductionDirector
+from app.universal.profiles.models import ChannelProfile
 
 
 class _Aligner:
@@ -191,3 +202,125 @@ def test_muxer_rejects_invalid_final_streams_and_cleans_temp(tmp_path, monkeypat
         )
     assert not destination.exists()
     assert not list(tmp_path.glob("*.part.mp4"))
+
+
+
+def _profile():
+    return ChannelProfile.from_dict({
+        "schema_version": 1,
+        "profile_id": "quasivanta",
+        "display_name": "Quasivanta",
+        "visual_defaults": {
+            "style_family": "cinematic_scientific_visualization",
+            "style_tags": ["infographics"],
+            "mood": ["curious"],
+            "composition_guidance": ["Keep claims proportional to narration."],
+        },
+    })
+
+
+def test_workflow_resolves_approved_director_stills_and_preserves_unresolved_fallback(tmp_path, monkeypatch):
+    script = "Why does the planet move? Its orbit follows gravity."
+    source = segment_narration(script, source_id="auto-visual-test", total_duration_ms=4000)
+    script = source.text
+    profile = _profile()
+    plan = ProductionDirector().create_plan(source, profile)
+    cues = tuple(
+        CinematicLineCue(
+            line_id=index,
+            start_seconds=(index - 1) * 2.0,
+            end_seconds=index * 2.0,
+            spoken_text=source.text_for_unit(unit).strip(),
+            caption=source.text_for_unit(unit).strip(),
+        )
+        for index, unit in enumerate(source.units, start=1)
+    )
+    doc = CinematicSkillNarrationDoc(tmp_path / "aligned", cues, duration_seconds=4.0)
+    audio = tmp_path / "narration.mp3"
+    audio.write_bytes(b"audio")
+    ffmpeg = _ffmpeg(tmp_path)
+    monkeypatch.setattr(
+        ffmpeg, "probe",
+        lambda path, cancel=None: SimpleNamespace(has_audio=True, duration_s=4.0),
+    )
+    film = SimpleNamespace(duration=4.0, fps=24)
+    aligner, builder, renderer = _Aligner(doc), _Builder(film), _Renderer()
+    scene_by_shot = {
+        shot_id: scene.scene_id
+        for scene in plan.scenes
+        for shot_id in scene.shot_ids
+    }
+    asset_path = str(tmp_path / "selected-visual.png")
+    resolutions = tuple(
+        ShotVisualResolution(
+            shot_id=shot.shot_id,
+            scene_id=scene_by_shot[shot.shot_id],
+            status="selected" if index == 0 else "unresolved",
+            asset_id="asset-001" if index == 0 else None,
+            asset_path=asset_path if index == 0 else None,
+            diagnostic="test fixture",
+        )
+        for index, shot in enumerate(plan.shots)
+    )
+    visual_resolution = DirectorVisualResolution(
+        plan_id=plan.plan_id,
+        source_fingerprint=plan.source_fingerprint,
+        profile_id=profile.profile_id,
+        shots=resolutions,
+    )
+    resolver_calls = []
+
+    def resolver(received_plan, **kwargs):
+        resolver_calls.append((received_plan, kwargs))
+        return visual_resolution
+
+    workflow = CinematicSkillAutoProduceWorkflow(
+        ffmpeg, aligner=aligner, film_builder=builder, renderer=renderer,
+        visual_resolver=resolver,
+    )
+    result = workflow.run(
+        script=script,
+        narration_audio=audio,
+        language="en",
+        project_dir=tmp_path / "project",
+        destination=tmp_path / "out.mp4",
+        fps=24,
+        director_plan=plan,
+        narration_source=source,
+        profile_id=profile.profile_id,
+        director_plan_approved=True,
+        profile=profile,
+        asset_library=object(),
+    )
+
+    shots = builder.calls[0][1]["shots"]
+    assert shots[0].kind == "image"
+    assert shots[0].image_path == asset_path
+    assert shots[0].director_shot_id == plan.shots[0].shot_id
+    assert shots[1].kind in {"card", "title"}
+    assert shots[1].image_path is None
+    assert result.visual_resolution == visual_resolution
+    assert resolver_calls[0][0] is plan
+    assert resolver_calls[0][1]["approved"] is True
+    assert resolver_calls[0][1]["allow_network"] is False
+    assert resolver_calls[0][1]["allow_api_key"] is False
+    assert resolver_calls[0][1]["provider_id"] is None
+
+
+def test_workflow_requires_profile_and_asset_library_together(tmp_path, monkeypatch):
+    audio = tmp_path / "narration.mp3"
+    audio.write_bytes(b"audio")
+    ffmpeg = _ffmpeg(tmp_path)
+    monkeypatch.setattr(
+        ffmpeg, "probe",
+        lambda path, cancel=None: SimpleNamespace(has_audio=True, duration_s=2.0),
+    )
+    workflow = CinematicSkillAutoProduceWorkflow(
+        ffmpeg, aligner=_Aligner(object()), film_builder=_Builder(object()), renderer=_Renderer(),
+    )
+    with pytest.raises(CinematicSkillAutoProduceError, match="supplied together"):
+        workflow.run(
+            script="A valid script.", narration_audio=audio, language="en",
+            project_dir=tmp_path / "project", destination=tmp_path / "out.mp4",
+            profile=_profile(),
+        )
