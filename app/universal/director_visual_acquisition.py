@@ -87,7 +87,10 @@ def _rights_eligible(asset: VisualAsset) -> bool:
     if provenance is None:
         return False
     source = provenance.source.casefold()
-    return source in {"user-upload", "user_upload", "user-import", "user_import"} or source.startswith("generated:") or bool(provenance.license)
+    if source in {"user-upload", "user_upload", "user-import", "user_import"} or source.startswith("generated:"):
+        return True
+    license_name = (provenance.license or "").strip().casefold()
+    return bool(license_name) and license_name not in {"unknown", "unverified", "not verified", "none", "n/a"}
 
 
 def _profile_eligible(asset: VisualAsset, profile_id: str) -> bool:
