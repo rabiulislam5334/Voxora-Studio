@@ -11,7 +11,6 @@ from typing import Sequence
 
 from app.universal.cinematic_skill_builder import CinematicSkillShot
 from app.universal.production_director import DirectorIntent, DirectorPlan
-from app.universal.storyboard import NarrationSource
 
 
 class DirectorHandoffError(ValueError):
@@ -38,7 +37,7 @@ def build_cinematic_skill_handoff(
     script: str,
     profile_id: str,
     narration_doc,
-    narration_source: NarrationSource,
+    source_unit_ids: Sequence[str],
     approved: bool,
 ) -> tuple[CinematicSkillShot, ...]:
     """Validate plan provenance/coverage and map its ordered shots to aligned lines.
@@ -68,13 +67,11 @@ def build_cinematic_skill_handoff(
     if not hasattr(narration_doc, "lines"):
         raise DirectorHandoffError("narration_doc must expose measured aligned lines")
 
-    if not isinstance(narration_source, NarrationSource):
-        raise DirectorHandoffError("narration_source must be the exact NarrationSource used by the Director")
-    if narration_source.text != script or narration_source.source_fingerprint != fingerprint:
-        raise DirectorHandoffError("NarrationSource text does not match the supplied script")
-    unit_ids = tuple(unit.unit_id for unit in narration_source.units)
-    if not unit_ids or len(set(unit_ids)) != len(unit_ids):
-        raise DirectorHandoffError("NarrationSource must contain unique narration units")
+    unit_ids = tuple(source_unit_ids)
+    if not unit_ids or any(not isinstance(item, str) or not item for item in unit_ids):
+        raise DirectorHandoffError("source_unit_ids must contain the exact ordered narration unit IDs")
+    if len(set(unit_ids)) != len(unit_ids):
+        raise DirectorHandoffError("source_unit_ids must not contain duplicates")
 
     shots = tuple(plan.shots)
     if not shots:
@@ -97,12 +94,7 @@ def build_cinematic_skill_handoff(
         )
 
     result = []
-    for line, shot, unit in zip(lines, shots, narration_source.units):
-        exact_unit_text = narration_source.text_for_unit(unit).strip()
-        if line.spoken_text != exact_unit_text:
-            raise DirectorHandoffError(
-                f"aligned narration line {line.line_id} does not exactly match source unit {unit.unit_id}"
-            )
+    for line, shot in zip(lines, shots):
         try:
             kind = _INTENT_KIND[shot.intent]
         except (KeyError, TypeError):
