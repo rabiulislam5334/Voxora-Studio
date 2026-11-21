@@ -1,87 +1,32 @@
-# VXP-00 Source Recovery — Historical 29-Engine Blueprint
+# VXP-00 Source Recovery — 29 Modular Systems
 
-**Status:** PARTIALLY RECOVERED — historical reference only  
-**Recorded:** 2026-11-21  
-**Source provenance:** User-pasted text in the Voxora Studio project conversation on 2026-11-20 at approximately 06:14 UTC. No original standalone filename or external source document was supplied in the retrieved conversation record.
+**Status:** BLOCKED — exact source not recovered  
+**Recorded:** 2026-11-21
 
-## 1. Critical distinction
+## 1. Evidence boundary
 
-This recovered catalogue is titled **“Voxora Studio — 29 Engine Blueprint.”** It is not verified as the separate historical **“29 Modular Systems”** inventory referenced by earlier planning notes.
+The recovered Rev 0.4 Master Specification distinguishes **19 Universal Core responsibilities** from **12 Specialized Engines**. It explicitly does not reproduce the separate historical **29 Modular Systems** catalogue referenced by earlier planning notes.
 
-The user later clarified that this 29-engine blueprint is historical context, must not be treated as the current architecture, and must be reconciled with (not forced onto or substituted for) the newer approved Planning Documents.
+The accessible project records and repository sources reviewed for this change do not provide a verifiable original MS-01…MS-29 list. A complete historical “29 Engine Blueprint” source, its 29 names, and its phase assignments have not been independently verified. Therefore this document intentionally does not transcribe or reconstruct any engine/system names.
 
-Accordingly:
+## 2. Do not infer the missing inventory
 
-- Preserve this blueprint as a historical capability reference.
-- Do not use its Phase 1–6 labels as current VXP phase IDs.
-- Do not treat these 29 engines as 29 Modular Systems (MS-01…MS-29).
-- Do not derive current system boundaries or implementation tasks from the old engine count.
-- The exact original 29 Modular Systems source remains **BLOCKED — SOURCE NOT RECOVERED**.
+- Do not treat 19 Universal Core responsibilities plus 12 Specialized Engines as 29 systems; they total 31 entries across two different categories.
+- Do not rename the 12 Specialized Engines as MS-01…MS-12 or as the 29 Modular Systems.
+- Do not derive MS IDs or missing definitions from VXP phases, runtime module names, PR titles, prior assistant summaries, or an unverified historical blueprint.
+- Do not use an unverified 29-engine list as the current architecture or as implementation scope.
 
-## 2. Recovered engine names and phase assignments
+## 3. Current source of truth
 
-The following names and phase assignments were present in the user-pasted catalogue.
+The current approved Planning Documents remain authoritative. Voxora uses one Universal Core, shared project/session and asset systems, one Production Director, capability-based adapters, unified audio/composition/render pipelines, and a resource-aware Render Orchestrator. FFmpeg remains the final media assembly backbone unless formally changed.
 
-| # | Historical engine name | Original phase assignment |
-|---:|---|---|
-| 01 | Universal Core Engine | Phase 1 |
-| 02 | Script & Audio Analyzer | Phase 1 |
-| 03 | AI Scene Planner / Storyboard | Phase 1 |
-| 04 | Director Brain | Phase 1 |
-| 05 | Character Performance Engine | Phase 2–4 |
-| 06 | Animation Physics & Natural Motion | Phase 4 |
-| 07 | Cinematography Engine | Phase 4–5 |
-| 08 | Visual Variety Engine | Phase 2–5 |
-| 09 | Advanced Audio Intelligence | Phase 3 |
-| 10 | Intelligent Editing Engine | Phase 3 |
-| 11 | Story Intelligence Engine | Phase 1–3 |
-| 12 | Environment & World Building | Phase 2–4 |
-| 13 | Subtitle & Typography Engine | Phase 3 |
-| 14 | VFX & Compositing Engine | Phase 4–5 |
-| 15 | AI Visual Generation & Asset Intelligence | Phase 2–5 |
-| 16 | Professional Production Workflow | Phase 1–3 |
-| 17 | Quality Assurance Engine | Phase 6 |
-| 18 | Audience Intelligence Engine | Phase 6 |
-| 19 | Voice Acting & Multilingual Engine | Phase 3 |
-| 20 | Copyright, License & Source Manager | Phase 1–5 |
-| 21 | Brand Identity & Human Director Override | Phase 1–6 |
-| 22 | Production Orchestration Engine | Not present in retrieved source |
-| 23 | Research & Fact Verification Engine | Not present in retrieved source |
-| 24 | Continuity & Consistency Engine | Not present in retrieved source |
-| 25 | Asset Intelligence & Provenance System | Not present in retrieved source |
-| 26 | AI Model & Runtime Manager | Not present in retrieved source |
-| 27 | Localization & Accessibility Engine | Not present in retrieved source |
-| 28 | Advanced Timeline & Compositing Workspace | Not present in retrieved source |
-| 29 | Delivery & Publishing Engine | Not present in retrieved source |
+The permanent visual capabilities remain 2D, 2.5D, 3D, 4D/time-based 3D, and Hybrid. Historical labels do not create separate runtime subsystems or reduce these capabilities.
 
-## 3. Recovered responsibility notes for Engines 22–27
+## 4. Recovery required to unblock VXP-00.2
 
-The retrieved user-pasted text included these responsibility summaries:
+1. Locate the original source document or an exact user-supplied transcription that explicitly lists MS-01 through MS-29 and their definitions.
+2. Verify provenance and completeness against that source.
+3. Transcribe without filling gaps by inference.
+4. Reconcile the recovered inventory with the current architecture without creating duplicate systems.
 
-- **22 — Production Orchestration Engine:** কাজ বণ্টন across engines, dependency management, execution order, job queue, error recovery and workflow control.
-- **23 — Research & Fact Verification Engine:** documentary research, source tracking, fact checking, claim verification, timeline verification and linking sources to script claims.
-- **24 — Continuity & Consistency Engine:** maintaining character appearance, clothing, age, voice, location, time, weather, props and story continuity.
-- **25 — Asset Intelligence & Provenance System:** tracking image/video/audio/font/3D-model assets, source URL, licence, attribution, creator and usage history.
-- **26 — AI Model & Runtime Manager:** model-to-task mapping, local/online execution, GPU/CPU selection, version and licence information, downloads and fallback.
-- **27 — Localization & Accessibility Engine:** multilingual voice, subtitles, translation, caption timing, text direction and screen-reader support.
-
-For **28** only the beginning “Multi-track…” was retained in the retrieved context. No reliable full responsibility description for 28 or 29, and no Phase assignment for 22–29, is available in this recovery record. Do not complete these from inference.
-
-## 4. Relationship to current architecture
-
-The current approved architecture remains the source of truth:
-
-- One Universal Core and shared project/session, asset, audio, timing, composition and render infrastructure.
-- One Production Director and a dependency-aware Render Orchestrator.
-- Capability-based adapters and profile-driven production.
-- FFmpeg remains the final assembly backbone unless formally changed.
-- 2D, 2.5D, 3D, 4D/time-based 3D and Hybrid remain permanent first-class capabilities.
-
-The historical engine titles may overlap current responsibilities. Such overlap must be reconciled through responsibility mapping and code reuse, not by creating duplicate subsystems or one runtime engine per historical title.
-
-## 5. Remaining source-recovery work
-
-1. Locate the separate original **29 Modular Systems** catalogue, if it exists as a file, document, or earlier source.
-2. Obtain the complete original text for Engines 22–29 if a verbatim historical blueprint archive is required.
-3. Do not promote this partial conversation recovery into a canonical MS-01…MS-29 transcription.
-4. Keep VXP-00.2 **BLOCKED** until the exact 29 Modular Systems source is located and transcribed.
+Until that evidence is available, **VXP-00.2 remains BLOCKED — SOURCE NOT RECOVERED**.
