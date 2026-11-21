@@ -50,9 +50,9 @@ def media(real_ffmpeg, tmp_path_factory):
 
 
 @pytest.fixture
-def env(tmp_path, real_ffmpeg, tone_mp3):
+def env(tmp_path, real_ffmpeg, tone_pcm):
     def build(tts=None):
-        tts = tts or FakeTTS(tone_mp3)
+        tts = tts or FakeTTS(tone_pcm)
         ncache = NarrationCache(tmp_path / "chunks", tmp_path / "scenes")
         njob = NarrationJob(tts, real_ffmpeg, ncache, tmp_path / "temp", retry_base_delay=0.0)
         vcache = VideoCache(tmp_path / "video")
