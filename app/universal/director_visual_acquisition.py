@@ -86,7 +86,7 @@ def _rights_eligible(asset: VisualAsset) -> bool:
     if provenance is None:
         return False
     source = provenance.source.casefold()
-    return source == "user-upload" or source.startswith("generated:") or bool(provenance.license)
+    return source in {"user-upload", "user_upload", "user-import", "user_import"} or source.startswith("generated:") or bool(provenance.license)
 
 
 def _profile_eligible(asset: VisualAsset, profile_id: str) -> bool:
@@ -102,6 +102,9 @@ def _shot_scene_map(plan: DirectorPlan) -> dict[str, str]:
     shot_ids = tuple(shot.shot_id for shot in plan.shots)
     if not shot_ids or len(set(shot_ids)) != len(shot_ids):
         raise ShotVisualAcquisitionError("Director plan must contain unique shots")
+    scene_ids = tuple(scene.scene_id for scene in plan.scenes)
+    if not scene_ids or len(set(scene_ids)) != len(scene_ids):
+        raise ShotVisualAcquisitionError("Director plan must contain unique scenes")
     mapping: dict[str, str] = {}
     for scene in plan.scenes:
         for shot_id in scene.shot_ids:
@@ -201,6 +204,8 @@ def resolve_director_plan_visuals(
     catalog = asset_library.load_catalog()
     resolved: list[ShotVisualResolution] = []
     for shot in plan.shots:
+        if not isinstance(shot.visual_prompt, str) or not shot.visual_prompt.strip():
+            raise ShotVisualAcquisitionError(f"Director shot {shot.shot_id} has no approved visual prompt")
         scene_id = scene_by_shot[shot.shot_id]
         match, match_diagnostics = _rank_local_assets(shot, catalog, asset_library, profile)
         if match is not None:
@@ -213,7 +218,7 @@ def resolve_director_plan_visuals(
                 asset_path=str(asset_library.resolve_asset_path(asset)),
                 source=asset.provenance.source if asset.provenance else None,
                 match_score=score,
-                diagnostic="Selected the highest-scoring verified local asset.",
+                diagnostic=("Selected the highest-scoring content-verified local asset." + (" Model/media rights review remains required." if asset.provenance and asset.provenance.source.startswith("generated:") else "")),
             ))
             continue
 
