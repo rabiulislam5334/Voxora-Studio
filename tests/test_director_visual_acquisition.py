@@ -95,6 +95,10 @@ def test_selects_best_verified_local_asset_before_generation(tmp_path):
         library, tmp_path, asset_id="unverified-match", tags=("gravity",),
         provenance=None,
     )
+    _import_asset(
+        library, tmp_path, asset_id="planet-question", tags=("planet", "question_reveal"),
+        provenance=AssetProvenance(source="user-upload"),
+    )
     selected = _import_asset(
         library, tmp_path, asset_id="gravity-diagram", tags=("gravity", "diagram"),
         provenance=AssetProvenance(source="user-upload"),
