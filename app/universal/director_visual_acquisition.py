@@ -92,7 +92,8 @@ def _rights_eligible(asset: VisualAsset) -> bool:
     if license_name.startswith(("public domain", "cc0", "cc 0")):
         return True
     if license_name.startswith(("cc by ", "cc by sa ")):
-        return not any(marker in license_name for marker in (" non commercial", " noncommercial", " nc ", " no derivatives", " nd "))
+        license_tokens = set(license_name.split())
+        return not bool(license_tokens.intersection({"nc", "nd", "noncommercial", "non-commercial", "non"}))
     return False
 
 
