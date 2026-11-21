@@ -39,7 +39,8 @@ def _profile():
 def _plan():
     script = "Why does the planet move? Its orbit follows gravity."
     source = segment_narration(script, source_id="vxp105-test", total_duration_ms=8000)
-    return script, _profile(), ProductionDirector().create_plan(source, _profile())
+    profile = _profile()
+    return script, source, profile, ProductionDirector().create_plan(source, profile)
 
 
 def _png_bytes(width=32, height=24):
@@ -89,7 +90,7 @@ class _FakeProvider:
 
 
 def test_selects_best_verified_local_asset_before_generation(tmp_path):
-    script, profile, plan = _plan()
+    script, narration_source, profile, plan = _plan()
     library = VisualAssetLibrary(tmp_path / "library")
     _import_asset(
         library, tmp_path, asset_id="unverified-match", tags=("gravity",),
@@ -107,7 +108,7 @@ def test_selects_best_verified_local_asset_before_generation(tmp_path):
     runtime = VisualGenerationRuntime(library, [provider])
 
     result = resolve_director_plan_visuals(
-        plan, script=script, profile=profile, asset_library=library,
+        plan, script=script, narration_source=narration_source, profile=profile, asset_library=library,
         generation_runtime=runtime, provider_id="fake-local", approved=True,
     )
 
@@ -119,14 +120,14 @@ def test_selects_best_verified_local_asset_before_generation(tmp_path):
 
 
 def test_generates_one_image_for_each_unmatched_shot_with_explicit_provider(tmp_path):
-    script, profile, plan = _plan()
+    script, narration_source, profile, plan = _plan()
     library = VisualAssetLibrary(tmp_path / "library")
     provider = _FakeProvider()
     runtime = VisualGenerationRuntime(library, [provider])
     events = []
 
     result = resolve_director_plan_visuals(
-        plan, script=script, profile=profile, asset_library=library,
+        plan, script=script, narration_source=narration_source, profile=profile, asset_library=library,
         generation_runtime=runtime, provider_id="fake-local", approved=True,
         progress=events.append,
     )
@@ -140,11 +141,11 @@ def test_generates_one_image_for_each_unmatched_shot_with_explicit_provider(tmp_
 
 
 def test_does_not_generate_or_claim_success_without_provider(tmp_path):
-    script, profile, plan = _plan()
+    script, narration_source, profile, plan = _plan()
     library = VisualAssetLibrary(tmp_path / "library")
 
     result = resolve_director_plan_visuals(
-        plan, script=script, profile=profile, asset_library=library, approved=True,
+        plan, script=script, narration_source=narration_source, profile=profile, asset_library=library, approved=True,
     )
 
     assert not result.is_complete
@@ -153,15 +154,15 @@ def test_does_not_generate_or_claim_success_without_provider(tmp_path):
 
 
 def test_requires_explicit_approval_and_rejects_stale_script_or_profile(tmp_path):
-    script, profile, plan = _plan()
+    script, narration_source, profile, plan = _plan()
     library = VisualAssetLibrary(tmp_path / "library")
     with pytest.raises(ShotVisualAcquisitionError, match="explicit approval"):
         resolve_director_plan_visuals(
-            plan, script=script, profile=profile, asset_library=library, approved=False,
+            plan, script=script, narration_source=narration_source, profile=profile, asset_library=library, approved=False,
         )
     with pytest.raises(ShotVisualAcquisitionError, match="stale"):
         resolve_director_plan_visuals(
-            plan, script=script + " changed", profile=profile,
+            plan, script=script + " changed", narration_source=narration_source, profile=profile,
             asset_library=library, approved=True,
         )
     other_profile = ChannelProfile.from_dict({
@@ -174,29 +175,29 @@ def test_requires_explicit_approval_and_rejects_stale_script_or_profile(tmp_path
     })
     with pytest.raises(ShotVisualAcquisitionError, match="active channel profile"):
         resolve_director_plan_visuals(
-            plan, script=script, profile=other_profile,
+            plan, script=script, narration_source=narration_source, profile=other_profile,
             asset_library=library, approved=True,
         )
 
 
 def test_rejects_scene_plan_that_does_not_reference_every_shot_once(tmp_path):
-    script, profile, plan = _plan()
+    script, narration_source, profile, plan = _plan()
     broken_scene = replace(plan.scenes[0], shot_ids=())
     broken_plan = replace(plan, scenes=(broken_scene,) + plan.scenes[1:])
     with pytest.raises(ShotVisualAcquisitionError, match="every shot exactly once"):
         resolve_director_plan_visuals(
-            broken_plan, script=script, profile=profile,
+            broken_plan, script=script, narration_source=narration_source, profile=profile,
             asset_library=VisualAssetLibrary(tmp_path / "library"), approved=True,
         )
 
 
 def test_generation_runtime_must_share_the_same_asset_library(tmp_path):
-    script, profile, plan = _plan()
+    script, narration_source, profile, plan = _plan()
     library = VisualAssetLibrary(tmp_path / "library")
     other_library = VisualAssetLibrary(tmp_path / "other")
     runtime = VisualGenerationRuntime(other_library, [_FakeProvider()])
     with pytest.raises(ShotVisualAcquisitionError, match="same VisualAssetLibrary"):
         resolve_director_plan_visuals(
-            plan, script=script, profile=profile, asset_library=library,
+            plan, script=script, narration_source=narration_source, profile=profile, asset_library=library,
             generation_runtime=runtime, provider_id="fake-local", approved=True,
         )
