@@ -42,7 +42,7 @@ def test_removes_non_spoken_pause_and_style_markup():
         "A spoken line. [pause 500ms] [whisper]A quieter line.",
         language="en",
     )
-    assert aligned == "A spoken line.\\nA quieter line."
+    assert aligned == "A spoken line.\nA quieter line."
     assert "[pause" not in source.text
     assert "[whisper]" not in source.text
     assert len(source.units) == 2
