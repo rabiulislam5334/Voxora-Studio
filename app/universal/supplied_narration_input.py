@@ -2,8 +2,8 @@
 
 The current local aligner returns one timing line per non-empty script line.
 This adapter converts the canonical sentence segmentation into that exact
-line contract without changing spoken wording; only inter-word whitespace and
-line breaks are normalized for the alignment request.
+line contract without changing spoken wording. Non-spoken pause/style markup is
+removed through the existing narration parser; whitespace is normalized for alignment.
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def build_line_aligned_narration_source(
         " ".join(item.text for item in paragraph.items if isinstance(item, TextItem))
         for paragraph in parsed.paragraphs
     ]
-    spoken_script = "\\n\\n".join(text for text in spoken_paragraphs if text.strip())
+    spoken_script = "\n\n".join(text for text in spoken_paragraphs if text.strip())
     if not spoken_script.strip():
         raise SuppliedNarrationInputError("project script contains no spoken text after removing narration markup")
 
