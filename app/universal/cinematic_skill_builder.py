@@ -15,9 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
-from PIL import Image, ImageOps
-
-
 class CinematicSkillFilmBuildError(ValueError):
     """Raised when a narration-backed shot plan cannot become a valid Film."""
 
@@ -100,22 +97,36 @@ class CinematicSkillFilmBuilder:
         if not target.is_file():
             temporary = None
             try:
+                try:
+                    from PIL import Image, ImageOps
+                except (ImportError, OSError) as exc:
+                    raise CinematicSkillFilmBuildError(
+                        "Pillow is required to stage Director still images"
+                    ) from exc
                 with Image.open(source) as original:
                     image = ImageOps.exif_transpose(original)
+                    width, height = image.size
+                    if width <= 0 or height <= 0 or width * height > 40_000_000:
+                        raise CinematicSkillFilmBuildError(
+                            "visual asset dimensions exceed the 40-megapixel staging limit"
+                        )
                     image.load()
                     if image.mode in ("RGBA", "LA", "P"):
                         rgba = image.convert("RGBA")
                         prepared = Image.new("RGB", rgba.size, (235, 228, 214))
                         prepared.paste(rgba, mask=rgba.getchannel("A"))
+                        rgba.close()
                     else:
                         prepared = image.convert("RGB")
                     prepared.thumbnail((2200, 2200), Image.Resampling.LANCZOS)
                     fd, temp_name = tempfile.mkstemp(prefix=".voxora-image-", suffix=".jpg", dir=str(photos_dir))
                     os.close(fd)
                     temporary = Path(temp_name)
-                    prepared.save(temporary, format="JPEG", quality=93, optimize=False)
-                    width, height = prepared.size
-                    prepared.close()
+                    try:
+                        prepared.save(temporary, format="JPEG", quality=93, optimize=False)
+                        width, height = prepared.size
+                    finally:
+                        prepared.close()
             except (OSError, ValueError, Image.DecompressionBombError) as exc:
                 if temporary is not None:
                     temporary.unlink(missing_ok=True)
