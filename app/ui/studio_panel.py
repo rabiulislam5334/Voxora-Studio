@@ -158,8 +158,7 @@ class StudioPanel(ttk.Frame):
         if self.produce_tab.running or self.auto_produce_tab.running:
             if not messagebox.askyesno(
                 "Production In Progress",
-                "A production is still running. Finished narration and scene clips are kept, "
-                "but the video will not be completed.\n\nClose anyway?",
+                "A production is still running. Closing now may cancel the active job before its MP4 is complete.\n\nClose anyway?",
             ):
                 return False
         return self.voice.confirm_close()
