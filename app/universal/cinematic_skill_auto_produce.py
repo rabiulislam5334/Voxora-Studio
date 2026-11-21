@@ -338,7 +338,7 @@ class CinematicSkillAutoProduceWorkflow:
                             )
                         resolved_director_shots.append(item)
                     director_shots = tuple(resolved_director_shots)
-                if on_progress:
+                if on_progress and profile is not None:
                     on_progress(0.22, "Building narration-led film")
                 film = self._film_builder.build(
                     doc, shots=director_shots, look=look, fps=fps,
