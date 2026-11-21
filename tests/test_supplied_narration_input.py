@@ -35,3 +35,15 @@ def test_normalization_does_not_rewrite_words():
     assert aligned == "Keep every word.\nDo not replace the narration!"
     assert "replace" in source.text
     assert len(source.units) == 2
+
+
+def test_removes_non_spoken_pause_and_style_markup():
+    aligned, source = build_line_aligned_narration_source(
+        "A spoken line. [pause 500ms] [whisper]A quieter line.",
+        language="en",
+    )
+    assert aligned == "A spoken line. A quieter line."
+    assert "[pause" not in source.text
+    assert "[whisper]" not in source.text
+    assert len(source.units) == 2
+    assert source.metadata["narration_markup_removed"] is True
