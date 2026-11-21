@@ -16,6 +16,7 @@ from uuid import uuid4
 from app.universal.asset_library import AssetImportError, VisualAssetLibrary
 from app.universal.production_director import DirectorPlan, DirectorShot
 from app.universal.profiles.models import ChannelProfile
+from app.universal.storyboard import NarrationSource
 from app.universal.visual_assets import VisualAsset, VisualAssetCatalog
 from app.universal.visual_generation import VisualGenerationRequest
 from app.universal.visual_generation_runtime import (
@@ -118,13 +119,12 @@ def _shot_scene_map(plan: DirectorPlan) -> dict[str, str]:
 
 def _rank_local_assets(
     shot: DirectorShot,
+    narration_text: str,
     catalog: VisualAssetCatalog,
     library: VisualAssetLibrary,
     profile: ChannelProfile,
 ) -> tuple[Optional[tuple[VisualAsset, int]], tuple[str, ...]]:
-    prompt_terms = _tokens(shot.visual_prompt)
-    prompt_terms -= _tokens(shot.style_family)
-    prompt_terms -= _tokens(" ".join(profile.visual_defaults.style_tags))
+    prompt_terms = _tokens(narration_text)
     intent = getattr(shot.intent, "value", str(shot.intent))
     ranked: list[tuple[int, str, VisualAsset]] = []
     diagnostics: list[str] = []
@@ -157,6 +157,7 @@ def resolve_director_plan_visuals(
     plan: DirectorPlan,
     *,
     script: str,
+    narration_source: NarrationSource,
     profile: ChannelProfile,
     asset_library: VisualAssetLibrary,
     approved: bool,
@@ -183,6 +184,16 @@ def resolve_director_plan_visuals(
     fingerprint = hashlib.sha256(script.encode("utf-8")).hexdigest()
     if plan.source_fingerprint != fingerprint:
         raise ShotVisualAcquisitionError("Director plan is stale: script fingerprint does not match")
+    if not isinstance(narration_source, NarrationSource):
+        raise ShotVisualAcquisitionError("narration_source must be the exact NarrationSource used by the Director")
+    if narration_source.text != script or narration_source.source_fingerprint != fingerprint:
+        raise ShotVisualAcquisitionError("NarrationSource does not match the supplied script")
+    if narration_source.source_id != plan.source_id:
+        raise ShotVisualAcquisitionError("NarrationSource does not match the Director source ID")
+    if tuple(unit.unit_id for unit in narration_source.units) != tuple(
+        unit_id for shot in plan.shots for unit_id in shot.narration_unit_ids
+    ):
+        raise ShotVisualAcquisitionError("Director shots must cover every narration unit exactly once and in order")
     if not isinstance(profile, ChannelProfile):
         raise ShotVisualAcquisitionError("profile must be a ChannelProfile")
     if plan.profile_id != profile.profile_id or plan.profile_style_family != profile.visual_defaults.style_family:
@@ -203,11 +214,18 @@ def resolve_director_plan_visuals(
     scene_by_shot = _shot_scene_map(plan)
     catalog = asset_library.load_catalog()
     resolved: list[ShotVisualResolution] = []
+    units_by_id = {unit.unit_id: unit for unit in narration_source.units}
     for shot in plan.shots:
         if not isinstance(shot.visual_prompt, str) or not shot.visual_prompt.strip():
             raise ShotVisualAcquisitionError(f"Director shot {shot.shot_id} has no approved visual prompt")
         scene_id = scene_by_shot[shot.shot_id]
-        match, match_diagnostics = _rank_local_assets(shot, catalog, asset_library, profile)
+        narration_text = " ".join(
+            narration_source.text_for_unit(units_by_id[unit_id]).strip()
+            for unit_id in shot.narration_unit_ids
+        )
+        match, match_diagnostics = _rank_local_assets(
+            shot, narration_text, catalog, asset_library, profile
+        )
         if match is not None:
             asset, score = match
             resolved.append(ShotVisualResolution(
