@@ -8,7 +8,7 @@ Resolve each approved Production Director shot to a suitable visual without requ
 
 ## Current flow
 
-1. Validate the DirectorPlan, exact script SHA-256 fingerprint, active profile ID/style family, explicit approval, and one-to-one scene/shot references.
+1. Validate the DirectorPlan, exact script SHA-256 fingerprint, the exact NarrationSource and ordered narration-unit coverage, active profile ID/style family, explicit approval, and one-to-one scene/shot references.
 2. Load the existing local VisualAssetCatalog.
 3. Rank assets deterministically using exact keyword/tag overlap and intent tags. An asset is eligible only when its content hash verifies, its path resolves safely inside the library, its optional profile restriction allows the active profile, and provenance indicates a user import, generated asset, or a declared licence.
 4. Select the highest-scoring asset, with asset ID as a deterministic tie-breaker.
