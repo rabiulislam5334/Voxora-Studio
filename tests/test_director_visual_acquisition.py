@@ -97,6 +97,10 @@ def test_selects_best_verified_local_asset_before_generation(tmp_path):
         provenance=None,
     )
     _import_asset(
+        library, tmp_path, asset_id="unknown-license", tags=("gravity",),
+        provenance=AssetProvenance(source="commons", license="unknown"),
+    )
+    _import_asset(
         library, tmp_path, asset_id="planet-question", tags=("planet", "question_reveal"),
         provenance=AssetProvenance(source="user-upload"),
     )
