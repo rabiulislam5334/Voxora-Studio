@@ -31,6 +31,7 @@ from app.universal.director_visual_acquisition import (
     ShotVisualAcquisitionError,
     resolve_director_plan_visuals,
 )
+from app.universal.render_orchestrator import RenderGraph, RenderStage, SequentialRenderOrchestrator
 from app.workers.cancel import CancelToken
 
 
@@ -192,41 +193,64 @@ class CinematicSkillAutoProduceWorkflow:
         cancel: Optional[CancelToken] = None,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> CinematicSkillAutoProduceResult:
-        if not isinstance(script, str) or not script.strip():
-            raise CinematicSkillAutoProduceError("script must not be empty")
-        if not isinstance(language, str) or not language.strip():
-            raise CinematicSkillAutoProduceError("language is required (for example 'en' or 'bn')")
-        audio_path = Path(narration_audio).expanduser().resolve()
-        if not audio_path.is_file():
-            raise CinematicSkillAutoProduceError("supplied narration audio file does not exist")
+        """Run the supplied-narration pipeline as a sequential render graph."""
         if on_progress is not None and not callable(on_progress):
             raise TypeError("on_progress must be callable")
-        if cancel is not None:
-            cancel.raise_if_cancelled()
-        if (profile is None) != (asset_library is None):
-            raise CinematicSkillAutoProduceError(
-                "profile and asset_library must be supplied together for Director visual resolution"
-            )
-        if profile is None and (
-            generation_runtime is not None or visual_provider_id is not None
-            or allow_network or allow_api_key
-        ):
-            raise CinematicSkillAutoProduceError(
-                "visual generation options require both profile and asset_library"
-            )
-        if not isinstance(allow_network, bool) or not isinstance(allow_api_key, bool):
-            raise CinematicSkillAutoProduceError("visual network/API-key consent flags must be booleans")
-        if on_progress:
-            on_progress(0.02, "Inspecting supplied narration")
-        info = self._ffmpeg.probe(audio_path, cancel=cancel)
-        if not info.has_audio or info.duration_s is None or info.duration_s <= 0:
-            raise CinematicSkillAutoProduceError("supplied file has no readable audio stream or duration")
-        if on_progress:
-            on_progress(0.08, "Aligning script to narration locally")
-        project_root = Path(project_dir).expanduser().resolve()
-        project_root.mkdir(parents=True, exist_ok=True)
-        workspace = Path(tempfile.mkdtemp(prefix="voxora-auto-produce-", dir=str(project_root)))
-        try:
+        workspace_holder: dict[str, Optional[Path]] = {"path": None}
+
+        def validate_inputs(context, outputs, token, progress):
+            if not isinstance(script, str) or not script.strip():
+                raise CinematicSkillAutoProduceError("script must not be empty")
+            if not isinstance(language, str) or not language.strip():
+                raise CinematicSkillAutoProduceError("language is required (for example 'en' or 'bn')")
+            audio_path = Path(narration_audio).expanduser().resolve()
+            if not audio_path.is_file():
+                raise CinematicSkillAutoProduceError("supplied narration audio file does not exist")
+            if token is not None:
+                token.raise_if_cancelled()
+            if (profile is None) != (asset_library is None):
+                raise CinematicSkillAutoProduceError(
+                    "profile and asset_library must be supplied together for Director visual resolution"
+                )
+            if profile is None and (
+                generation_runtime is not None or visual_provider_id is not None
+                or allow_network or allow_api_key
+            ):
+                raise CinematicSkillAutoProduceError(
+                    "visual generation options require both profile and asset_library"
+                )
+            if not isinstance(allow_network, bool) or not isinstance(allow_api_key, bool):
+                raise CinematicSkillAutoProduceError("visual network/API-key consent flags must be booleans")
+            if progress:
+                progress(0.1, "Inspecting supplied narration")
+            info = self._ffmpeg.probe(audio_path, cancel=token)
+            if not info.has_audio or info.duration_s is None or info.duration_s <= 0:
+                raise CinematicSkillAutoProduceError(
+                    "supplied file has no readable audio stream or duration"
+                )
+            if progress:
+                progress(0.35, "Preparing local production workspace")
+            project_root = Path(project_dir).expanduser().resolve()
+            project_root.mkdir(parents=True, exist_ok=True)
+            workspace = Path(tempfile.mkdtemp(
+                prefix="voxora-auto-produce-", dir=str(project_root)
+            ))
+            workspace_holder["path"] = workspace
+            if progress:
+                progress(1.0, "Narration inspected")
+            return {
+                "audio_path": audio_path,
+                "audio_info": info,
+                "workspace": workspace,
+            }
+
+        def prepare_visuals(context, outputs, token, progress):
+            validated = outputs["validate_inputs"]
+            audio_path = validated["audio_path"]
+            info = validated["audio_info"]
+            workspace = validated["workspace"]
+            if progress:
+                progress(0.05, "Aligning script to narration locally")
             doc = self._aligner.align(
                 script=script,
                 audio_path=audio_path,
@@ -234,12 +258,12 @@ class CinematicSkillAutoProduceWorkflow:
                 project_dir=workspace,
                 audio_duration_seconds=info.duration_s,
             )
-            if cancel is not None:
-                cancel.raise_if_cancelled()
+            if token is not None:
+                token.raise_if_cancelled()
             visual_resolution = None
-            if on_progress:
-                on_progress(
-                    0.18,
+            if progress:
+                progress(
+                    0.12,
                     "Resolving approved Director visuals" if profile is not None
                     else "Building narration-led film",
                 )
@@ -285,10 +309,10 @@ class CinematicSkillAutoProduceWorkflow:
                             allow_network=allow_network,
                             allow_api_key=allow_api_key,
                             progress=(
-                                (lambda fraction, message: on_progress(
-                                    0.18 + max(0.0, min(1.0, float(fraction))) * 0.03,
+                                (lambda fraction, message: progress(
+                                    0.12 + 0.18 * max(0.0, min(1.0, float(fraction))),
                                     message,
-                                )) if on_progress else None
+                                )) if progress else None
                             ),
                         )
                     except ShotVisualAcquisitionError as exc:
@@ -313,7 +337,9 @@ class CinematicSkillAutoProduceWorkflow:
                         raise CinematicSkillAutoProduceError(
                             "visual resolution must contain every Director shot exactly once and in order"
                         )
-                    resolution_by_shot = {item.shot_id: item for item in visual_resolution.shots}
+                    resolution_by_shot = {
+                        item.shot_id: item for item in visual_resolution.shots
+                    }
                     resolved_director_shots = []
                     for item in director_shots:
                         resolution = resolution_by_shot.get(item.director_shot_id)
@@ -326,7 +352,9 @@ class CinematicSkillAutoProduceWorkflow:
                                 raise CinematicSkillAutoProduceError(
                                     "resolved visual is missing its asset ID or local path"
                                 )
-                            item = replace(item, kind="image", image_path=resolution.asset_path)
+                            item = replace(
+                                item, kind="image", image_path=resolution.asset_path
+                            )
                         elif resolution.status == "unresolved":
                             if resolution.asset_id is not None or resolution.asset_path is not None:
                                 raise CinematicSkillAutoProduceError(
@@ -338,44 +366,86 @@ class CinematicSkillAutoProduceWorkflow:
                             )
                         resolved_director_shots.append(item)
                     director_shots = tuple(resolved_director_shots)
-                if on_progress and profile is not None:
-                    on_progress(0.22, "Building narration-led film")
+                if progress and profile is not None:
+                    progress(0.34, "Building narration-led film")
                 film = self._film_builder.build(
                     doc, shots=director_shots, look=look, fps=fps,
                 )
+            if progress:
+                progress(1.0, "Narration and approved visuals prepared")
+            return {
+                "doc": doc,
+                "film": film,
+                "visual_resolution": visual_resolution,
+            }
+
+        def render_video(context, outputs, token, progress):
+            validated = outputs["validate_inputs"]
+            prepared = outputs["prepare_visuals"]
+            film = prepared["film"]
             frame_count = max(1, math.ceil(float(film.duration) * film.fps - 1e-9))
             timeline = SimpleNamespace(
                 fps=film.fps, width=width, height=height, total_frames=frame_count,
             )
-            render_start = 0.22 if director_plan is not None and profile is not None else 0.20
-            if on_progress:
-                on_progress(render_start, "Rendering and assembling MP4")
+            if progress:
+                progress(0.02, "Rendering and assembling MP4")
             render = self._renderer.render(
                 film,
                 destination,
                 width=width,
                 height=height,
-                doc=doc,
-                narration_wav=audio_path,
+                doc=prepared["doc"],
+                narration_wav=validated["audio_path"],
                 audio_settings=object(),
                 timeline_plan=timeline,
                 audio_muxer=SuppliedNarrationMuxer(self._ffmpeg),
-                cancel=cancel,
+                cancel=token,
                 on_progress=(
-                    lambda fraction, message: on_progress(
-                        render_start + max(0.0, min(1.0, fraction)) * (1.0 - render_start), message,
-                    )
-                ) if on_progress else None,
+                    (lambda fraction, message: progress(
+                        0.02 + 0.98 * max(0.0, min(1.0, float(fraction))),
+                        message,
+                    )) if progress else None
+                ),
             )
+            if progress:
+                progress(1.0, "Final MP4 rendered and validated")
+            return render
+
+        def build_result(context, outputs, token, progress):
+            validated = outputs["validate_inputs"]
+            prepared = outputs["prepare_visuals"]
+            doc = prepared["doc"]
             word_count = sum(len(line.word_timings) for line in doc.lines.values())
+            if progress:
+                progress(1.0, "Auto Produce complete")
             return CinematicSkillAutoProduceResult(
-                render=render,
-                narration_duration_seconds=info.duration_s,
+                render=outputs["render_video"],
+                narration_duration_seconds=validated["audio_info"].duration_s,
                 aligned_line_count=len(doc.lines),
                 aligned_word_count=word_count,
                 language=language.strip(),
-                visual_resolution=visual_resolution,
+                visual_resolution=prepared["visual_resolution"],
             )
+
+        graph = RenderGraph((
+            RenderStage("validate_inputs", validate_inputs, weight=1.0),
+            RenderStage("prepare_visuals", prepare_visuals,
+                        dependencies=("validate_inputs",), weight=4.0),
+            RenderStage("render_video", render_video,
+                        dependencies=("prepare_visuals",), weight=8.0),
+            RenderStage("build_result", build_result,
+                        dependencies=("render_video",), weight=0.5),
+        ))
+        try:
+            result = SequentialRenderOrchestrator().run(
+                graph,
+                context=None,
+                cancel=cancel,
+                on_progress=on_progress,
+            )
+            return result.outputs["build_result"]
         finally:
-            import shutil
-            shutil.rmtree(workspace, ignore_errors=True)
+            workspace = workspace_holder["path"]
+            if workspace is not None:
+                import shutil
+                shutil.rmtree(workspace, ignore_errors=True)
