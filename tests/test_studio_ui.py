@@ -103,7 +103,7 @@ def test_every_sidebar_section_opens_the_right_tab(studio):
     root, script, panel, *_ = studio
     expected = {"voice": panel.voice, "audio": panel.audio_tab, "scenes": panel.scenes_tab,
                 "video": panel.video_tab, "produce": panel.produce_tab,
-                "transitions": panel.transitions_tab}
+                "auto_produce": panel.auto_produce_tab, "transitions": panel.transitions_tab}
     for section, key in SECTION_TABS.items():
         panel.show_section(section)
         assert panel._notebook.nametowidget(panel._notebook.select()) is expected[key], section
@@ -394,8 +394,8 @@ def test_main_window_starts_with_all_sections_and_closes(tmp_path, monkeypatch, 
     assert window._current_page == "Script" and routed == ["new", "open"]
     script._on_new_project, script._on_open_project = original_new, original_open
     window._on_export()
-    assert window._current_page == "Produce"
-    assert window._pages["Produce"]._notebook.nametowidget(window._pages["Produce"]._notebook.select()) is window._pages["Produce"].produce_tab
+    assert window._current_page == "Auto Produce"
+    assert window._pages["Auto Produce"]._notebook.nametowidget(window._pages["Auto Produce"]._notebook.select()) is window._pages["Auto Produce"].auto_produce_tab
     assert window.project_label.cget("text") == script._project.name
     window._toggle_theme()
     window._toggle_theme()

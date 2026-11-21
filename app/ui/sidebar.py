@@ -15,6 +15,7 @@ class Sidebar(ttk.Frame):
         "Timeline",
         "Video",
         "Produce",
+        "Auto Produce",
         "Subtitles",
         "Settings",
         "Engines",

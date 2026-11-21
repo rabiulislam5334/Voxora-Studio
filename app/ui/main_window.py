@@ -105,7 +105,7 @@ class MainWindow:
         ).grid(row=0, column=2, padx=(0, 8), pady=10)
 
         self._export_button = ttk.Button(
-            top_bar, text="Open Produce", style="Primary.TButton", command=self._on_export
+            top_bar, text="Open Auto Produce", style="Primary.TButton", command=self._on_export
         )
         self._export_button.grid(row=0, column=3, padx=(0, 16), pady=10)
 
@@ -304,8 +304,8 @@ class MainWindow:
         self.project_label.configure(text=project.name if project is not None else "Untitled Project")
 
     def _on_export(self) -> None:
-        # Navigation only; the user reviews the Produce checklist and starts the job there.
-        self._show_page("Produce")
+        # The primary CTA opens the supplied-narration Auto Produce workflow.
+        self._show_page("Auto Produce")
 
     def _toggle_theme(self) -> None:
         self.theme_name = "light" if self.theme_name == "dark" else "dark"
