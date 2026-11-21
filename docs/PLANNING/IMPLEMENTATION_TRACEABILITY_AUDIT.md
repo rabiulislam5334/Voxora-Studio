@@ -245,13 +245,12 @@ The preceding sections remain the historical row-level audit snapshot at their s
 
 Do not implement another Auto Produce feature slice solely from the prior Section 5 proposal: its Director handoff and initial still-image acquisition portions have since been delivered by PRs #118 and #119. First complete the canonical VXP-00 registry/source-recovery and traceability gates. Then select the next bounded integration from the current approved README, after checking exact dependencies and existing source/tests.
 
-## 8. VXP-00 source-recovery delta — historical 29-engine blueprint
+## 8. VXP-00 source-recovery correction — 29 Modular Systems
 
-A user-pasted **“Voxora Studio — 29 Engine Blueprint”** was located in the 2026-11-20 project conversation (approximately 06:14 UTC). The recovered conversation context preserves all 29 engine titles and Phase 1–6 assignments for Engines 01–21. It preserves responsibility summaries for Engines 22–27 only partially; Engine 28's description is truncated after “Multi-track…”, Engine 29's description was not retained, and no Phase assignments for Engines 22–29 were recovered. No standalone source filename or external document was supplied with that pasted catalogue.
+The prior draft of this addendum asserted that a complete historical “Voxora Studio — 29 Engine Blueprint” had been recovered from a 2026-11-20 project conversation, including engine titles and phase assignments. That assertion is not supported by a verifiable source in the records available for this audit and is withdrawn. The previously drafted engine list and responsibility summaries must not be treated as verified historical data.
 
-This finding does **not** close the separate VXP-00.2 requirement. The user distinguished the historical 29-engine blueprint from the exact original **29 Modular Systems** catalogue and instructed that the old blueprint must not become the current architecture. The current Rev 0.4 specification also distinguishes the 12 Specialized Engines from the broader modular-system inventory.
+The verified Rev 0.4 distinction remains: 19 Universal Core responsibilities and 12 Specialized Engines are separate categories, not the 29 Modular Systems inventory. The exact original MS-01…MS-29 names and definitions remain **BLOCKED — SOURCE NOT RECOVERED**.
 
-- Historical 29-engine names, recovered phase assignments and provenance limits: [VXP00_HISTORICAL_29_ENGINE_BLUEPRINT.md](./VXP00_HISTORICAL_29_ENGINE_BLUEPRINT.md).
-- Exact original MS-01…MS-29 names/definitions: **BLOCKED — SOURCE NOT RECOVERED**.
-- Do not infer MS IDs from the 29-engine blueprint, 19 Universal Core responsibilities, 12 Specialized Engines, VXP phases or runtime module names.
-- Current approved Planning Documents remain the architecture source of truth; preserve the old blueprint only as historical capability context.
+- Corrected evidence boundary and recovery requirements: [VXP-00 29 Modular Systems Source Recovery](./VXP00_HISTORICAL_29_ENGINE_BLUEPRINT.md).
+- Do not infer missing names, IDs, definitions, or phase assignments from assistant summaries, VXP phases, runtime module names, or the 19/12 inventory.
+- Current approved Planning Documents remain the architecture source of truth.
