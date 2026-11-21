@@ -327,9 +327,14 @@ class CinematicSkillAutoProduceWorkflow:
                                     "resolved visual is missing its asset ID or local path"
                                 )
                             item = replace(item, kind="image", image_path=resolution.asset_path)
-                        elif resolution.status != "unresolved" or resolution.asset_path is not None:
+                        elif resolution.status == "unresolved":
+                            if resolution.asset_id is not None or resolution.asset_path is not None:
+                                raise CinematicSkillAutoProduceError(
+                                    "unresolved visual results must not carry an asset ID or path"
+                                )
+                        else:
                             raise CinematicSkillAutoProduceError(
-                                f"unsupported or inconsistent visual resolution status: {resolution.status!r}"
+                                f"unsupported visual resolution status: {resolution.status!r}"
                             )
                         resolved_director_shots.append(item)
                     director_shots = tuple(resolved_director_shots)
