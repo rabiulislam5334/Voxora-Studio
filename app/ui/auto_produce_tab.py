@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tkinter as tk
+import uuid
 from functools import partial
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -35,6 +36,8 @@ class AutoProduceTab(ttk.Frame):
         self._token: CancelToken | None = None
         self.running = False
         self._last_dir: Path | None = None
+        self._target_path: Path | None = None
+        self._staging_path: Path | None = None
         self._audio_var = tk.StringVar()
         self._language_var = tk.StringVar(value="en")
         self._folder_var = tk.StringVar(value=str(ctx.config.output_dir))
@@ -234,21 +237,20 @@ class AutoProduceTab(ttk.Frame):
 
         folder = Path(self._folder_var.get().strip() or self._ctx.config.output_dir)
         destination = folder / f"{self._safe_name(self._name_var.get() or self._ctx.script.get_project_name())}.mp4"
-        if destination.exists():
-            if not messagebox.askyesno(
-                "Replace existing video?",
-                f"The output already exists:\n{destination}\n\nReplace it?",
-                parent=self,
-            ):
-                return
-            try:
-                destination.unlink()
-            except OSError as exc:
-                self._message.configure(text=f"Could not replace the existing output: {exc}")
-                return
+        if destination.is_symlink() or (destination.exists() and not destination.is_file()):
+            self._message.configure(text="The output path must be a regular file, not a symbolic link or directory.")
+            return
+        if destination.exists() and not messagebox.askyesno(
+            "Replace existing video?",
+            f"The output already exists:\n{destination}\n\nReplace it after a new render succeeds?",
+            parent=self,
+        ):
+            return
 
         try:
             folder.mkdir(parents=True, exist_ok=True)
+            self._target_path = destination
+            self._staging_path = folder / f".{destination.stem}.{uuid.uuid4().hex}.part.mp4"
             library = VisualAssetLibrary(Path(self._ctx.config.assets_dir) / "visual_library")
             workflow = CinematicSkillAutoProduceWorkflow(self._ctx.ffmpeg)
             self._token = CancelToken()
@@ -265,7 +267,7 @@ class AutoProduceTab(ttk.Frame):
                 narration_audio=audio,
                 language=language,
                 project_dir=Path(self._ctx.config.temp_dir) / "auto_produce",
-                destination=destination,
+                destination=self._staging_path,
                 fps=profile.production_defaults.frame_rate or 30,
                 width=1280,
                 height=720,
@@ -315,11 +317,23 @@ class AutoProduceTab(ttk.Frame):
         self._cancel_btn.configure(state="normal" if running else "disabled")
 
     def _on_done(self, result) -> None:
+        try:
+            if self._target_path is None:
+                raise OSError("Auto Produce output destination was lost.")
+            os.replace(result.render.destination, self._target_path)
+            final_path = self._target_path
+            self._staging_path = None
+        except OSError as exc:
+            self._finish()
+            self._stage.configure(text="Failed")
+            self._message.configure(text=f"Render completed, but the final MP4 could not be committed: {exc}")
+            self._ctx.on_status("Auto Produce output commit failed.")
+            return
         self._finish()
         self._progress.configure(value=100)
         self._stage.configure(text="Finished")
         self._message.configure(
-            text=f"Finished MP4: {result.render.destination}\n"
+            text=f"Finished MP4: {final_path}\n"
                  f"Duration: {result.narration_duration_seconds:.1f}s · "
                  f"Aligned lines: {result.aligned_line_count} · "
                  f"Words: {result.aligned_word_count}"
@@ -328,13 +342,16 @@ class AutoProduceTab(ttk.Frame):
         self._ctx.on_status("Supplied-narration Auto Produce finished.")
         messagebox.showinfo(
             "Auto Produce complete",
-            f"Finished MP4:\n{result.render.destination}\n\n"
+            f"Finished MP4:\n{final_path}\n\n"
             "The original supplied narration was used as the final audio track.",
             parent=self,
         )
 
     def _on_failed(self, error: Exception) -> None:
         self._finish()
+        if self._staging_path is not None:
+            self._staging_path.unlink(missing_ok=True)
+            self._staging_path = None
         self._progress.configure(value=0)
         self._stage.configure(text="Failed")
         self._message.configure(text=str(error))
