@@ -65,17 +65,25 @@ class CinematicSkillFilmBuilder:
         except OSError as exc:
             raise CinematicSkillFilmBuildError(f"visual asset is unavailable: {exc}") from exc
 
-        project_dir = Path(getattr(narration_doc, "dir", "")).expanduser().resolve()
-        prep_dir = Path(getattr(narration_doc, "prep", project_dir / "assets" / "prep")).expanduser().resolve()
+        raw_project_dir = getattr(narration_doc, "dir", None)
+        raw_prep_dir = getattr(narration_doc, "prep", None)
+        if raw_project_dir is None or raw_prep_dir is None:
+            raise CinematicSkillFilmBuildError(
+                "image shots require a narration document with project dir and prep paths"
+            )
+        if Path(raw_project_dir).expanduser().is_symlink() or Path(raw_prep_dir).expanduser().is_symlink():
+            raise CinematicSkillFilmBuildError("Cinematic Skill project paths must not be symbolic links")
+        project_dir = Path(raw_project_dir).expanduser().resolve()
+        prep_dir = Path(raw_prep_dir).expanduser().resolve()
         try:
             prep_dir.relative_to(project_dir)
         except ValueError:
             raise CinematicSkillFilmBuildError("Cinematic Skill asset staging must remain inside its project workspace") from None
 
         photos_dir = prep_dir / "photos"
-        photos_dir.mkdir(parents=True, exist_ok=True)
         if photos_dir.is_symlink():
             raise CinematicSkillFilmBuildError("visual staging directory must not be a symbolic link")
+        photos_dir.mkdir(parents=True, exist_ok=True)
 
         digest = hashlib.sha256()
         try:
@@ -87,6 +95,8 @@ class CinematicSkillFilmBuilder:
         key = "voxora_" + digest.hexdigest()[:24]
         target = photos_dir / f"{key}.jpg"
 
+        if target.is_symlink():
+            raise CinematicSkillFilmBuildError("staged visual asset path must not be a symbolic link")
         if not target.is_file():
             temporary = None
             try:
@@ -105,6 +115,7 @@ class CinematicSkillFilmBuilder:
                     temporary = Path(temp_name)
                     prepared.save(temporary, format="JPEG", quality=93, optimize=False)
                     width, height = prepared.size
+                    prepared.close()
             except (OSError, ValueError, Image.DecompressionBombError) as exc:
                 if temporary is not None:
                     temporary.unlink(missing_ok=True)
