@@ -19,13 +19,19 @@ class FakeSegment:
 
 
 class FakeModel:
-    def __init__(self, segments):
+    def __init__(self, segments, refined_segments=None):
         self.segments = segments
+        self.refined_segments = segments if refined_segments is None else refined_segments
         self.calls = []
+        self.refinement_calls = []
 
     def align(self, *args, **kwargs):
         self.calls.append((args, kwargs))
         return SimpleNamespace(segments=self.segments)
+
+    def align_words(self, *args, **kwargs):
+        self.refinement_calls.append((args, kwargs))
+        return SimpleNamespace(segments=self.refined_segments)
 
 
 def words(items, start):
@@ -61,6 +67,44 @@ def test_aligns_script_lines_and_preserves_measured_word_times(tmp_path):
     assert args[1] == "The Voyager crossed the heliopause.\nIt entered interstellar space."
     assert kwargs["original_split"] is True
     assert kwargs["language"] == "en"
+    refine_args, refine_kwargs = model.refinement_calls[0]
+    assert refine_args[0] == str(audio.resolve())
+    assert refine_kwargs["inplace"] is False
+    assert refine_kwargs["suppress_silence"] is True
+
+
+def test_alignment_uses_constrained_refinement_timestamps(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    first_pass = [FakeSegment([FakeWord("Hello", 0.1, 0.8)])]
+    refined = [FakeSegment([FakeWord("Hello", 0.2, 0.45)])]
+    model = FakeModel(first_pass, refined_segments=refined)
+
+    doc = StableTsNarrationAligner(model=model).align(
+        script="Hello",
+        audio_path=audio,
+        language="en",
+        project_dir=tmp_path,
+        audio_duration_seconds=1.0,
+    )
+
+    assert doc.W(1, "Hello") == pytest.approx(0.2)
+    assert model.refinement_calls
+
+
+def test_alignment_rejects_zero_duration_word_after_refinement(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    model = FakeModel([FakeSegment([FakeWord("Hello", 0.1, 0.1)])])
+
+    with pytest.raises(CinematicSkillAlignmentError, match="zero-duration word cue"):
+        StableTsNarrationAligner(model=model).align(
+            script="Hello",
+            audio_path=audio,
+            language="en",
+            project_dir=tmp_path,
+            audio_duration_seconds=1.0,
+        )
 
 
 def test_alignment_rejects_script_audio_word_mismatch(tmp_path):
