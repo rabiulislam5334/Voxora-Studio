@@ -244,3 +244,14 @@ The preceding sections remain the historical row-level audit snapshot at their s
 ### Next-sequence correction
 
 Do not implement another Auto Produce feature slice solely from the prior Section 5 proposal: its Director handoff and initial still-image acquisition portions have since been delivered by PRs #118 and #119. First complete the canonical VXP-00 registry/source-recovery and traceability gates. Then select the next bounded integration from the current approved README, after checking exact dependencies and existing source/tests.
+
+## 8. VXP-00 source-recovery delta — historical 29-engine blueprint
+
+A user-pasted **“Voxora Studio — 29 Engine Blueprint”** was located in the 2026-11-20 project conversation (approximately 06:14 UTC). The recovered conversation context preserves all 29 engine titles and Phase 1–6 assignments for Engines 01–21. It preserves responsibility summaries for Engines 22–27 only partially; Engine 28's description is truncated after “Multi-track…”, Engine 29's description was not retained, and no Phase assignments for Engines 22–29 were recovered. No standalone source filename or external document was supplied with that pasted catalogue.
+
+This finding does **not** close the separate VXP-00.2 requirement. The user distinguished the historical 29-engine blueprint from the exact original **29 Modular Systems** catalogue and instructed that the old blueprint must not become the current architecture. The current Rev 0.4 specification also distinguishes the 12 Specialized Engines from the broader modular-system inventory.
+
+- Historical 29-engine names, recovered phase assignments and provenance limits: [VXP00_HISTORICAL_29_ENGINE_BLUEPRINT.md](./VXP00_HISTORICAL_29_ENGINE_BLUEPRINT.md).
+- Exact original MS-01…MS-29 names/definitions: **BLOCKED — SOURCE NOT RECOVERED**.
+- Do not infer MS IDs from the 29-engine blueprint, 19 Universal Core responsibilities, 12 Specialized Engines, VXP phases or runtime module names.
+- Current approved Planning Documents remain the architecture source of truth; preserve the old blueprint only as historical capability context.
