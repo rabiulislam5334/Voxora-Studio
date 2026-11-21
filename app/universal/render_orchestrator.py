@@ -185,7 +185,6 @@ class SequentialRenderOrchestrator:
                 aggregate = _base + _weight * min(1.0, max(0.0, numeric))
                 report(aggregate, message or stage.stage_id)
 
-            report(stage_base, f"Starting: {stage.stage_id}")
             visible_outputs = MappingProxyType(dict(outputs))
             output = stage.execute(
                 context,
