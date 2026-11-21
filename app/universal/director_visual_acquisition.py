@@ -148,7 +148,8 @@ def _rank_local_assets(
         raw_style_tags = asset.metadata.get("style_tags", ())
         if isinstance(raw_style_tags, str):
             raw_style_tags = (raw_style_tags,)
-        style_match = isinstance(raw_style_tags, (list, tuple)) and bool(profile_style_tags.intersection(raw_style_tags))
+        asset_style_tags = {tag for tag in raw_style_tags if isinstance(tag, str)} if isinstance(raw_style_tags, (list, tuple)) else set()
+        style_match = bool(profile_style_tags.intersection(asset_style_tags))
         if not overlap and not intent_match:
             continue
         score = len(overlap) * 2 + (4 if intent_match else 0) + (1 if style_match else 0)
