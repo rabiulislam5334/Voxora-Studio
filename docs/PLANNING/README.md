@@ -120,7 +120,9 @@ The recovered Rev 0.4 Master Specification defines:
 **Important discrepancy:** previous planning notes also refer to “29 Modular Systems”. Rev 0.4 explicitly says the 12-engine catalogue and the broader modular-system inventory are different decomposition levels. The exact original 29 names/definitions are not reproduced in the recovered Rev 0.4 text. Therefore:
 - Do not call 19 + 12 = 29 (it is 31 entries across two categories).
 - Do not rename the 12 engines as the 29 systems.
-- Keep MS-01…MS-29 as **source transcription pending** until the exact original list is located.
+- A separate user-pasted **“Voxora Studio — 29 Engine Blueprint”** was located in the 2026-11-20 project conversation. Its recovered names and Phase 1–6 assignments are historical engine-catalogue data, not proof of the separate 29 Modular Systems inventory.
+- Its provenance and recovery limits are recorded in [VXP-00 Historical 29-Engine Blueprint](./VXP00_HISTORICAL_29_ENGINE_BLUEPRINT.md). Engines 22–29 have no recovered phase assignments; some responsibility text is incomplete.
+- Keep MS-01…MS-29 as **source transcription pending** until the exact original Modular Systems list is located. Do not relabel the historical 29 Engine Blueprint as that list.
 - The VXP phases below organize recovered requirements; they do not invent canonical MS IDs.
 
 ### Master roadmap stage mapping (original R IDs preserved)
