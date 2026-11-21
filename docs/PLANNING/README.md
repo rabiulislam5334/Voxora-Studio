@@ -168,12 +168,14 @@ R-stage IDs remain those of the Master Specification. **VXP IDs** are proposed s
 | Subphase | Deliverable | Current status |
 |---|---|---|
 | 00.1 | Recover Rev 0.3/0.4, R-1…R-13, SC/TS decisions | PARTIAL — Rev 0.4 recovered |
-| 00.2 | Transcribe exact 29 Modular Systems | BLOCKED — exact source list not yet recovered |
+| 00.2 | Transcribe exact 29 Modular Systems | DEFERRED — product owner confirmed not required for active product delivery (2026-11-21) |
 | 00.3 | Establish phase/PR/completion registry | IN PROGRESS — this document |
 | 00.4 | Map merged PRs to requirements, tests and remaining gaps | PARTIAL — PR #80–114 feature-group mapping |
 | 00.5 | Freeze duplicate-work/change-control rules | PLANNED |
 
-Exit: original requirements are traceable; no phase starts from an isolated chat idea.
+Historical inventory deferral: do not spend further work recovering the 29 Modular Systems list unless the product owner explicitly reopens it. This historical transcription is not a dependency for active VXP product delivery.
+
+Exit: approved product requirements are traceable; no phase starts from an isolated chat idea.
 
 ### VXP-01 — Universal Core and project integrity (R-2a; SC-01/02/05/06/10)
 
@@ -342,7 +344,9 @@ This is the main automation milestone. It integrates existing engines; it must n
 
 **Director → Auto Produce handoff (PR #118 merged; supporting integration, no new VXP subphase ID):** The adapter validates an explicitly approved DirectorPlan against the exact script fingerprint, active profile, ordered narration-unit coverage and aligned-line count, then maps supported intents to the existing Cinematic Skill card/title contract. The supplied-audio Auto Produce workflow consumes this optional handoff while retaining the existing deterministic card fallback when no DirectorPlan is supplied. Unsupported visual complexity is not represented as a completed map, animation, evidence asset or 3D scene; this is a planning/contract integration only. It does not implement VXP-10.5 automatic visual selection/acquisition/generation, external visual-direction package ingestion (10.2), or Produce UI wiring.
 
-**10.5 implementation update (PR #119 merged; CI VERIFIED, PC verification NOT STARTED):** `app/universal/director_visual_acquisition.py` resolves each explicitly approved Director shot against the existing Visual Asset Library, verifies content/provenance/profile eligibility, deterministically ranks local matches, and can request one still image from an explicitly injected/selected VisualGenerationRuntime provider when no local match exists. Network/API-key consent remains explicit and off by default. Unresolved shots return diagnostics rather than fake assets. This is not yet wired into one-action Auto Produce or the Render Orchestrator; it does not add stock-media web acquisition, project binding, semantic image matching, documentary fact verification, or visual-quality QC. See [VXP-10.5 shot visual acquisition notes](../architecture/VXP_10_5_SHOT_VISUAL_ACQUISITION.md).
+**10.5 implementation update (PR #119 merged; CI VERIFIED, PC verification NOT STARTED):** `app/universal/director_visual_acquisition.py` resolves each explicitly approved Director shot against the existing Visual Asset Library, verifies content/provenance/profile eligibility, deterministically ranks local matches, and can request one still image from an explicitly injected/selected VisualGenerationRuntime provider when no local match exists. Network/API-key consent remains explicit and off by default. Unresolved shots return diagnostics rather than fake assets.
+
+**Director still-image → Film bridge (bounded service integration; CI/PC evidence tracked separately):** `CinematicSkillAutoProduceWorkflow` can now accept the active `ChannelProfile` and existing `VisualAssetLibrary`, call the existing per-shot resolver after explicit plan approval, and pass selected/generated stills to the Cinematic Skill Film builder. The builder stages bounded local copies inside its temporary project workspace and renders them as existing Cinematic Skill `Print` items. Unresolved shots retain the deterministic card fallback. This is a service-level integration only; no Project binding is persisted and the Produce UI/Render Orchestrator are not wired yet. It does not add stock-media web acquisition, semantic image matching, documentary fact verification, per-shot regeneration, or visual-quality QC. See [VXP-10.5 shot visual acquisition notes](../architecture/VXP_10_5_SHOT_VISUAL_ACQUISITION.md).
 
 **Generate Video acceptance:** with a matching script + supplied narration audio + profile, and optionally a Claude visual-direction package, one user action produces a playable final MP4. The narration track is preserved as the primary voice track; visuals, scene changes, motion, captions and optional sound design align to its actual timing. Without an external prompt package, Voxora creates the scene/shot prompts itself. No manual timeline editing or per-scene asset attachment is required. Missing providers/assets yield explicit profile-compatible fallback or actionable errors, never fake success.
 
@@ -612,7 +616,7 @@ A phase is DONE only when:
 ## 9. Current next sequence
 
 1. Reconcile the PR registry against repository history, including merged PRs #115, #118 and #119 and their exact implementation boundaries.
-2. Close the VXP-00 source-recovery gap: exact 29 Modular Systems and precise R-stage definitions from their original source.
+2. Keep the historical 29 Modular Systems transcription deferred by product-owner decision; do not block active product work on that archive.
 3. Complete the requirement-to-implementation traceability matrix against merged PRs and current Core code.
 4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment.
 5. Validate the optional Stable-ts script/audio word aligner on real English and Bangla narration; audit exact CPU PyTorch/torchaudio wheels; evolve the deterministic narration-line-to-Film builder toward semantic script/shot planning, then render and review a 20–30 second sequence on the target PC (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
@@ -620,10 +624,10 @@ A phase is DONE only when:
 7. Define advanced animation/render quality acceptance criteria and integrate them into the Auto Produce production graph.
 8. Design Sound & Voice System contracts and the smallest testable vertical slices.
 9. Define the Auto Produce production-plan schema and end-to-end acceptance fixture.
-10. Implement only the next approved small phase, after the VXP-00 traceability and dependency gates above are resolved.
+10. Continue the active Production Director → visual-production integration in small, dependency-reviewed slices; maintain VXP-00.3/00.4 traceability in the same PRs rather than treating the deferred historical inventory as a blocker.
 11. After the core automatic video-generation workflow and its visual/animation/rendering acceptance priorities, schedule VXP-14 as the final deferred workstream; do not advance Bengali TTS ahead of those priorities.
 
-Do not start an unrelated feature phase while VXP-00 traceability and the next dependency decision are unresolved.
+Do not divert into unrelated feature work while VXP-00 traceability and the next dependency decision are unresolved. The explicitly prioritized Production Director → visual-production integration is the active VXP-10 continuation; keep its source, tests and traceability synchronized. The historical 29-system transcription remains deferred unless the product owner reopens it.
 
 ## 10. Channel and visual production profile catalogue
 

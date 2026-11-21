@@ -50,4 +50,14 @@ No duplicate registry, downloader, generation runtime or renderer is introduced.
 
 ## Remaining work
 
-This does not complete all of VXP-10.5 or VXP-10. The coordinator is not yet wired into the one-action Auto Produce/Render Orchestrator path, does not automatically persist reviewed scene bindings, and has no semantic image ranking, documentary source research, stock-media acquisition, cache/retry orchestration, per-shot regeneration UI or visual-quality QC. Real local Stable Diffusion.cpp inference, model licensing, resource use and quality on the target Windows PC remain unverified. No CI or PC verification is claimed until the corresponding evidence exists.
+This does not complete all of VXP-10.5 or VXP-10. The coordinator is now consumed by the supplied-script/supplied-narration Auto Produce service when the caller explicitly supplies the active ChannelProfile and existing VisualAssetLibrary. Selected/generated stills are staged into the temporary Cinematic Skill project and rendered as `Print` items; unresolved shots keep the deterministic card fallback. This does not wire the service into the Produce UI or Render Orchestrator, persist Project scene bindings, or add semantic image ranking, documentary source research, stock-media acquisition, cache/retry orchestration, per-shot regeneration UI or visual-quality QC. Real local Stable Diffusion.cpp inference, model licensing, resource use and quality on the target Windows PC remain unverified. CI and PC verification must be reported separately.
+
+
+## Auto Produce still-image rendering bridge (bounded implementation slice)
+
+- `CinematicSkillAutoProduceWorkflow.run` accepts the existing active `ChannelProfile` and `VisualAssetLibrary` as an optional pair. Supplying only one is rejected.
+- After the existing approved-plan/script/profile/narration checks, the workflow calls the existing `resolve_director_plan_visuals` coordinator. Network and API-key consent remain false by default; a generation provider is used only when explicitly injected and selected.
+- The resolution must match the exact Director plan ID, source fingerprint, profile ID, and ordered shot IDs. Selected/generated local paths are attached to their matching `CinematicSkillShot`; unresolved shots remain on the prior card/title fallback.
+- `CinematicSkillFilmBuilder` stages each image into the temporary project workspace, bounds the staged raster to 2200 px per side and 100 MiB input, writes local photo metadata, and emits the existing Cinematic Skill `Print` item. It does not modify the source asset or persist Project bindings.
+- The Director handoff now expands a Director shot across each of its narration units, preserving the shot ID for exact visual-result mapping.
+- This is a still-image rendering slice only. It does not complete stock footage, semantic/factual verification, animation, 2.5D, 3D, 4D/time-based 3D, Hybrid, full Auto Produce UI, or target-PC acceptance.

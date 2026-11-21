@@ -6,10 +6,14 @@ asset acquisition, forced alignment, or character animation.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import tempfile
 import textwrap
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Sequence
-
 
 class CinematicSkillFilmBuildError(ValueError):
     """Raised when a narration-backed shot plan cannot become a valid Film."""
@@ -32,12 +36,134 @@ class CinematicSkillShot:
     counter_prefix: str = ""
     counter_suffix: str = ""
     counter_caption: Optional[str] = None
+    director_shot_id: Optional[str] = None
+    image_path: Optional[str] = None
 
 
 class CinematicSkillFilmBuilder:
     """Build an upstream Film from exact Voxora line timings and optional shot cues."""
 
-    SUPPORTED_KINDS = frozenset({"card", "title", "counter"})
+    SUPPORTED_KINDS = frozenset({"card", "title", "counter", "image"})
+
+    @staticmethod
+    def _stage_image(narration_doc, image_path: str) -> tuple[str, float]:
+        """Copy a verified local still into the temporary Film project context."""
+        if not isinstance(image_path, str) or not image_path.strip():
+            raise CinematicSkillFilmBuildError("image shots require a non-empty image_path")
+        source = Path(image_path).expanduser()
+        if source.is_symlink():
+            raise CinematicSkillFilmBuildError("symbolic-link visual assets are not accepted")
+        try:
+            source = source.resolve(strict=True)
+            if not source.is_file():
+                raise CinematicSkillFilmBuildError("visual asset must be a regular file")
+            if source.stat().st_size <= 0 or source.stat().st_size > 100 * 1024 * 1024:
+                raise CinematicSkillFilmBuildError("visual asset is empty or exceeds the 100 MiB limit")
+        except OSError as exc:
+            raise CinematicSkillFilmBuildError(f"visual asset is unavailable: {exc}") from exc
+
+        raw_project_dir = getattr(narration_doc, "dir", None)
+        raw_prep_dir = getattr(narration_doc, "prep", None)
+        if raw_project_dir is None or raw_prep_dir is None:
+            raise CinematicSkillFilmBuildError(
+                "image shots require a narration document with project dir and prep paths"
+            )
+        if Path(raw_project_dir).expanduser().is_symlink() or Path(raw_prep_dir).expanduser().is_symlink():
+            raise CinematicSkillFilmBuildError("Cinematic Skill project paths must not be symbolic links")
+        project_dir = Path(raw_project_dir).expanduser().resolve()
+        prep_dir = Path(raw_prep_dir).expanduser().resolve()
+        try:
+            prep_dir.relative_to(project_dir)
+        except ValueError:
+            raise CinematicSkillFilmBuildError("Cinematic Skill asset staging must remain inside its project workspace") from None
+
+        photos_dir = prep_dir / "photos"
+        if photos_dir.is_symlink():
+            raise CinematicSkillFilmBuildError("visual staging directory must not be a symbolic link")
+        photos_dir.mkdir(parents=True, exist_ok=True)
+
+        digest = hashlib.sha256()
+        try:
+            with source.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError as exc:
+            raise CinematicSkillFilmBuildError(f"could not read visual asset: {exc}") from exc
+        key = "voxora_" + digest.hexdigest()[:24]
+        target = photos_dir / f"{key}.jpg"
+
+        if target.is_symlink():
+            raise CinematicSkillFilmBuildError("staged visual asset path must not be a symbolic link")
+        try:
+            from PIL import Image, ImageOps
+        except (ImportError, OSError) as exc:
+            raise CinematicSkillFilmBuildError(
+                "Pillow is required to stage Director still images"
+            ) from exc
+        if not target.is_file():
+            temporary = None
+            try:
+                with Image.open(source) as original:
+                    image = ImageOps.exif_transpose(original)
+                    width, height = image.size
+                    if width <= 0 or height <= 0 or width * height > 40_000_000:
+                        raise CinematicSkillFilmBuildError(
+                            "visual asset dimensions exceed the 40-megapixel staging limit"
+                        )
+                    image.load()
+                    if image.mode in ("RGBA", "LA", "P"):
+                        rgba = image.convert("RGBA")
+                        prepared = Image.new("RGB", rgba.size, (235, 228, 214))
+                        prepared.paste(rgba, mask=rgba.getchannel("A"))
+                        rgba.close()
+                    else:
+                        prepared = image.convert("RGB")
+                    prepared.thumbnail((2200, 2200), Image.Resampling.LANCZOS)
+                    fd, temp_name = tempfile.mkstemp(prefix=".voxora-image-", suffix=".jpg", dir=str(photos_dir))
+                    os.close(fd)
+                    temporary = Path(temp_name)
+                    try:
+                        prepared.save(temporary, format="JPEG", quality=93, optimize=False)
+                        width, height = prepared.size
+                    finally:
+                        prepared.close()
+            except (OSError, ValueError, Image.DecompressionBombError) as exc:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+                raise CinematicSkillFilmBuildError(f"visual asset is not a supported readable image: {exc}") from exc
+            try:
+                os.replace(temporary, target)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+        else:
+            try:
+                with Image.open(target) as prepared:
+                    width, height = prepared.size
+            except OSError as exc:
+                raise CinematicSkillFilmBuildError(f"staged visual asset is corrupt: {exc}") from exc
+
+        metadata_path = photos_dir / "meta.json"
+        if metadata_path.is_symlink():
+            raise CinematicSkillFilmBuildError("visual metadata path must not be a symbolic link")
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CinematicSkillFilmBuildError(f"prepared visual metadata is invalid: {exc}") from exc
+        if not isinstance(metadata, dict):
+            raise CinematicSkillFilmBuildError("prepared visual metadata must be an object")
+        metadata[key] = {"w": width, "h": height, "kind": "photo"}
+        fd, temp_meta_name = tempfile.mkstemp(prefix=".voxora-meta-", suffix=".json", dir=str(photos_dir))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(metadata, stream, ensure_ascii=False, sort_keys=True)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp_meta_name, metadata_path)
+        finally:
+            Path(temp_meta_name).unlink(missing_ok=True)
+        narration_doc.meta = metadata
+        return key, width / height
 
     def __init__(self, *, engine_module=None):
         # Dependency injection keeps tests and the core Voxora install independent
@@ -133,12 +259,24 @@ class CinematicSkillFilmBuilder:
                     f"unsupported visual kind {shot.kind!r}; "
                     f"choose one of {sorted(self.SUPPORTED_KINDS)}"
                 )
+            if shot.kind == "image" and not shot.image_path:
+                raise CinematicSkillFilmBuildError("image shots require image_path")
+            if shot.kind != "image" and shot.image_path is not None:
+                raise CinematicSkillFilmBuildError("image_path is only valid for image shots")
 
             x = index * 3600.0
             y = 0.0
             film.shot(line.start_seconds, x, y, 1.0, radius=1750, strength=0.48)
 
-            if shot.kind == "card":
+            if shot.kind == "image":
+                key, aspect = self._stage_image(narration_doc, shot.image_path)
+                film.add(engine.Print(
+                    key, x=x, y=y, w=2500,
+                    t_in=line.start_seconds, t_out=line.end_seconds,
+                    paper=False, pin=True, label=shot.title or None,
+                    aspect=aspect,
+                ))
+            elif shot.kind == "card":
                 body = shot.body or (line.caption or line.spoken_text,)
                 wrapped = tuple(
                     part for paragraph in body

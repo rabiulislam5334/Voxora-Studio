@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -117,3 +118,24 @@ def test_handoff_rejects_line_text_that_does_not_match_source_unit():
     doc.lines[1].spoken_text = "A different sentence."
     with pytest.raises(DirectorHandoffError, match="does not exactly match"):
         build_cinematic_skill_handoff(plan, **_args(script, source, doc))
+
+
+
+def test_handoff_expands_one_director_shot_over_its_multiple_narration_units():
+    script, source, plan, doc = _fixture()
+    merged = replace(
+        plan.shots[0],
+        narration_unit_ids=tuple(unit.unit_id for unit in source.units),
+    )
+    grouped_plan = replace(
+        plan,
+        scenes=(replace(plan.scenes[0], shot_ids=(merged.shot_id,)),),
+        shots=(merged,),
+    )
+
+    shots = build_cinematic_skill_handoff(
+        grouped_plan, **_args(script, source, doc)
+    )
+
+    assert [item.line_id for item in shots] == [1, 2]
+    assert [item.director_shot_id for item in shots] == [merged.shot_id, merged.shot_id]

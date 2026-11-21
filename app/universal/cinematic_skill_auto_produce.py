@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Optional
@@ -25,6 +25,11 @@ from app.universal.cinematic_skill_builder import CinematicSkillFilmBuilder
 from app.universal.director_auto_produce_handoff import (
     DirectorHandoffError,
     build_cinematic_skill_handoff,
+)
+from app.universal.director_visual_acquisition import (
+    DirectorVisualResolution,
+    ShotVisualAcquisitionError,
+    resolve_director_plan_visuals,
 )
 from app.workers.cancel import CancelToken
 
@@ -131,6 +136,7 @@ class CinematicSkillAutoProduceResult:
     aligned_line_count: int
     aligned_word_count: int
     language: str
+    visual_resolution: Optional[DirectorVisualResolution] = None
 
 
 class CinematicSkillAutoProduceWorkflow:
@@ -143,6 +149,7 @@ class CinematicSkillAutoProduceWorkflow:
         aligner=None,
         film_builder=None,
         renderer=None,
+        visual_resolver=None,
     ) -> None:
         if not isinstance(ffmpeg, FFmpegTool):
             raise TypeError("ffmpeg must be an FFmpegTool")
@@ -150,12 +157,15 @@ class CinematicSkillAutoProduceWorkflow:
         self._aligner = aligner or StableTsNarrationAligner()
         self._film_builder = film_builder or CinematicSkillFilmBuilder()
         self._renderer = renderer or CinematicSkillRenderCoordinator()
+        self._visual_resolver = visual_resolver or resolve_director_plan_visuals
         if not callable(getattr(self._aligner, "align", None)):
             raise TypeError("aligner must provide align(...)")
         if not callable(getattr(self._film_builder, "build", None)):
             raise TypeError("film_builder must provide build(...)")
         if not callable(getattr(self._renderer, "render", None)):
             raise TypeError("renderer must provide render(...)")
+        if not callable(self._visual_resolver):
+            raise TypeError("visual_resolver must be callable")
 
     def run(
         self,
@@ -173,6 +183,12 @@ class CinematicSkillAutoProduceWorkflow:
         narration_source=None,
         profile_id: Optional[str] = None,
         director_plan_approved: bool = False,
+        profile=None,
+        asset_library=None,
+        generation_runtime=None,
+        visual_provider_id: Optional[str] = None,
+        allow_network: bool = False,
+        allow_api_key: bool = False,
         cancel: Optional[CancelToken] = None,
         on_progress: Optional[Callable[[float, str], None]] = None,
     ) -> CinematicSkillAutoProduceResult:
@@ -187,6 +203,19 @@ class CinematicSkillAutoProduceWorkflow:
             raise TypeError("on_progress must be callable")
         if cancel is not None:
             cancel.raise_if_cancelled()
+        if (profile is None) != (asset_library is None):
+            raise CinematicSkillAutoProduceError(
+                "profile and asset_library must be supplied together for Director visual resolution"
+            )
+        if profile is None and (
+            generation_runtime is not None or visual_provider_id is not None
+            or allow_network or allow_api_key
+        ):
+            raise CinematicSkillAutoProduceError(
+                "visual generation options require both profile and asset_library"
+            )
+        if not isinstance(allow_network, bool) or not isinstance(allow_api_key, bool):
+            raise CinematicSkillAutoProduceError("visual network/API-key consent flags must be booleans")
         if on_progress:
             on_progress(0.02, "Inspecting supplied narration")
         info = self._ffmpeg.probe(audio_path, cancel=cancel)
@@ -207,12 +236,21 @@ class CinematicSkillAutoProduceWorkflow:
             )
             if cancel is not None:
                 cancel.raise_if_cancelled()
+            visual_resolution = None
             if on_progress:
-                on_progress(0.18, "Building narration-led film")
+                on_progress(
+                    0.18,
+                    "Resolving approved Director visuals" if profile is not None
+                    else "Building narration-led film",
+                )
             if director_plan is None:
-                if narration_source is not None or profile_id is not None or director_plan_approved:
+                if (
+                    narration_source is not None or profile_id is not None or director_plan_approved
+                    or profile is not None or asset_library is not None
+                    or generation_runtime is not None or visual_provider_id is not None
+                ):
                     raise CinematicSkillAutoProduceError(
-                        "Director handoff metadata was supplied without a DirectorPlan"
+                        "Director handoff or visual-resolution metadata was supplied without a DirectorPlan"
                     )
                 film = self._film_builder.build(doc, look=look, fps=fps)
             else:
@@ -229,6 +267,79 @@ class CinematicSkillAutoProduceWorkflow:
                     raise CinematicSkillAutoProduceError(
                         f"Director plan cannot enter Auto Produce: {exc}"
                     ) from exc
+                if profile is not None:
+                    if getattr(profile, "profile_id", None) != profile_id:
+                        raise CinematicSkillAutoProduceError(
+                            "active ChannelProfile does not match profile_id"
+                        )
+                    try:
+                        visual_resolution = self._visual_resolver(
+                            director_plan,
+                            script=script,
+                            narration_source=narration_source,
+                            profile=profile,
+                            asset_library=asset_library,
+                            approved=director_plan_approved,
+                            generation_runtime=generation_runtime,
+                            provider_id=visual_provider_id,
+                            allow_network=allow_network,
+                            allow_api_key=allow_api_key,
+                            progress=(
+                                (lambda fraction, message: on_progress(
+                                    0.18 + max(0.0, min(1.0, float(fraction))) * 0.03,
+                                    message,
+                                )) if on_progress else None
+                            ),
+                        )
+                    except ShotVisualAcquisitionError as exc:
+                        raise CinematicSkillAutoProduceError(
+                            f"Director visual resolution failed: {exc}"
+                        ) from exc
+                    if not isinstance(visual_resolution, DirectorVisualResolution):
+                        raise CinematicSkillAutoProduceError(
+                            "visual resolver returned an invalid resolution object"
+                        )
+                    if (
+                        visual_resolution.plan_id != director_plan.plan_id
+                        or visual_resolution.source_fingerprint != director_plan.source_fingerprint
+                        or visual_resolution.profile_id != director_plan.profile_id
+                    ):
+                        raise CinematicSkillAutoProduceError(
+                            "visual resolution provenance does not match the approved DirectorPlan"
+                        )
+                    expected_shot_ids = tuple(item.shot_id for item in director_plan.shots)
+                    resolved_shot_ids = tuple(item.shot_id for item in visual_resolution.shots)
+                    if resolved_shot_ids != expected_shot_ids:
+                        raise CinematicSkillAutoProduceError(
+                            "visual resolution must contain every Director shot exactly once and in order"
+                        )
+                    resolution_by_shot = {item.shot_id: item for item in visual_resolution.shots}
+                    resolved_director_shots = []
+                    for item in director_shots:
+                        resolution = resolution_by_shot.get(item.director_shot_id)
+                        if resolution is None:
+                            raise CinematicSkillAutoProduceError(
+                                "a Film shot is missing its Director visual resolution"
+                            )
+                        if resolution.status in {"selected", "generated"}:
+                            if not resolution.asset_id or not resolution.asset_path:
+                                raise CinematicSkillAutoProduceError(
+                                    "resolved visual is missing its asset ID or local path"
+                                )
+                            item = replace(item, kind="image", image_path=resolution.asset_path)
+                        elif resolution.status == "unresolved":
+                            if resolution.asset_id is not None or resolution.asset_path is not None:
+                                raise CinematicSkillAutoProduceError(
+                                    "unresolved visual results must not carry an asset ID or path"
+                                )
+                        else:
+                            raise CinematicSkillAutoProduceError(
+                                f"unsupported visual resolution status: {resolution.status!r}"
+                            )
+                        resolved_director_shots.append(item)
+                    director_shots = tuple(resolved_director_shots)
+                if on_progress and profile is not None:
+                    on_progress(0.22, "Building narration-led film")
                 film = self._film_builder.build(
                     doc, shots=director_shots, look=look, fps=fps,
                 )
@@ -236,8 +347,9 @@ class CinematicSkillAutoProduceWorkflow:
             timeline = SimpleNamespace(
                 fps=film.fps, width=width, height=height, total_frames=frame_count,
             )
+            render_start = 0.22 if director_plan is not None and profile is not None else 0.20
             if on_progress:
-                on_progress(0.20, "Rendering and assembling MP4")
+                on_progress(render_start, "Rendering and assembling MP4")
             render = self._renderer.render(
                 film,
                 destination,
@@ -251,7 +363,7 @@ class CinematicSkillAutoProduceWorkflow:
                 cancel=cancel,
                 on_progress=(
                     lambda fraction, message: on_progress(
-                        0.20 + max(0.0, min(1.0, fraction)) * 0.80, message,
+                        render_start + max(0.0, min(1.0, fraction)) * (1.0 - render_start), message,
                     )
                 ) if on_progress else None,
             )
@@ -262,6 +374,7 @@ class CinematicSkillAutoProduceWorkflow:
                 aligned_line_count=len(doc.lines),
                 aligned_word_count=word_count,
                 language=language.strip(),
+                visual_resolution=visual_resolution,
             )
         finally:
             import shutil
