@@ -94,15 +94,15 @@ class CinematicSkillFilmBuilder:
 
         if target.is_symlink():
             raise CinematicSkillFilmBuildError("staged visual asset path must not be a symbolic link")
+        try:
+            from PIL import Image, ImageOps
+        except (ImportError, OSError) as exc:
+            raise CinematicSkillFilmBuildError(
+                "Pillow is required to stage Director still images"
+            ) from exc
         if not target.is_file():
             temporary = None
             try:
-                try:
-                    from PIL import Image, ImageOps
-                except (ImportError, OSError) as exc:
-                    raise CinematicSkillFilmBuildError(
-                        "Pillow is required to stage Director still images"
-                    ) from exc
                 with Image.open(source) as original:
                     image = ImageOps.exif_transpose(original)
                     width, height = image.size
