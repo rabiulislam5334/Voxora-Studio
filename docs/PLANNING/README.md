@@ -173,7 +173,9 @@ R-stage IDs remain those of the Master Specification. **VXP IDs** are proposed s
 | 00.4 | Map merged PRs to requirements, tests and remaining gaps | PARTIAL — PR #80–114 feature-group mapping |
 | 00.5 | Freeze duplicate-work/change-control rules | PLANNED |
 
-Historical inventory deferral: do not spend further work recovering the 29 Modular Systems list unless the product owner explicitly reopens it. This historical transcription is not a dependency for active VXP product delivery.\n\nExit: approved product requirements are traceable; no phase starts from an isolated chat idea.
+Historical inventory deferral: do not spend further work recovering the 29 Modular Systems list unless the product owner explicitly reopens it. This historical transcription is not a dependency for active VXP product delivery.
+
+Exit: approved product requirements are traceable; no phase starts from an isolated chat idea.
 
 ### VXP-01 — Universal Core and project integrity (R-2a; SC-01/02/05/06/10)
 
