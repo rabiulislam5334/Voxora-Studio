@@ -36,11 +36,9 @@ _PROJECT_POLL_MS = 700
 
 
 class StudioPanel(ttk.Frame):
-    """One workspace for the whole production: Voice & Narration (the existing
-    Voice page, unchanged), Audio (music, mix, waveform), Scenes (media,
-    timing, timeline), Video (format) and Produce (end-to-end run). The
-    sidebar entries Voice / Audio / Timeline / Video / Produce all open this
-    panel on the matching tab, and the tabs are also clickable directly."""
+    """One workspace for the whole production: Voice & Narration, Audio,
+    Scenes, Video, legacy TTS-first Produce, supplied-audio Auto Produce,
+    Channel Profile and Transitions. Sidebar entries open their matching tabs."""
 
     SECTION_NAMES = tuple(SECTION_TABS)
 
