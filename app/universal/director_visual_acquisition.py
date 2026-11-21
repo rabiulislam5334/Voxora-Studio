@@ -213,8 +213,12 @@ def resolve_director_plan_visuals(
             raise ShotVisualAcquisitionError("generation_runtime must be a VisualGenerationRuntime")
         if generation_runtime.asset_library is not asset_library:
             raise ShotVisualAcquisitionError("generation runtime must use the same VisualAssetLibrary")
+    if provider_id is not None and (not isinstance(provider_id, str) or not provider_id.strip()):
+        raise ShotVisualAcquisitionError("provider_id must be a non-empty string or null")
     if provider_id is not None and generation_runtime is None:
         raise ShotVisualAcquisitionError("provider_id requires an injected generation_runtime")
+    if progress is not None and not callable(progress):
+        raise ShotVisualAcquisitionError("progress must be callable or null")
     for name, value in (("allow_network", allow_network), ("allow_api_key", allow_api_key)):
         if not isinstance(value, bool):
             raise ShotVisualAcquisitionError(f"{name} must be a boolean")
