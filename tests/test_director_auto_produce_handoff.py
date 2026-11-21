@@ -11,6 +11,7 @@ from app.universal.director_auto_produce_handoff import (
 from app.universal.narration_segmentation import segment_narration
 from app.universal.production_director import ProductionDirector
 from app.universal.profiles.models import ChannelProfile
+from app.universal.storyboard import NarrationSource, NarrationTextUnit
 
 
 def _profile():
@@ -32,31 +33,29 @@ def _fixture():
     source = segment_narration(script, source_id="handoff-test", total_duration_ms=8000)
     plan = ProductionDirector().create_plan(source, _profile())
     lines = {
-        index: SimpleNamespace(
-            line_id=index,
-            caption=text,
-            spoken_text=text,
-        )
+        index: SimpleNamespace(line_id=index, caption=text, spoken_text=text)
         for index, text in enumerate(
             ("Why does the planet move?", "Its orbit follows gravity."), start=1
         )
     }
-    doc = SimpleNamespace(lines=lines)
-    return script, source, plan, doc
+    return script, source, plan, SimpleNamespace(lines=lines)
+
+
+def _args(script, source, doc):
+    return {
+        "script": script,
+        "profile_id": "quasivanta",
+        "narration_doc": doc,
+        "narration_source": source,
+        "approved": True,
+    }
 
 
 def test_handoff_maps_approved_current_plan_to_existing_shot_contract():
     script, source, plan, doc = _fixture()
-
     shots = build_cinematic_skill_handoff(
-        plan,
-        script=script,
-        profile_id="quasivanta",
-        narration_doc=doc,
-        source_unit_ids=tuple(unit.unit_id for unit in source.units),
-        approved=True,
+        plan, **_args(script, source, doc)
     )
-
     assert [shot.line_id for shot in shots] == [1, 2]
     assert all(shot.kind in {"card", "title"} for shot in shots)
     assert shots[0].body == ("Why does the planet move?",)
@@ -64,53 +63,57 @@ def test_handoff_maps_approved_current_plan_to_existing_shot_contract():
 
 def test_handoff_requires_explicit_approval():
     script, source, plan, doc = _fixture()
+    args = _args(script, source, doc)
+    args["approved"] = False
     with pytest.raises(DirectorHandoffError, match="explicit user approval"):
-        build_cinematic_skill_handoff(
-            plan, script=script, profile_id="quasivanta",
-            narration_doc=doc,
-            source_unit_ids=tuple(unit.unit_id for unit in source.units),
-            approved=False,
-        )
+        build_cinematic_skill_handoff(plan, **args)
 
 
 def test_handoff_rejects_stale_script_and_wrong_profile():
     script, source, plan, doc = _fixture()
-    args = {
-        "profile_id": "quasivanta",
-        "narration_doc": doc,
-        "source_unit_ids": tuple(unit.unit_id for unit in source.units),
-        "approved": True,
-    }
+    args = _args(script, source, doc)
     with pytest.raises(DirectorHandoffError, match="fingerprint"):
-        build_cinematic_skill_handoff(plan, script=script + " Changed", **args)
+        build_cinematic_skill_handoff(plan, **{**args, "script": script + " Changed"})
     with pytest.raises(DirectorHandoffError, match="profile"):
-        build_cinematic_skill_handoff(
-            plan, script=script, **{**args, "profile_id": "veltracis"}
-        )
+        build_cinematic_skill_handoff(plan, **{**args, "profile_id": "veltracis"})
 
 
-def test_handoff_rejects_incomplete_or_reordered_narration_coverage():
+def test_handoff_rejects_incomplete_or_wrong_narration_coverage():
     script, source, plan, doc = _fixture()
-    ids = tuple(unit.unit_id for unit in source.units)
-    args = {
-        "script": script,
-        "profile_id": "quasivanta",
-        "narration_doc": doc,
-        "approved": True,
-    }
+    args = _args(script, source, doc)
+    incomplete = NarrationSource(
+        source_id=source.source_id, text=source.text,
+        units=source.units[:-1], total_duration_ms=source.total_duration_ms,
+    )
+    renamed_units = tuple(
+        NarrationTextUnit(
+            unit_id=f"other-{index}",
+            start_offset=unit.start_offset,
+            end_offset=unit.end_offset,
+            timing=unit.timing,
+            metadata=unit.metadata,
+        )
+        for index, unit in enumerate(source.units, start=1)
+    )
+    wrong_ids = NarrationSource(
+        source_id=source.source_id, text=source.text,
+        units=renamed_units, total_duration_ms=source.total_duration_ms,
+    )
     with pytest.raises(DirectorHandoffError, match="coverage"):
-        build_cinematic_skill_handoff(plan, source_unit_ids=ids[:-1], **args)
+        build_cinematic_skill_handoff(plan, **{**args, "narration_source": incomplete})
     with pytest.raises(DirectorHandoffError, match="coverage"):
-        build_cinematic_skill_handoff(plan, source_unit_ids=tuple(reversed(ids)), **args)
+        build_cinematic_skill_handoff(plan, **{**args, "narration_source": wrong_ids})
 
 
 def test_handoff_rejects_line_count_mismatch_instead_of_guessing():
     script, source, plan, doc = _fixture()
     doc.lines.pop(2)
     with pytest.raises(DirectorHandoffError, match="line count"):
-        build_cinematic_skill_handoff(
-            plan, script=script, profile_id="quasivanta",
-            narration_doc=doc,
-            source_unit_ids=tuple(unit.unit_id for unit in source.units),
-            approved=True,
-        )
+        build_cinematic_skill_handoff(plan, **_args(script, source, doc))
+
+
+def test_handoff_rejects_line_text_that_does_not_match_source_unit():
+    script, source, plan, doc = _fixture()
+    doc.lines[1].spoken_text = "A different sentence."
+    with pytest.raises(DirectorHandoffError, match="does not exactly match"):
+        build_cinematic_skill_handoff(plan, **_args(script, source, doc))
