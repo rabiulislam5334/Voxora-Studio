@@ -327,6 +327,12 @@ class AutoProduceTab(ttk.Frame):
             final_path = self._target_path
             self._staging_path = None
         except OSError as exc:
+            if self._staging_path is not None:
+                try:
+                    self._staging_path.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning("Could not remove failed Auto Produce staging file: %s", self._staging_path)
+                self._staging_path = None
             self._finish()
             self._stage.configure(text="Failed")
             self._message.configure(text=f"Render completed, but the final MP4 could not be committed: {exc}")
@@ -353,7 +359,10 @@ class AutoProduceTab(ttk.Frame):
     def _on_failed(self, error: Exception) -> None:
         self._finish()
         if self._staging_path is not None:
-            self._staging_path.unlink(missing_ok=True)
+            try:
+                self._staging_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Could not remove failed Auto Produce staging file: %s", self._staging_path)
             self._staging_path = None
         self._progress.configure(value=0)
         self._stage.configure(text="Failed")
