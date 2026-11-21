@@ -7,7 +7,6 @@ for every Director intent. Narration alignment remains the timing authority.
 from __future__ import annotations
 
 import hashlib
-from typing import Sequence
 
 from app.universal.cinematic_skill_builder import CinematicSkillShot
 from app.universal.production_director import DirectorIntent, DirectorPlan
@@ -56,10 +55,6 @@ def build_cinematic_skill_handoff(
         raise DirectorHandoffError("script must be non-empty")
     if not isinstance(profile_id, str) or not profile_id.strip():
         raise DirectorHandoffError("profile_id is required")
-    if plan.requires_review:
-        # Approval is a separate explicit user action; the plan's immutable
-        # proposal flag remains true as provenance and is not mutated here.
-        pass
     fingerprint = hashlib.sha256(script.encode("utf-8")).hexdigest()
     if plan.source_fingerprint != fingerprint:
         raise DirectorHandoffError("Director plan is stale: script fingerprint does not match")
