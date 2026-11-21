@@ -88,8 +88,12 @@ def _rights_eligible(asset: VisualAsset) -> bool:
     source = provenance.source.casefold()
     if source in {"user-upload", "user_upload", "user-import", "user_import"} or source.startswith("generated:"):
         return True
-    license_name = (provenance.license or "").strip().casefold()
-    return bool(license_name) and license_name not in {"unknown", "unverified", "not verified", "none", "n/a"}
+    license_name = re.sub(r"[^a-z0-9]+", " ", (provenance.license or "").casefold()).strip()
+    if license_name.startswith(("public domain", "cc0", "cc 0")):
+        return True
+    if license_name.startswith(("cc by ", "cc by sa ")):
+        return not any(marker in license_name for marker in (" non commercial", " noncommercial", " nc ", " no derivatives", " nd "))
+    return False
 
 
 def _profile_eligible(asset: VisualAsset, profile_id: str) -> bool:
