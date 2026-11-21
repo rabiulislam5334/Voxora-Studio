@@ -1,8 +1,8 @@
 # Voxora Studio — Master Product Plan & Delivery Registry
 
-> Status: Active planning baseline (PR #115 merged; registry reconciliation in progress)
+> Status: Active planning baseline (PR #119 merged; VXP-00 registry reconciliation in progress)
 > Canonical location: docs/PLANNING/README.md
-> Last reconciled: 2026-11-20
+> Last reconciled: 2026-11-21
 
 ## 0. Non-negotiable product identity and outcome
 
@@ -342,7 +342,7 @@ This is the main automation milestone. It integrates existing engines; it must n
 
 **Director → Auto Produce handoff (PR #118 merged; supporting integration, no new VXP subphase ID):** The adapter validates an explicitly approved DirectorPlan against the exact script fingerprint, active profile, ordered narration-unit coverage and aligned-line count, then maps supported intents to the existing Cinematic Skill card/title contract. The supplied-audio Auto Produce workflow consumes this optional handoff while retaining the existing deterministic card fallback when no DirectorPlan is supplied. Unsupported visual complexity is not represented as a completed map, animation, evidence asset or 3D scene; this is a planning/contract integration only. It does not implement VXP-10.5 automatic visual selection/acquisition/generation, external visual-direction package ingestion (10.2), or Produce UI wiring.
 
-**10.5 implementation update (bounded coordinator; this PR):** `app/universal/director_visual_acquisition.py` resolves each explicitly approved Director shot against the existing Visual Asset Library, verifies content/provenance/profile eligibility, deterministically ranks local matches, and can request one still image from an explicitly injected/selected VisualGenerationRuntime provider when no local match exists. Network/API-key consent remains explicit and off by default. Unresolved shots return diagnostics rather than fake assets. This is not yet wired into one-action Auto Produce or the Render Orchestrator; it does not add stock-media web acquisition, project binding, semantic image matching, documentary fact verification, or visual-quality QC. See [VXP-10.5 shot visual acquisition notes](../architecture/VXP_10_5_SHOT_VISUAL_ACQUISITION.md).
+**10.5 implementation update (PR #119 merged; CI VERIFIED, PC verification NOT STARTED):** `app/universal/director_visual_acquisition.py` resolves each explicitly approved Director shot against the existing Visual Asset Library, verifies content/provenance/profile eligibility, deterministically ranks local matches, and can request one still image from an explicitly injected/selected VisualGenerationRuntime provider when no local match exists. Network/API-key consent remains explicit and off by default. Unresolved shots return diagnostics rather than fake assets. This is not yet wired into one-action Auto Produce or the Render Orchestrator; it does not add stock-media web acquisition, project binding, semantic image matching, documentary fact verification, or visual-quality QC. See [VXP-10.5 shot visual acquisition notes](../architecture/VXP_10_5_SHOT_VISUAL_ACQUISITION.md).
 
 **Generate Video acceptance:** with a matching script + supplied narration audio + profile, and optionally a Claude visual-direction package, one user action produces a playable final MP4. The narration track is preserved as the primary voice track; visuals, scene changes, motion, captions and optional sound design align to its actual timing. Without an external prompt package, Voxora creates the scene/shot prompts itself. No manual timeline editing or per-scene asset attachment is required. Missing providers/assets yield explicit profile-compatible fallback or actionable errors, never fake success.
 
@@ -501,7 +501,8 @@ This registry records delivered PR scope, not completion of the entire associate
 | #113 | Cinematic Skill source/adapter, exact timing bridge, deterministic Film builder and optional local alignment | VXP-06.8/06.11 | Real Skia render, model accuracy and target-PC acceptance remain open |
 | #114 | Supplied script + supplied narration Auto Produce vertical slice | VXP-10.3 | Orchestration service only; no semantic Director, UI wiring, automatic visuals, captions or sound design |
 | #115 | Deterministic AI Production Director core: scene/shot planning, profile-aware visual prompts and review flags | VXP-10.4 | Rule/keyword heuristics only; no LLM, semantic beat analysis, visual sourcing/generation, animation or render routing |
-| #118 | Approved DirectorPlan → supplied-audio Auto Produce handoff | VXP-10 | Reuses existing card/title Film builder; no automatic visual acquisition or Produce UI wiring |
+| #118 | Approved DirectorPlan → supplied-audio Auto Produce handoff | VXP-10 supporting integration | Reuses existing card/title Film builder; no automatic visual acquisition or Produce UI wiring |
+| #119 | Approved per-shot visual acquisition coordinator: verified local asset selection or explicitly selected still-image generation | VXP-10.5 | CI VERIFIED on Windows + Ubuntu for PR head `d443e3f`; not wired into Auto Produce/Render Orchestrator; no stock-media acquisition, project binding persistence, semantic matching, visual QC or PC verification |
 
 **PR #110:** an earlier shared-project-session implementation remains open in the latest issue listing, while PR #111 is the merged canonical delivery. Treat #110 as superseded/duplicate pending explicit repository cleanup; do not implement or merge a second copy.
 
@@ -610,7 +611,7 @@ A phase is DONE only when:
 
 ## 9. Current next sequence
 
-1. Reconcile the PR registry against repository history, including merged PR #115 and its exact implementation boundary.
+1. Reconcile the PR registry against repository history, including merged PRs #115, #118 and #119 and their exact implementation boundaries.
 2. Close the VXP-00 source-recovery gap: exact 29 Modular Systems and precise R-stage definitions from their original source.
 3. Complete the requirement-to-implementation traceability matrix against merged PRs and current Core code.
 4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment.

@@ -1,6 +1,7 @@
 # Voxora Studio — Implementation Traceability Audit
 
-**Audit baseline:** `main` at `68129e8575ac0cec506b0c3324fd89d349bb3c22` (2026-11-20).  
+**Audit baseline:** `main` at `68129e8575ac0cec506b0c3324fd89d349bb3c22` (2026-11-20; historical snapshot).  
+**Post-audit delta:** merged PRs #118 and #119 are recorded in Section 7 against `main` at `93bd796c4c7855a71fd5d75efbbdcf9f395c1201` (2026-11-21).
 **Purpose:** Reconcile the current repository against the recovered Rev 0.4 Master Specification and recent merged delivery history.  
 **Audit type:** Source/document/test inventory. This is not a target-PC runtime, performance, visual-quality, or licensing certification.
 
@@ -219,3 +220,27 @@ This is a proposal for the next small slice, not authorization to implement it. 
 ## 6. Audit limitations
 
 This audit used current-main source files, the recursive repository tree, selected tests/architecture documents and GitHub PR metadata. T-01…T-73 now have row-level entries, but this remains a bounded source/test/PR inventory rather than an exhaustive engine or acceptance audit; a final cross-row review remains. The visual-capability matrix is a bounded source-path review, not an exhaustive engine audit. The exact original “29 Modular Systems” catalogue was not recovered from the Rev 0.4 specification or current repository; its absence from those two inspected sources is not proof that it never existed elsewhere. Real model inference, target-PC performance, long-form sync, visual quality, packaging, and license clearance remain separate acceptance gates.
+
+
+## 7. Post-audit delta — main after PRs #118 and #119
+
+**Delta baseline:** `main` at `93bd796c4c7855a71fd5d75efbbdcf9f395c1201` (2026-11-21).
+The preceding sections remain the historical row-level audit snapshot at their stated baseline. This addendum records only later merged evidence; it does not silently rewrite the earlier audit rows or close VXP-00.4.
+
+### Newly confirmed merged deliveries
+
+- **PR #118 — Director → Auto Produce handoff (supporting VXP-10 integration; no new VXP subphase ID).** Current source: `app/universal/director_auto_produce_handoff.py` and `app/universal/cinematic_skill_auto_produce.py`; architecture note: `docs/architecture/VXP_10_DIRECTOR_AUTO_PRODUCE_HANDOFF.md`. The handoff requires explicit approval and validates exact script fingerprint, active profile, ordered narration-unit coverage, one-to-one scene/shot references, aligned-line count and exact spoken text. It maps current supported intents to the existing card/title Film contract. It does not provide semantic visual rendering, external Visual Direction Package ingestion (10.2), Produce UI wiring or a full Auto Produce workflow.
+- **PR #119 — VXP-10.5 bounded per-shot visual acquisition coordinator.** Current source: `app/universal/director_visual_acquisition.py`; architecture note: `docs/architecture/VXP_10_5_SHOT_VISUAL_ACQUISITION.md`. It validates an approved DirectorPlan against the exact script, NarrationSource and profile; deterministically selects verified/provenance-eligible local assets, or requests a still image only through an explicitly injected and selected provider with network/API-key consent off by default. It reports selected/generated/unresolved outcomes per shot.
+- **CI evidence for PR #119:** exact PR head `d443e3f7460fd3c4841c3d3b2258731c8bdcf48b`, workflow run `44881869648`; Windows and Ubuntu pytest jobs both completed successfully. This is CI evidence only, not PC verification, real Stable Diffusion inference, target-PC resource validation or visual-quality acceptance.
+
+### Updated current gaps
+
+1. **VXP-00 remains IN PROGRESS.** The exact original “29 Modular Systems” source remains unrecovered. The full requirement-to-current-code traceability review and exact original source transcription are not complete.
+2. **VXP-10.5 remains partial.** PR #119's coordinator is not connected to the one-action Auto Produce/Render Orchestrator path. Project scene-binding persistence, stock-media acquisition, semantic matching, documentary claim/source verification, cache/retry orchestration, selective regeneration UI, visual QC and capability-specific render routing remain open.
+3. **VXP-10.2 remains not evidenced as implemented.** No versioned external Visual Direction Package import/validation path is established by PRs #118–#119.
+4. **VXP-10 end-to-end acceptance remains open.** The merged services are bounded vertical slices; no Produce UI one-action workflow or target-PC complete MP4 acceptance is claimed.
+5. **Permanent visual capabilities remain first-class and incomplete.** PR #119 resolves still images only; it does not complete 2D animation, Stickman, 2.5D, 3D, 4D/time-based 3D or Hybrid production.
+
+### Next-sequence correction
+
+Do not implement another Auto Produce feature slice solely from the prior Section 5 proposal: its Director handoff and initial still-image acquisition portions have since been delivered by PRs #118 and #119. First complete the canonical VXP-00 registry/source-recovery and traceability gates. Then select the next bounded integration from the current approved README, after checking exact dependencies and existing source/tests.

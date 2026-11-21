@@ -1,6 +1,6 @@
 # VXP-10.5 — Per-shot Visual Selection, Acquisition and Generation
 
-**Status:** IMPLEMENTED (bounded coordinator); CI verification pending; PC verification NOT STARTED.
+**Status:** IMPLEMENTED (bounded coordinator); CI VERIFIED — PR #119 exact head `d443e3f7460fd3c4841c3d3b2258731c8bdcf48b` passed Windows + Ubuntu in workflow run `44881869648`; PC verification NOT STARTED.
 
 ## Purpose
 
