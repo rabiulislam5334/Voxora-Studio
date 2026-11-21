@@ -140,6 +140,36 @@ class StableTsNarrationAligner:
                 f"local word alignment failed for language {language!r}: {exc}"
             ) from exc
 
+        # Stable-ts' align() establishes script-line ranges, but its first-pass
+        # fallback can leave instant words or stretch a boundary word across
+        # trailing silence. Re-align each word inside those measured line
+        # ranges using Stable-ts' constrained align_words() pass.
+        refine_words = getattr(model, "align_words", None)
+        if not callable(refine_words):
+            raise CinematicSkillAlignmentError(
+                "the installed Stable-ts runtime does not expose align_words(); "
+                "install the pinned optional runtime from requirements-word-alignment.txt"
+            )
+        try:
+            result = refine_words(
+                str(audio),
+                result,
+                language=language,
+                inplace=False,
+                stream=True,
+                verbose=False,
+                suppress_silence=True,
+            )
+        except Exception as exc:
+            raise CinematicSkillAlignmentError(
+                f"constrained word-timing refinement failed for language {language!r}: {exc}"
+            ) from exc
+
+        if result is None:
+            raise CinematicSkillAlignmentError(
+                "Stable-ts could not refine the first-pass word alignment"
+            )
+
         segments = getattr(result, "segments", None)
         if segments is None or len(segments) != len(lines):
             actual = None if segments is None else len(segments)
@@ -170,11 +200,17 @@ class StableTsNarrationAligner:
                 start = getattr(word, "start", None)
                 end = getattr(word, "end", None)
                 try:
-                    word_cues.append(CinematicWordCue(token, start, end))
+                    cue = CinematicWordCue(token, start, end)
                 except (TypeError, CinematicSkillTimingError) as exc:
                     raise CinematicSkillAlignmentError(
                         f"invalid word timing in script line {line_id}: {exc}"
                     ) from exc
+                if cue.end_seconds <= cue.start_seconds:
+                    raise CinematicSkillAlignmentError(
+                        f"Stable-ts produced a zero-duration word cue for {token!r} "
+                        f"in script line {line_id}, even after constrained refinement"
+                    )
+                word_cues.append(cue)
 
             start_seconds = min(item.start_seconds for item in word_cues)
             end_seconds = max(item.end_seconds for item in word_cues)
