@@ -53,7 +53,7 @@ No duplicate registry, downloader, generation runtime or renderer is introduced.
 This does not complete all of VXP-10.5 or VXP-10. The coordinator is now consumed by the supplied-script/supplied-narration Auto Produce service when the caller explicitly supplies the active ChannelProfile and existing VisualAssetLibrary. Selected/generated stills are staged into the temporary Cinematic Skill project and rendered as `Print` items; unresolved shots keep the deterministic card fallback. This does not wire the service into the Produce UI or Render Orchestrator, persist Project scene bindings, or add semantic image ranking, documentary source research, stock-media acquisition, cache/retry orchestration, per-shot regeneration UI or visual-quality QC. Real local Stable Diffusion.cpp inference, model licensing, resource use and quality on the target Windows PC remain unverified. CI and PC verification must be reported separately.
 
 
-## Auto Produce still-image rendering bridge (this PR; CI pending)
+## Auto Produce still-image rendering bridge (bounded implementation slice)
 
 - `CinematicSkillAutoProduceWorkflow.run` accepts the existing active `ChannelProfile` and `VisualAssetLibrary` as an optional pair. Supplying only one is rejected.
 - After the existing approved-plan/script/profile/narration checks, the workflow calls the existing `resolve_director_plan_visuals` coordinator. Network and API-key consent remain false by default; a generation provider is used only when explicitly injected and selected.
