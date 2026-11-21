@@ -20,7 +20,7 @@ This supporting integration connects the merged deterministic Production Directo
 - The current Cinematic Skill builder supports cards, titles and counters; this handoff only uses cards and titles.
 - A map, diagram, evidence, timeline, character action or environment intent is not thereby a real specialized renderer. These intents currently receive a conservative card representation until capability-specific visual adapters are integrated.
 - The Director visual prompt is not yet used to acquire or generate an asset.
-- The caller must pass the exact ordered narration unit IDs from the same NarrationSource used to create the DirectorPlan.
+- The caller must pass the exact NarrationSource used to create the DirectorPlan. The adapter checks its script fingerprint, ordered unit IDs, aligned line count and exact spoken text for each unit.
 - Stable-ts/Skia real inference, Bengali timing quality, target-PC performance and final visual quality are not validated by unit tests.
 - This does not implement VXP-10.5, which remains automatic visual selection/acquisition/generation per shot. It also does not implement VXP-10.2 external visual-direction package ingestion or Produce UI wiring.
 
