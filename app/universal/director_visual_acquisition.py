@@ -21,7 +21,6 @@ from app.universal.visual_assets import VisualAsset, VisualAssetCatalog
 from app.universal.visual_generation import VisualGenerationRequest
 from app.universal.visual_generation_runtime import (
     VisualGenerationCancelled,
-    VisualGenerationProgress,
     VisualGenerationRuntime,
     VisualGenerationRuntimeError,
 )
@@ -129,6 +128,7 @@ def _rank_local_assets(
 ) -> tuple[Optional[tuple[VisualAsset, int]], tuple[str, ...]]:
     prompt_terms = _tokens(narration_text)
     intent = getattr(shot.intent, "value", str(shot.intent))
+    profile_style_tags = set(profile.visual_defaults.style_tags)
     ranked: list[tuple[int, str, VisualAsset]] = []
     diagnostics: list[str] = []
     for asset in catalog.assets:
@@ -138,16 +138,20 @@ def _rank_local_assets(
             if not library.verify_asset(asset):
                 diagnostics.append(f"Asset {asset.asset_id} failed content verification.")
                 continue
-            path = library.resolve_asset_path(asset)
+            library.resolve_asset_path(asset)
         except AssetImportError:
             diagnostics.append(f"Asset {asset.asset_id} is missing or unsafe.")
             continue
         asset_terms = _metadata_terms(asset)
         overlap = prompt_terms.intersection(asset_terms)
         intent_match = intent in asset.tags or asset.metadata.get("intent") == intent
+        raw_style_tags = asset.metadata.get("style_tags", ())
+        if isinstance(raw_style_tags, str):
+            raw_style_tags = (raw_style_tags,)
+        style_match = isinstance(raw_style_tags, (list, tuple)) and bool(profile_style_tags.intersection(raw_style_tags))
         if not overlap and not intent_match:
             continue
-        score = len(overlap) * 2 + (4 if intent_match else 0)
+        score = len(overlap) * 2 + (4 if intent_match else 0) + (1 if style_match else 0)
         ranked.append((score, asset.asset_id, asset))
     if not ranked:
         return None, tuple(diagnostics)
