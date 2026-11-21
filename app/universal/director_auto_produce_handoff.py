@@ -91,8 +91,14 @@ def build_cinematic_skill_handoff(
             "no timing or scene mapping was guessed"
         )
 
+    shot_by_unit = {
+        unit_id: shot
+        for shot in shots
+        for unit_id in shot.narration_unit_ids
+    }
     result = []
-    for line, shot, unit in zip(lines, shots, narration_source.units):
+    for line, unit in zip(lines, narration_source.units):
+        shot = shot_by_unit[unit.unit_id]
         exact_unit_text = narration_source.text_for_unit(unit).strip()
         if line.spoken_text != exact_unit_text:
             raise DirectorHandoffError(
@@ -109,5 +115,6 @@ def build_cinematic_skill_handoff(
             kind=kind,
             title=shot.shot_type.replace("_", " ").title(),
             body=(line.caption or line.spoken_text,),
+            director_shot_id=shot.shot_id,
         ))
     return tuple(result)
