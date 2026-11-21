@@ -236,8 +236,13 @@ class CinematicSkillAutoProduceWorkflow:
             )
             if cancel is not None:
                 cancel.raise_if_cancelled()
+            visual_resolution = None
             if on_progress:
-                on_progress(0.18, "Building narration-led film")
+                on_progress(
+                    0.18,
+                    "Resolving approved Director visuals" if profile is not None
+                    else "Building narration-led film",
+                )
             if director_plan is None:
                 if (
                     narration_source is not None or profile_id is not None or director_plan_approved
@@ -267,8 +272,6 @@ class CinematicSkillAutoProduceWorkflow:
                         raise CinematicSkillAutoProduceError(
                             "active ChannelProfile does not match profile_id"
                         )
-                    if on_progress:
-                        on_progress(0.18, "Resolving approved Director visuals")
                     try:
                         visual_resolution = self._visual_resolver(
                             director_plan,
@@ -366,7 +369,7 @@ class CinematicSkillAutoProduceWorkflow:
                 aligned_line_count=len(doc.lines),
                 aligned_word_count=word_count,
                 language=language.strip(),
-                visual_resolution=visual_resolution if director_plan is not None and profile is not None else None,
+                visual_resolution=visual_resolution,
             )
         finally:
             import shutil
