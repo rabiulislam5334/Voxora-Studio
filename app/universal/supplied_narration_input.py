@@ -7,6 +7,7 @@ line breaks are normalized for the alignment request.
 """
 from __future__ import annotations
 
+from app.text.narration_parser import TextItem, parse_script
 from app.universal.narration_segmentation import segment_narration
 from app.universal.storyboard import NarrationSource, NarrationTextUnit
 
@@ -33,8 +34,17 @@ def build_line_aligned_narration_source(
     if not isinstance(language, str) or not language.strip():
         raise SuppliedNarrationInputError("narration language is required")
 
+    parsed = parse_script(script)
+    spoken_paragraphs = [
+        " ".join(item.text for item in paragraph.items if isinstance(item, TextItem))
+        for paragraph in parsed.paragraphs
+    ]
+    spoken_script = "\\n\\n".join(text for text in spoken_paragraphs if text.strip())
+    if not spoken_script.strip():
+        raise SuppliedNarrationInputError("project script contains no spoken text after removing narration markup")
+
     segmented = segment_narration(
-        script,
+        spoken_script,
         source_id=source_id,
         language=language.strip(),
     )
@@ -67,6 +77,7 @@ def build_line_aligned_narration_source(
         metadata={
             "alignment_input": "one_sentence_per_line_v1",
             "source_wording_preserved": True,
+            "narration_markup_removed": True,
             "whitespace_normalized": True,
         },
     )
