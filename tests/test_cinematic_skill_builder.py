@@ -1,6 +1,8 @@
+import json
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 
 from app.universal.cinematic_skill_builder import (
     CinematicSkillFilmBuildError,
@@ -29,7 +31,8 @@ class FakeFilm:
 
 
 class FakeItem:
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
+        self.args = args
         self.kwargs = kwargs
 
 
@@ -39,6 +42,7 @@ def fake_engine():
         Card=FakeItem,
         BigText=FakeItem,
         Counter=FakeItem,
+        Print=FakeItem,
     )
 
 
@@ -133,4 +137,44 @@ def test_unsupported_visual_kind_is_rejected(tmp_path):
     with pytest.raises(CinematicSkillFilmBuildError, match="unsupported visual kind"):
         CinematicSkillFilmBuilder(engine_module=fake_engine()).build(
             doc, [CinematicSkillShot(1, kind="unverified_magic")]
+        )
+
+
+
+def test_image_shot_stages_local_asset_and_adds_print_item(tmp_path):
+    source = tmp_path / "voyager.png"
+    Image.new("RGB", (640, 320), (30, 90, 150)).save(source)
+    doc = make_doc(tmp_path)
+
+    film = CinematicSkillFilmBuilder(engine_module=fake_engine()).build(
+        doc,
+        [CinematicSkillShot(
+            1, kind="image", title="Voyager", image_path=str(source),
+        )],
+    )
+
+    item = film.items[0]
+    key = item.args[0]
+    assert key.startswith("voxora_")
+    assert item.kwargs["t_in"] == 0.0
+    assert item.kwargs["t_out"] == 2.0
+    assert item.kwargs["label"] == "Voyager"
+    staged = doc.prep / "photos" / f"{key}.jpg"
+    assert staged.is_file()
+    metadata = json.loads((doc.prep / "photos" / "meta.json").read_text())
+    assert metadata[key] == {"w": 640, "h": 320, "kind": "photo"}
+    assert doc.meta[key] == metadata[key]
+
+
+def test_image_shot_rejects_missing_or_invalid_local_asset(tmp_path):
+    doc = make_doc(tmp_path)
+    builder = CinematicSkillFilmBuilder(engine_module=fake_engine())
+    with pytest.raises(CinematicSkillFilmBuildError, match="image_path"):
+        builder.build(doc, [CinematicSkillShot(1, kind="image")])
+    with pytest.raises(CinematicSkillFilmBuildError, match="unavailable"):
+        builder.build(
+            doc,
+            [CinematicSkillShot(
+                1, kind="image", image_path=str(tmp_path / "missing.png"),
+            )],
         )
