@@ -162,13 +162,16 @@ class AutoProduceTab(ttk.Frame):
             if preset:
                 base_visual = profile_data.get("visual_defaults", {})
                 preset_visual = preset.get("visual_defaults", {})
-                if preset_visual.get("style_family", "unspecified") != "unspecified":
-                    profile_data["visual_defaults"] = {
-                        "style_family": preset_visual.get("style_family", base_visual.get("style_family", "unspecified")),
-                        "style_tags": list(dict.fromkeys((*base_visual.get("style_tags", []), *preset_visual.get("style_tags", [])))),
-                        "mood": list(dict.fromkeys((*base_visual.get("mood", []), *preset_visual.get("mood", [])))),
-                        "composition_guidance": list(dict.fromkeys((*base_visual.get("composition_guidance", []), *preset_visual.get("composition_guidance", [])))),
-                    }
+                profile_data["visual_defaults"] = {
+                    "style_family": (
+                        preset_visual.get("style_family", "unspecified")
+                        if preset_visual.get("style_family", "unspecified") != "unspecified"
+                        else base_visual.get("style_family", "unspecified")
+                    ),
+                    "style_tags": list(dict.fromkeys((*base_visual.get("style_tags", []), *preset_visual.get("style_tags", [])))),
+                    "mood": list(dict.fromkeys((*base_visual.get("mood", []), *preset_visual.get("mood", [])))),
+                    "composition_guidance": list(dict.fromkeys((*base_visual.get("composition_guidance", []), *preset_visual.get("composition_guidance", [])))),
+                }
                 profile_data["narration_defaults"] = {
                     **profile_data.get("narration_defaults", {}),
                     **preset.get("narration_defaults", {}),
