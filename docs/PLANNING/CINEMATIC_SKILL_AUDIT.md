@@ -182,6 +182,11 @@ The adapter uses [jianfch/stable-ts](https://github.com/jianfch/stable-ts) behin
 - `requirements-word-alignment.txt` pins Stable-ts `2.19.1`, the API version used by the adapter's two-pass `align()` + `align_words()` flow. It is deliberately not added to core requirements. No optional alignment runtime is auto-installed.
 - The adapter rejects zero-duration word cues after the constrained refinement pass rather than forwarding unusable timestamps into the Film builder. Long word durations remain subject to real-audio review; no arbitrary duration clamp is applied.
 
+- The first pass now fails closed unless it returns exactly one measured segment per non-empty script line, with finite, non-negative, positive-duration start/end boundaries. Missing boundaries are not accepted in production.
+- The refined pass validates the complete normalized token sequence and count against the supplied script, requires finite positive-duration word cues, rejects regressing word starts and cues beyond the supplied audio duration, and preserves overlapping adjacent intervals where measured.
+- Validation never clamps, interpolates, reorders or repairs timestamps. The original refined word objects and their measured times are retained.
+- Regression tests now cover missing/partial first-pass boundaries, invalid numeric values (including booleans, NaN, infinities and oversized integers), zero-duration ranges/cues, token order/count, start regression, audio-duration bounds, overlap acceptance and no fallback to first-pass timestamps.
+
 ### Limitations and acceptance gates
 
 - Stable-ts is archived upstream; this is an isolated experimental integration, not an endorsement of indefinite maintenance.
