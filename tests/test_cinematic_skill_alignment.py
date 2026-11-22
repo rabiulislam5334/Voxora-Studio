@@ -213,3 +213,31 @@ def test_alignment_supports_unicode_script_tokens(tmp_path):
         audio_duration_seconds=1.0,
     )
     assert doc.W(1, "ভাষা") == pytest.approx(0.35)
+
+def test_refinement_can_split_segments_and_restores_original_script_lines(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    first_pass = [
+        FakeSegment(words(["The", "Voyager", "crossed", "the", "heliopause."], 0.2)),
+        FakeSegment(words(["It", "entered", "interstellar", "space."], 2.0)),
+    ]
+    # Stable-ts align_words() is allowed to return a different segmentation.
+    refined = [
+        FakeSegment(words(["The", "Voyager"], 0.2)),
+        FakeSegment(words(["crossed", "the", "heliopause.", "It"], 0.8)),
+        FakeSegment(words(["entered", "interstellar", "space."], 2.0)),
+    ]
+    model = FakeModel(first_pass, refined_segments=refined)
+
+    doc = StableTsNarrationAligner(model=model).align(
+        script="The Voyager crossed the heliopause.\\nIt entered interstellar space.",
+        audio_path=audio,
+        language="en",
+        project_dir=tmp_path,
+        audio_duration_seconds=4.0,
+    )
+
+    assert len(doc.lines) == 2
+    assert doc.W(1, "Voyager") == pytest.approx(0.45)
+    assert doc.W(2, "interstellar") == pytest.approx(2.25)
+
