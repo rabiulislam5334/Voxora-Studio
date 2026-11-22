@@ -126,7 +126,7 @@ def test_alignment_rejects_missing_words_and_wrong_segment_count(tmp_path):
     audio = tmp_path / "voice.mp3"
     audio.write_bytes(b"fake audio")
 
-    with pytest.raises(CinematicSkillAlignmentError, match="no word timestamps"):
+    with pytest.raises(CinematicSkillAlignmentError, match="returned 0 words; expected 2"):
         StableTsNarrationAligner(model=FakeModel([FakeSegment([])])).align(
             script="Hello world.",
             audio_path=audio,
@@ -230,7 +230,7 @@ def test_refinement_can_split_segments_and_restores_original_script_lines(tmp_pa
     model = FakeModel(first_pass, refined_segments=refined)
 
     doc = StableTsNarrationAligner(model=model).align(
-        script="The Voyager crossed the heliopause.\\nIt entered interstellar space.",
+        script="The Voyager crossed the heliopause.\nIt entered interstellar space.",
         audio_path=audio,
         language="en",
         project_dir=tmp_path,
