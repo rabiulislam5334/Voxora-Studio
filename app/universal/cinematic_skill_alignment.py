@@ -52,11 +52,18 @@ def _is_finite_number(value) -> bool:
         return False
 
 
+def _safe_repr(value) -> str:
+    try:
+        return repr(value)
+    except (OverflowError, ValueError):
+        return f"<{type(value).__name__}>"
+
+
 def _check_range(start, end, label: str, noun: str = "range") -> None:
     if not _is_real_number(start) or not _is_real_number(end):
         raise CinematicSkillAlignmentError(
             f"{label} has a non-numeric or boolean boundary "
-            f"(start={start!r}, end={end!r})"
+            f"(start={_safe_repr(start)}, end={_safe_repr(end)})"
         )
     if not _is_finite_number(start) or not _is_finite_number(end):
         raise CinematicSkillAlignmentError(
