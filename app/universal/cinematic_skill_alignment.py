@@ -108,9 +108,10 @@ class StableTsNarrationAligner:
         """Return exact word cues grouped by non-empty script line.
 
         original_split=True asks Stable-ts to preserve the script's line
-        boundaries. Every returned segment must contain the same words in
-        the same order as its corresponding script line; omissions, insertions
-        and line-count changes are errors rather than silently shifted cues.
+        boundaries during the first pass. The constrained refinement may split
+        or merge segments, so its flattened word sequence is validated against
+        the complete script and then regrouped by the original line word counts.
+        Omissions, insertions and reordered words are rejected.
         """
         lines = _script_lines(script)
         if not isinstance(language, str) or not language.strip():
@@ -171,23 +172,41 @@ class StableTsNarrationAligner:
             )
 
         segments = getattr(result, "segments", None)
-        if segments is None or len(segments) != len(lines):
-            actual = None if segments is None else len(segments)
+        if segments is None:
             raise CinematicSkillAlignmentError(
-                f"aligner returned {actual} script segments; expected {len(lines)}. "
-                "Check the supplied script, language and narration match."
+                "Stable-ts refinement returned no segment collection"
+            )
+
+        # align_words() may split or merge the first-pass script segments.
+        # Validate the complete ordered word stream, then restore the original
+        # script-line grouping by each line's known word count. Timestamps are
+        # retained verbatim; only their container grouping is reconstructed.
+        refined_words = [
+            word
+            for segment in segments
+            for word in (getattr(segment, "words", None) or [])
+        ]
+        expected_tokens = [
+            token for source_line in lines for token in source_line.split()
+        ]
+        if len(refined_words) != len(expected_tokens):
+            raise CinematicSkillAlignmentError(
+                f"refined alignment returned {len(refined_words)} words; "
+                f"expected {len(expected_tokens)} from the supplied script"
             )
 
         cues = []
-        for line_id, (source_line, segment) in enumerate(zip(lines, segments), start=1):
-            words = getattr(segment, "words", None)
-            if not words:
-                raise CinematicSkillAlignmentError(
-                    f"aligner produced no word timestamps for script line {line_id}"
-                )
-            expected = [_normalise_token(token) for token in source_line.split()]
-            actual_words = [getattr(word, "word", None) for word in words]
-            actual = [_normalise_token(word) if isinstance(word, str) else "" for word in actual_words]
+        word_offset = 0
+        for line_id, source_line in enumerate(lines, start=1):
+            line_tokens = source_line.split()
+            words = refined_words[word_offset:word_offset + len(line_tokens)]
+            word_offset += len(line_tokens)
+            actual = [
+                _normalise_token(getattr(word, "word", ""))
+                if isinstance(getattr(word, "word", None), str) else ""
+                for word in words
+            ]
+            expected = [_normalise_token(token) for token in line_tokens]
             if actual != expected:
                 raise CinematicSkillAlignmentError(
                     f"aligned words do not exactly match script line {line_id}; "
