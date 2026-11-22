@@ -287,7 +287,8 @@ def test_first_pass_rejects_one_missing_boundary(boundaries):
     (True, 0.9), (0.1, True), (False, True),
     (float("nan"), 0.9), (0.1, float("nan")),
     (float("inf"), 0.9), (0.1, float("inf")), (0.1, float("-inf")),
-    (-0.1, 0.9), (0.9, 0.1), (10**10000, 10**10001),
+    (-0.1, 0.9), (0.9, 0.1),
+    pytest.param(10**10000, 10**10001, id="oversized-integer-boundary"),
 ])
 def test_first_pass_rejects_invalid_boundaries(start, end):
     with pytest.raises(CinematicSkillAlignmentError):
