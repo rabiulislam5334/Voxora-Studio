@@ -5,6 +5,8 @@ import pytest
 from app.universal.cinematic_skill_alignment import (
     CinematicSkillAlignmentError,
     StableTsNarrationAligner,
+    validate_first_pass_ranges,
+    validate_refined_alignment,
 )
 
 
@@ -14,8 +16,12 @@ class FakeWord:
 
 
 class FakeSegment:
-    def __init__(self, words):
+    def __init__(self, words, **boundaries):
         self.words = words
+        if not boundaries:
+            boundaries = {"start": 0.0, "end": 1.0}
+        for name, value in boundaries.items():
+            setattr(self, name, value)
 
 
 class FakeModel:
@@ -241,3 +247,171 @@ def test_refinement_can_split_segments_and_restores_original_script_lines(tmp_pa
     assert doc.W(1, "Voyager") == pytest.approx(0.45)
     assert doc.W(2, "interstellar") == pytest.approx(2.25)
 
+
+
+# --- validate_first_pass_ranges -------------------------------------------
+
+LINES = ["Hello world."]
+
+
+def seg(**boundaries):
+    return FakeSegment(words(["Hello", "world."], 0.1), **boundaries)
+
+
+def test_first_pass_rejects_segment_with_both_boundaries_absent():
+    segment = seg()
+    del segment.start
+    del segment.end
+    with pytest.raises(CinematicSkillAlignmentError, match="missing a measured boundary"):
+        validate_first_pass_ranges([segment], LINES)
+
+
+def test_first_pass_accepts_valid_numeric_ranges():
+    validate_first_pass_ranges([seg(start=0.1, end=0.9)], LINES)
+    validate_first_pass_ranges([seg(start=0, end=1)], LINES)
+
+
+def test_first_pass_rejects_wrong_segment_count():
+    with pytest.raises(CinematicSkillAlignmentError, match="expected 2"):
+        validate_first_pass_ranges([seg()], ["One.", "Two."])
+
+
+@pytest.mark.parametrize("boundaries", [{"start": 0.1}, {"end": 0.9}])
+def test_first_pass_rejects_one_missing_boundary(boundaries):
+    with pytest.raises(CinematicSkillAlignmentError, match="missing a measured boundary"):
+        validate_first_pass_ranges([seg(**boundaries)], LINES)
+
+
+@pytest.mark.parametrize("start,end", [
+    ("0.1", 0.9), (0.1, "0.9"), (0.1, [0.9]),
+    (True, 0.9), (0.1, True), (False, True),
+    (float("nan"), 0.9), (0.1, float("nan")),
+    (float("inf"), 0.9), (0.1, float("inf")), (0.1, float("-inf")),
+    (-0.1, 0.9), (0.9, 0.1), (10**10000, 10**10001),
+])
+def test_first_pass_rejects_invalid_boundaries(start, end):
+    with pytest.raises(CinematicSkillAlignmentError):
+        validate_first_pass_ranges([seg(start=start, end=end)], LINES)
+
+
+def test_first_pass_rejects_zero_duration_range():
+    with pytest.raises(CinematicSkillAlignmentError, match="zero-duration"):
+        validate_first_pass_ranges([seg(start=0.5, end=0.5)], LINES)
+
+
+def test_first_pass_validation_does_not_mutate_measured_timestamps():
+    segment = seg(start=0.2, end=0.8)
+    validate_first_pass_ranges([segment], LINES)
+    assert (segment.start, segment.end) == (0.2, 0.8)
+
+
+def test_align_rejects_invalid_first_pass_before_calling_align_words(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    model = FakeModel([FakeSegment(words(["Hello"], 0.1), start=0.4, end=0.4)])
+
+    with pytest.raises(CinematicSkillAlignmentError, match="first-pass segment 1"):
+        StableTsNarrationAligner(model=model).align(
+            script="Hello",
+            audio_path=audio,
+            language="en",
+            project_dir=tmp_path,
+            audio_duration_seconds=1.0,
+        )
+    assert model.refinement_calls == []
+
+
+# --- validate_refined_alignment -------------------------------------------
+
+
+def refined(*items):
+    return SimpleNamespace(segments=[FakeSegment(list(items))])
+
+
+def test_refined_accepts_slight_overlap_between_adjacent_words():
+    result = refined(FakeWord("Hello", 0.1, 0.5), FakeWord("world.", 0.4, 0.8))
+    flat = validate_refined_alignment(result, LINES, 1.0)
+    assert [(w.start, w.end) for w in flat] == [(0.1, 0.5), (0.4, 0.8)]
+
+
+def test_refined_rejects_zero_duration_word():
+    result = refined(FakeWord("Hello", 0.1, 0.1), FakeWord("world.", 0.4, 0.8))
+    with pytest.raises(CinematicSkillAlignmentError, match="zero-duration word cue"):
+        validate_refined_alignment(result, LINES, 1.0)
+
+
+def test_refined_rejects_start_regression():
+    result = refined(FakeWord("Hello", 0.5, 0.7), FakeWord("world.", 0.4, 0.8))
+    with pytest.raises(CinematicSkillAlignmentError, match="before the previous word start"):
+        validate_refined_alignment(result, LINES, 1.0)
+
+
+@pytest.mark.parametrize("start,end", [
+    ("0.1", 0.5), (True, 0.5), (float("nan"), 0.5), (0.1, float("inf")),
+    (-0.2, 0.5), (0.5, 0.2), (None, 0.5), (0.1, None),
+])
+def test_refined_rejects_invalid_word_timestamps(start, end):
+    result = refined(FakeWord("Hello", start, end), FakeWord("world.", 0.6, 0.9))
+    with pytest.raises(CinematicSkillAlignmentError):
+        validate_refined_alignment(result, LINES, 1.0)
+
+
+def test_refined_rejects_wrong_token_sequence():
+    result = refined(FakeWord("world.", 0.1, 0.4), FakeWord("Hello", 0.5, 0.8))
+    with pytest.raises(CinematicSkillAlignmentError, match="do not exactly match"):
+        validate_refined_alignment(result, LINES, 1.0)
+
+
+@pytest.mark.parametrize("items", [
+    [FakeWord("Hello", 0.1, 0.4)],
+    [FakeWord("Hello", 0.1, 0.4), FakeWord("world.", 0.5, 0.8), FakeWord("again", 0.9, 1.0)],
+])
+def test_refined_rejects_wrong_word_count(items):
+    with pytest.raises(CinematicSkillAlignmentError, match="expected 2"):
+        validate_refined_alignment(refined(*items), LINES, 1.0)
+
+
+def test_refined_rejects_cue_beyond_audio_duration():
+    result = refined(FakeWord("Hello", 0.1, 0.4), FakeWord("world.", 0.5, 1.2))
+    with pytest.raises(CinematicSkillAlignmentError, match="after the supplied audio"):
+        validate_refined_alignment(result, LINES, 1.0)
+
+
+def test_refined_rejects_extreme_integer_duration():
+    result = refined(FakeWord("Hello", 0.1, 0.4), FakeWord("world.", 0.5, 0.8))
+    with pytest.raises(CinematicSkillAlignmentError, match="audio duration"):
+        validate_refined_alignment(result, LINES, 10**10000)
+
+
+def test_align_accepts_overlapping_words_end_to_end(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    model = FakeModel(
+        [FakeSegment(words(["Hello", "world."], 0.1))],
+        refined_segments=[FakeSegment([FakeWord("Hello", 0.1, 0.5), FakeWord("world.", 0.4, 0.8)])],
+    )
+    doc = StableTsNarrationAligner(model=model).align(
+        script="Hello world.",
+        audio_path=audio,
+        language="en",
+        project_dir=tmp_path,
+        audio_duration_seconds=1.0,
+    )
+    assert doc.W(1, "world") == pytest.approx(0.4)
+
+
+def test_align_does_not_fall_back_to_first_pass_timestamps(tmp_path):
+    audio = tmp_path / "voice.mp3"
+    audio.write_bytes(b"fake audio")
+    model = FakeModel(
+        [FakeSegment(words(["Hello", "world."], 0.1), start=0.1, end=0.9)],
+        refined_segments=[FakeSegment([FakeWord("Hello", 0.1, 0.1), FakeWord("world.", 0.4, 0.8)])],
+    )
+    with pytest.raises(CinematicSkillAlignmentError, match="zero-duration word cue"):
+        StableTsNarrationAligner(model=model).align(
+            script="Hello world.",
+            audio_path=audio,
+            language="en",
+            project_dir=tmp_path,
+            audio_duration_seconds=1.0,
+        )
