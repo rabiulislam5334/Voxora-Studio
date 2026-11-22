@@ -67,19 +67,19 @@ def _check_range(start, end, label: str, noun: str = "range") -> None:
         )
     if not _is_finite_number(start) or not _is_finite_number(end):
         raise CinematicSkillAlignmentError(
-            f"{label} has a non-finite boundary (start={start!r}, end={end!r})"
+            f"{label} has a non-finite boundary (start={_safe_repr(start)}, end={_safe_repr(end)})"
         )
     if start < 0 or end < 0:
         raise CinematicSkillAlignmentError(
-            f"{label} has a negative boundary (start={start!r}, end={end!r})"
+            f"{label} has a negative boundary (start={_safe_repr(start)}, end={_safe_repr(end)})"
         )
     if end < start:
         raise CinematicSkillAlignmentError(
-            f"{label} ends before it starts (start={start!r}, end={end!r})"
+            f"{label} ends before it starts (start={_safe_repr(start)}, end={_safe_repr(end)})"
         )
     if end == start:
         raise CinematicSkillAlignmentError(
-            f"{label} is a zero-duration {noun} (start={start!r}, end={end!r})"
+            f"{label} is a zero-duration {noun} (start={_safe_repr(start)}, end={_safe_repr(end)})"
         )
 
 
@@ -102,7 +102,7 @@ def validate_first_pass_ranges(segments, lines) -> None:
         if start is None or end is None:
             raise CinematicSkillAlignmentError(
                 f"{label} is missing a measured boundary "
-                f"(start={start!r}, end={end!r})"
+                f"(start={_safe_repr(start)}, end={_safe_repr(end)})"
             )
         _check_range(start, end, label)
 
