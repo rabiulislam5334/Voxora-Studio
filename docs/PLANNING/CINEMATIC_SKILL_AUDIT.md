@@ -176,7 +176,7 @@ The adapter uses [jianfch/stable-ts](https://github.com/jianfch/stable-ts) behin
 ### Voxora implementation
 
 - `app/universal/cinematic_skill_alignment.py` lazily loads Stable-ts and aligns the supplied audio to the supplied script.
-- `original_split=True` preserves non-empty script line boundaries. Each returned line must match the script's normalized word sequence exactly. Insertions, omissions, line-count differences, empty word cues, invalid timestamps or cues beyond the supplied audio duration fail closed.
+- `original_split=True` establishes non-empty script-line ranges in the first pass. The constrained `align_words()` refinement may split or merge its segment containers, so the adapter validates the complete refined word sequence against the supplied script and regroups the unchanged timestamped words by each original line's word count. Insertions, omissions, reordering, line-level token mismatches, empty word cues, invalid timestamps or cues beyond the supplied audio duration fail closed.
 - The adapter creates `CinematicLineCue` and exact `CinematicWordCue` records consumed by the existing Cinematic Skill timing bridge and Film builder.
 - `CinematicSkillNarrationDoc` now preserves the full audio duration, including trailing silence after the final spoken word.
 - `requirements-word-alignment.txt` pins Stable-ts `2.19.1`, the API version used by the adapter's two-pass `align()` + `align_words()` flow. It is deliberately not added to core requirements. No optional alignment runtime is auto-installed.
