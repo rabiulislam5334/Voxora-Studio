@@ -168,7 +168,7 @@ A deterministic builder now converts the existing Voxora narration timing docume
 The adapter uses [jianfch/stable-ts](https://github.com/jianfch/stable-ts) behind a Voxora-owned boundary:
 
 - Stable-ts is published under MIT; its repository was archived on **2026-05-30**. The integration is therefore pinned and isolated, not treated as a permanent core dependency.
-- Stable-ts exposes script-to-audio word alignment through `model.align(audio, text, language=...)`. Its documentation describes word-level timestamps and preserving original input segment boundaries. The adapter supplies the user's script and existing audio; it does not replace the script with an ASR transcript.
+- Stable-ts exposes script-to-audio word alignment through `model.align(audio, text, language=...)` and a constrained `model.align_words(audio, result, ...)` refinement pass. The adapter first establishes exact script-line ranges, then refines word timestamps within those measured ranges. The user's script remains the semantic source; no ASR transcript replaces it.
 - OpenAI Whisper's code and model weights are published under MIT. The model is downloaded locally on first use and can be reused from its local cache; audio is processed locally, with no paid API, account, hosted service or subscription.
 - `whisper-timestamped` was rejected because its upstream repository is AGPL-3.0, which is not accepted for Voxora's current distribution policy.
 - WhisperX remains an unapproved candidate: its code is BSD-2-Clause, but the alignment-model and optional pyannote model/dependency conditions require a separate language-by-language and model-by-model review. Its default diarization stack is not needed for this feature.
@@ -176,10 +176,16 @@ The adapter uses [jianfch/stable-ts](https://github.com/jianfch/stable-ts) behin
 ### Voxora implementation
 
 - `app/universal/cinematic_skill_alignment.py` lazily loads Stable-ts and aligns the supplied audio to the supplied script.
-- `original_split=True` preserves non-empty script line boundaries. Each returned line must match the script's normalized word sequence exactly. Insertions, omissions, line-count differences, empty word cues, invalid timestamps or cues beyond the supplied audio duration fail closed.
+- `original_split=True` establishes non-empty script-line ranges in the first pass. The constrained `align_words()` refinement may split or merge its segment containers, so the adapter validates the complete refined word sequence against the supplied script and regroups the unchanged timestamped words by each original line's word count. Insertions, omissions, reordering, line-level token mismatches, empty word cues, invalid timestamps or cues beyond the supplied audio duration fail closed.
 - The adapter creates `CinematicLineCue` and exact `CinematicWordCue` records consumed by the existing Cinematic Skill timing bridge and Film builder.
 - `CinematicSkillNarrationDoc` now preserves the full audio duration, including trailing silence after the final spoken word.
-- `requirements-word-alignment.txt` pins the optional Stable-ts package. It is deliberately not added to core requirements. No optional alignment runtime is auto-installed.
+- `requirements-word-alignment.txt` pins Stable-ts `2.19.1`, the API version used by the adapter's two-pass `align()` + `align_words()` flow. It is deliberately not added to core requirements. No optional alignment runtime is auto-installed.
+- The adapter rejects zero-duration word cues after the constrained refinement pass rather than forwarding unusable timestamps into the Film builder. Long word durations remain subject to real-audio review; no arbitrary duration clamp is applied.
+
+- The first pass now fails closed unless it returns exactly one measured segment per non-empty script line, with finite, non-negative, positive-duration start/end boundaries. Missing boundaries are not accepted in production.
+- The refined pass validates the complete normalized token sequence and count against the supplied script, requires finite positive-duration word cues, rejects regressing word starts and cues beyond the supplied audio duration, and preserves overlapping adjacent intervals where measured.
+- Validation never clamps, interpolates, reorders or repairs timestamps. The original refined word objects and their measured times are retained.
+- Regression tests now cover missing/partial first-pass boundaries, invalid numeric values (including booleans, NaN, infinities and oversized integers), zero-duration ranges/cues, token order/count, start regression, audio-duration bounds, overlap acceptance and no fallback to first-pass timestamps.
 
 ### Limitations and acceptance gates
 
@@ -188,7 +194,7 @@ The adapter uses [jianfch/stable-ts](https://github.com/jianfch/stable-ts) behin
 - The default model is multilingual `tiny` on CPU to keep the initial memory footprint modest. It may be too inaccurate for some English accents, Bangla, Arabic, mixed-language narration or noisy audio. Larger models consume more time and memory. No quality promise is made without real audio benchmarks.
 - The optional dependency stack includes PyTorch, torchaudio, OpenAI Whisper and their transitive/platform binary dependencies. MIT for Stable-ts and Whisper does not clear every transitive wheel. Exact Windows wheel notices and packaging clearance remain open.
 - The model weights must be downloaded once before offline use. No paid service is involved, but first-time model acquisition requires an internet connection.
-- Current tests use a fake model and validate contracts only. They do not prove Stable-ts installation, real word alignment accuracy, Bangla/Arabic performance, target-PC memory use or commercial redistribution clearance.
+- Current tests use a fake model and validate the two-pass contract and zero-duration rejection only. They do not prove real Stable-ts alignment accuracy, Bangla/Arabic performance, target-PC memory use or commercial redistribution clearance.
 
 **Next validation:** run a short English narration/script pair and a Bangla pair on the target Windows PC, inspect every word boundary against the waveform, record peak RAM and processing time, and retain the model/output provenance. Do not make this optional aligner mandatory until these checks pass.
 
