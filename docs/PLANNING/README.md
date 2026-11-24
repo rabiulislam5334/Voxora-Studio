@@ -322,6 +322,9 @@ Do not introduce parallel rendering or silent engine fallback without a separate
 
 ### VXP-10 — AI Production Director and Auto Produce (R-7; orchestration layer)
 
+**10.2 implementation update (in progress):** A local JSON interchange foundation is being added using the existing DirectorPlan schema. Packages are bound to the exact script fingerprint, narration source and active profile; imported plans require explicit approval. This does not yet add a Claude-specific generator or UI file picker.
+
+
 This is the main automation milestone. It integrates existing engines; it must not duplicate them.
 
 10.1 Production-plan schema: scenes, shots, narration audio ranges, visual prompts, motion directions, audio cues and engine choice.  
