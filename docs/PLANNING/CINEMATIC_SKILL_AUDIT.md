@@ -265,7 +265,8 @@ A first executable orchestration service has been added in `app/universal/cinema
 | Existing-browser override | `HYPERFRAMES_BROWSER_PATH` path in source | SOURCE VERIFIED |
 | Browser download-free render | Requires an installed compatible browser; no offline execution yet | NOT VERIFIED |
 | FFmpeg binary closure | Local CLI expects external FFmpeg; no bundled local CLI binary established | OPEN |
-| Exact font licence and notice retention | 18 locked package artifacts not individually inspected | OPEN |
+| Exact font family/package licence classification | 18 locked Fontsource artifacts reviewed; all identify OFL-1.1 | SOURCE VERIFIED |
+| OFL notices retained in CLI output package | Generator embeds WOFF2 only; no font-notice copy found in build-copy or package files allowlist; npm tarball itself not inspected | SOURCE-LEVEL GAP; ARCHIVE NOT VERIFIED |
 | npm registry integrity/signature/provenance | Exact 0.9.46 registry evidence not captured | OPEN |
 | Complete offline/local-only render | No network-isolated run on target Windows PC | NOT VERIFIED |
 | Target-PC performance and render quality | No new target-PC benchmark in this audit | NOT VERIFIED |
@@ -274,5 +275,74 @@ A first executable orchestration service has been added in `app/universal/cinema
 
 - HyperFrames remains a technically plausible adapter candidate, not an approved framework selection.
 - Do not install or bundle HyperFrames, Chrome, FFmpeg or its optional dependencies into Voxora as part of this audit.
-- Before VXP-06.3 can be unblocked, capture exact npm registry evidence, complete the per-font notice audit, define the intended local browser/FFmpeg distribution boundary, and run a network-isolated smoke render with all required local inputs pre-provisioned.
+- Before VXP-06.3 can be unblocked, capture exact npm registry evidence, close the confirmed source-level OFL notice gap (or remove embedded fonts from the redistribution path), define the intended local browser/FFmpeg distribution boundary, and run a network-isolated smoke render with all required local inputs pre-provisioned.
 - The local-only smoke render must be performed separately from the target-PC quality/performance acceptance. A successful source inspection or CI run is not a substitute.
+
+
+### 13.1 Exact npm package identity and Fontsource notice follow-up
+
+#### Published package identity — source verified
+
+- The immutable v0.9.46 CLI manifest is named `@hyperframes/cli` in the monorepo and declares Apache-2.0 and Node.js `>=22`.
+- The same tag's publish workflow explicitly rewrites the manifest name to the unscoped npm package `hyperframes` immediately before running `npm publish`. Therefore the registry artifact under audit is `hyperframes@0.9.46`, not `@hyperframes/cli@0.9.46`.
+- The publish job grants `id-token: write` and invokes `npm publish` without an explicit `--provenance` flag. npm documents that trusted publishing can generate provenance automatically without that flag, but the workflow alone does not prove that the npm trusted-publisher configuration was enabled for this package/version.
+- The exact npm version metadata endpoint could not be retrieved during this pass. The exact registry `dist.integrity`, ECDSA registry signature, and Sigstore provenance attestation for `hyperframes@0.9.46` therefore remain UNVERIFIED. Do not substitute the source Bun lock's SHA-512 entries for the CLI tarball's registry `dist.integrity`, and do not describe provenance as absent.
+
+#### Exact 18-font lock and licence classification
+
+The immutable v0.9.46 `bun.lock` pins these exact Fontsource artifacts and records SHA-512 package integrity values. The package README/metadata and corresponding Fontsource family licence records identify all 18 families below as SIL Open Font License 1.1 (OFL-1.1):
+
+| Fontsource package | Locked version | Declared font licence |
+|---|---:|---|
+| `@fontsource/archivo-black` | 5.2.8 | OFL-1.1 |
+| `@fontsource/eb-garamond` | 5.2.7 | OFL-1.1 |
+| `@fontsource/ibm-plex-mono` | 5.2.7 | OFL-1.1 |
+| `@fontsource/inter` | 5.2.8 | OFL-1.1 |
+| `@fontsource/jetbrains-mono` | 5.2.8 | OFL-1.1 |
+| `@fontsource/lato` | 5.2.7 | OFL-1.1 |
+| `@fontsource/league-gothic` | 5.2.8 | OFL-1.1 |
+| `@fontsource/montserrat` | 5.2.8 | OFL-1.1 |
+| `@fontsource/noto-sans-jp` | 5.2.9 | OFL-1.1 |
+| `@fontsource/nunito` | 5.2.7 | OFL-1.1 |
+| `@fontsource/open-sans` | 5.2.7 | OFL-1.1 |
+| `@fontsource/oswald` | 5.2.8 | OFL-1.1 |
+| `@fontsource/outfit` | 5.2.8 | OFL-1.1 |
+| `@fontsource/playfair-display` | 5.2.8 | OFL-1.1 |
+| `@fontsource/poppins` | 5.2.7 | OFL-1.1 |
+| `@fontsource/roboto` | 5.2.10 | OFL-1.1 |
+| `@fontsource/source-code-pro` | 5.2.7 | OFL-1.1 |
+| `@fontsource/space-mono` | 5.2.9 | OFL-1.1 |
+
+This is a per-family classification of the exact lock set, not a claim that every Fontsource package uses OFL. Fontsource's general catalogue also contains Apache-2.0 and Ubuntu Font Licence families; those are not among these 18 locked package names.
+
+#### Redistribution notice gap — source-level issue confirmed
+
+- `packages/core/scripts/generate-font-data.ts` reads only selected Latin-subset WOFF2 files from the 18 packages and writes base64 data URIs into `fontData.generated.ts`. The generated module records font keys/data URIs, not each font's copyright attribution or OFL text.
+- `packages/cli/scripts/build-fonts.mjs` triggers that generator when the generated file is absent.
+- `packages/cli/scripts/build-copy.mjs` copies the CLI's selected runtime assets, docs, templates and skills; the reviewed script contains no step that copies the 18 font `LICENSE`/OFL notice files into the CLI output.
+- The CLI package manifest's `files` allowlist is only `bin` and `dist`. Its package-level Apache-2.0 declaration does not replace the embedded fonts' separate OFL-1.1 terms.
+- OFL-1.1 permits fonts to be bundled/embedded and redistributed with software, but requires the copyright notice and licence to accompany each copy; the font software must remain under OFL. Several families also carry Reserved Font Names, which must be respected if fonts are modified.
+
+**Conclusion:** source inspection confirms a packaging/notice-closure gap in the v0.9.46 build path. This is not a finding that embedding or commercial use is prohibited. It means the candidate cannot be cleared for Voxora redistribution until the exact font notices are included in the shipped package (or the font embedding path is removed/replaced) and the resulting package archive is inspected. No source changes or package installation were made in this audit.
+
+#### Updated gate state
+
+| Gate | Evidence | Status |
+|---|---|---|
+| Exact 18-font package versions and SHA-512 lock entries | Immutable v0.9.46 `bun.lock` | SOURCE VERIFIED |
+| Font family licence classification | 18/18 reviewed as OFL-1.1 | SOURCE VERIFIED |
+| Font copyright/OFL notices in CLI output | Generator and build-copy path do not copy per-font notices; archive not downloaded | SOURCE-LEVEL GAP; ARCHIVE NOT VERIFIED |
+| Registry package identity | Publish workflow rewrites `@hyperframes/cli` to `hyperframes` | SOURCE VERIFIED |
+| Exact `hyperframes@0.9.46` dist.integrity/signature/provenance | Exact registry metadata/attestation not captured | NOT VERIFIED |
+| Target package archive contents | No exact npm tarball inspection | NOT VERIFIED |
+
+#### Evidence references
+
+- [HyperFrames v0.9.46 CLI manifest](https://github.com/heygen-com/hyperframes/blob/v0.9.46/packages/cli/package.json)
+- [HyperFrames v0.9.46 Bun lock](https://github.com/heygen-com/hyperframes/blob/v0.9.46/bun.lock)
+- [HyperFrames v0.9.46 font generator](https://github.com/heygen-com/hyperframes/blob/v0.9.46/packages/core/scripts/generate-font-data.ts)
+- [HyperFrames v0.9.46 CLI build-copy script](https://github.com/heygen-com/hyperframes/blob/v0.9.46/packages/cli/scripts/build-copy.mjs)
+- [HyperFrames v0.9.46 publish workflow](https://github.com/heygen-com/hyperframes/blob/v0.9.46/.github/workflows/publish.yml)
+- [Fontsource licensing policy](https://github.com/fontsource/fontsource#licensing)
+- [npm registry signatures](https://docs.npmjs.com/about-registry-signatures/)
+- [npm provenance verification](https://docs.npmjs.com/viewing-package-provenance/)
