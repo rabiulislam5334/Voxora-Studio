@@ -220,3 +220,59 @@ A first executable orchestration service has been added in `app/universal/cinema
 - The tests use injected fake aligner/renderer implementations. They do not prove actual Stable-ts inference, Skia rendering, audio mux quality on Windows, or Bengali alignment quality.
 
 **Acceptance sequence:** exact PR-head Windows + Ubuntu CI → target-PC 30–60 second English MP4 with supplied narration → inspect H.264/AAC streams and visual/audio sync → separate Bangla alignment benchmark → integrate the service into the Produce UI only after the local render path is verified. This is an incremental working slice, not a claim that full Auto Produce is complete.
+
+
+## 13. HyperFrames v0.9.46 browser, binary and local-only closure audit
+
+### Immutable source inspected
+
+- Upstream tag: `v0.9.46`
+- Resolved tag commit: `43132411c86b23a55134afaf261d77f3785168cc`
+- Source files inspected: `packages/cli/package.json`, `packages/core/package.json`, `packages/cli/src/browser/manager.ts`, `packages/cli/src/commands/browser.ts`, `packages/cli/src/commands/render/execute.ts`, `packages/cli/scripts/build-fonts.mjs`, and `.github/workflows/publish.yml`.
+
+### Verified source-level findings
+
+1. **CLI package and runtime dependencies**
+   - The published CLI package is `hyperframes`, package version `0.9.46`, licensed Apache-2.0, with Node.js `>=22`.
+   - The CLI declares `@puppeteer/browsers` and `puppeteer-core`; it does not declare a bundled Chrome package in its direct dependency list.
+   - The CLI README requires FFmpeg as an external dependency. The reviewed CLI package metadata does not declare `ffmpeg-static`; that package appears in the separate AWS Lambda adapter, not the ordinary local CLI dependency list.
+   - Therefore the local desktop adapter cannot assume that browser or FFmpeg binaries are already included in the npm CLI tarball.
+
+2. **Browser acquisition and offline boundary**
+   - `hyperframes browser ensure` explicitly looks for the managed Chrome Headless Shell and downloads it when missing. `browser clear` removes the managed browser cache.
+   - The render execution path calls `ensureBrowser({ preferManagedChrome: true, signal })`; a missing managed browser can therefore trigger acquisition during render, not only when the user manually runs the browser command.
+   - `HYPERFRAMES_BROWSER_PATH` is checked before managed-cache acquisition. A valid existing executable can be supplied to avoid this managed download path.
+   - The manager uses a versioned Chrome Headless Shell cache and the Puppeteer browser installer. This establishes a separate browser-binary acquisition boundary outside the npm package lock.
+   - These are source-inspection findings only. No network-isolated render was executed. They do not prove that every runtime path, composition, font, update check or optional feature is network-independent.
+
+3. **Font build boundary**
+   - The CLI build runs `build:fonts`, which generates `fontData.generated.ts` in the Core package when that generated file is absent.
+   - The Core package declares 18 Fontsource packages as build-time development dependencies; the immutable lock records exact package versions and SHA-512 integrity values.
+   - The generated WOFF2 data is embedded in the generated source/build output, but this does not itself prove that all corresponding font licence texts and attribution notices are retained in a redistributed desktop package.
+   - Per-font licence and notice clearance remains OPEN until each exact locked package artifact and its bundled notice are inspected.
+
+4. **Release workflow and provenance**
+   - The immutable `.github/workflows/publish.yml` publish job grants `id-token: write` and invokes `npm publish` for the CLI package without an explicit `--provenance` argument.
+   - This is compatible with an OIDC/trusted-publishing setup, but source workflow permissions alone do not establish the npm-side trusted-publisher configuration or prove that the exact `hyperframes@0.9.46` registry artifact has a valid provenance attestation.
+   - Exact registry `dist.integrity`, ECDSA signature and build attestation for `hyperframes@0.9.46` remain UNVERIFIED in this audit. Do not describe provenance as absent.
+
+### Updated closure matrix
+
+| Gate | Evidence | Status |
+|---|---|---|
+| CLI package licence and Node requirement | Exact v0.9.46 package manifest | SOURCE VERIFIED |
+| Browser installer and cache behavior | Exact v0.9.46 CLI source | SOURCE VERIFIED |
+| Existing-browser override | `HYPERFRAMES_BROWSER_PATH` path in source | SOURCE VERIFIED |
+| Browser download-free render | Requires an installed compatible browser; no offline execution yet | NOT VERIFIED |
+| FFmpeg binary closure | Local CLI expects external FFmpeg; no bundled local CLI binary established | OPEN |
+| Exact font licence and notice retention | 18 locked package artifacts not individually inspected | OPEN |
+| npm registry integrity/signature/provenance | Exact 0.9.46 registry evidence not captured | OPEN |
+| Complete offline/local-only render | No network-isolated run on target Windows PC | NOT VERIFIED |
+| Target-PC performance and render quality | No new target-PC benchmark in this audit | NOT VERIFIED |
+
+### Decision impact
+
+- HyperFrames remains a technically plausible adapter candidate, not an approved framework selection.
+- Do not install or bundle HyperFrames, Chrome, FFmpeg or its optional dependencies into Voxora as part of this audit.
+- Before VXP-06.3 can be unblocked, capture exact npm registry evidence, complete the per-font notice audit, define the intended local browser/FFmpeg distribution boundary, and run a network-isolated smoke render with all required local inputs pre-provisioned.
+- The local-only smoke render must be performed separately from the target-PC quality/performance acceptance. A successful source inspection or CI run is not a substitute.
