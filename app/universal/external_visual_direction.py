@@ -50,8 +50,8 @@ def _reject_constant(value):
 def _read_package(package: Any) -> Mapping[str, Any]:
     if isinstance(package, Mapping):
         try:
-            encoded = json.dumps(package, ensure_ascii=False, allow_nan=False).encode("utf-8")
-            data = json.loads(encoded, object_pairs_hook=_reject_duplicate_keys, parse_constant=_reject_constant)
+            encoded = json.dumps(package, ensure_ascii=False, allow_nan=True).encode("utf-8")
+            data = json.loads(encoded, object_pairs_hook=_reject_duplicate_keys)
         except (TypeError, ValueError, UnicodeError) as exc:
             if isinstance(exc, VisualDirectionImportError):
                 raise
@@ -123,18 +123,17 @@ def import_visual_direction_package(
     if not isinstance(narration_source, NarrationSource):
         raise VisualDirectionImportError("narration_source must be the active NarrationSource")
     fingerprint = hashlib.sha256(script.encode("utf-8")).hexdigest()
-    if narration_source.text != script or narration_source.source_fingerprint != fingerprint:
-        raise VisualDirectionImportError("active NarrationSource does not match the supplied script")
-
     data = _read_package(package)
     if data.get("schema_version") != 1:
         raise VisualDirectionImportError("unsupported visual-direction schema_version; expected 1")
     source_id = _text(data.get("source_id"), "source_id", maximum=256)
     source_fingerprint = _text(data.get("source_fingerprint"), "source_fingerprint", maximum=64)
-    if source_id != narration_source.source_id:
-        raise VisualDirectionImportError("package source_id does not match the active narration source")
     if source_fingerprint != fingerprint:
         raise VisualDirectionImportError("package script fingerprint is stale or does not match")
+    if narration_source.text != script or narration_source.source_fingerprint != fingerprint:
+        raise VisualDirectionImportError("active NarrationSource does not match the supplied script")
+    if source_id != narration_source.source_id:
+        raise VisualDirectionImportError("package source_id does not match the active narration source")
     package_profile = _text(data.get("profile_id"), "profile_id", maximum=128)
     if package_profile != profile_id:
         raise VisualDirectionImportError("package profile_id does not match the active channel profile")
