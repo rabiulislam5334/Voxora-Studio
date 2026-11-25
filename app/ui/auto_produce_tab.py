@@ -259,7 +259,8 @@ class AutoProduceTab(ttk.Frame):
         )
         preview = (
             f"Plan source: {plan_origin}\n"
-            f"Profile: {profile.display_name}\n            f"Scenes: {len(plan.scenes)} · Shots: {len(plan.shots)}\n\n"
+            f"Profile: {profile.display_name}\n"
+            f"Scenes: {len(plan.scenes)} · Shots: {len(plan.shots)}\n\n"
             + "\n".join(preview_lines)
         )
         if len(plan.shots) > 8:
