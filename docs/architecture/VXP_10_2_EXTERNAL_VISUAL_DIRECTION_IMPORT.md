@@ -24,9 +24,9 @@ profile data instead of introducing a parallel planning model.
 ## Scope
 
 This is the local JSON interchange/validation foundation. A Claude-specific
-prompt/export workflow, UI file picker, external provider integration and
-additional interchange schemas remain future work. No network access, paid
-API, cloud upload or new dependency is introduced.
+prompt/export workflow, external provider integration and additional
+interchange schemas remain future work. No network access, paid API, cloud
+upload or new dependency is introduced.
 
 
 ## Auto Produce UI integration
