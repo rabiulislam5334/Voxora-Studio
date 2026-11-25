@@ -116,5 +116,6 @@ def build_cinematic_skill_handoff(
             title=shot.shot_type.replace("_", " ").title(),
             body=(line.caption or line.spoken_text,),
             director_shot_id=shot.shot_id,
+            camera_preset=_INTENT_CAMERA_PRESET[shot.intent],
         ))
     return tuple(result)
