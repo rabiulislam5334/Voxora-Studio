@@ -87,3 +87,16 @@ The final selection (VXP-06.3) remains BLOCKED until HyperFrames package provena
 ### HyperFrames 0.9.46 source provenance follow-up
 
 The official upstream tag `v0.9.46` resolves to immutable commit `43132411c86b23a55134afaf261d77f3785168cc`. Its CLI package manifest is `@hyperframes/cli@0.9.46`, Apache-2.0, Node >=22, with declared Puppeteer/browser, fontkit and related runtime dependencies; producer/engine manifests also declare Puppeteer dependencies. The official guide documents local Puppeteer/Chromium + system FFmpeg mode and a separate Docker mode. This improves source provenance and establishes the dependency families, but does not prove npm tarball identity, resolved transitive closure, browser/font/FFmpeg redistribution terms, or no-network behavior. HyperFrames remains a lead candidate for further audit only—not selected or cleared for bundling.
+
+
+### HyperFrames 0.9.46 runtime/privacy/font follow-up
+
+Source inspection at upstream tag v0.9.46 (commit 43132411c86b23a55134afaf261d77f3785168cc) adds decision-critical findings:
+
+- The source CLI manifest is published under the unscoped npm name hyperframes by a release workflow that rewrites the package name before npm publish. The workflow pins its source checkout to an immutable release commit, but npm tarball dist.integrity and provenance metadata were not retrievable here. Exact source-to-tarball identity remains unverified.
+- The CLI build embeds generated WOFF2 font data and copies several runtime surfaces into its published dist. The font generator selects Latin subsets from its canonical font list; that list has no Bengali-specific family/subset. Bengali shaping and fallback must be validated separately, and exact embedded font notices remain open.
+- Production telemetry defaults to enabled and sends command/system/render event metadata to PostHog. The source provides HYPERFRAMES_NO_TELEMETRY=1, DO_NOT_TRACK=1 and a persistent disable command. A separate npm update check runs in the normal CLI path, with HYPERFRAMES_NO_UPDATE_CHECK=1 as an opt-out.
+- The browser manager can download a managed Chrome Headless Shell. The engine's private-address filtering is not a global network-deny policy. Therefore the unmodified CLI is not proven to operate offline; strict local-first use requires explicit telemetry/update opt-outs and a pinned, pre-provisioned browser or a verified offline integration path.
+- The npm version history confirms hyperframes@0.9.46 was published, but not its tarball integrity. No package install, network-isolated execution or target-PC benchmark was performed.
+
+The lead-candidate assessment is now more qualified: HyperFrames remains the most promising candidate from the user's visual benchmark, but default telemetry/update behavior, managed-browser downloads, missing Bengali font coverage and unclosed npm/runtime licence evidence prevent adoption approval. Do not bundle or integrate it until the remaining gates are resolved. VXP-06.3 remains BLOCKED; no framework is selected.
