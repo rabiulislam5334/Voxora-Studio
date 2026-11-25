@@ -93,3 +93,53 @@ The official rendering guide documents local mode using Puppeteer/Chromium and t
 **Still open:** npm tarball dist.integrity and provenance attestation; exact installed package contents matching the tag; resolved transitive graph and per-package licences; bundled/downloaded Chromium and font notices; FFmpeg build/licence and whether Voxora can delegate encoding to its existing FFmpeg pipeline; network-disabled behavior; actual 8GB Windows target-PC performance.
 
 Sources inspected: upstream tag ref and files at `v0.9.46` (commit above), `packages/cli/package.json`, `packages/producer/package.json`, `packages/engine/package.json`, and official local/Docker rendering documentation. This remains an engineering audit, not legal advice.
+
+
+## 8. HyperFrames 0.9.46 runtime, privacy and font follow-up (2026-11-25)
+
+This pass inspected additional files at immutable upstream tag v0.9.46 / commit 43132411c86b23a55134afaf261d77f3785168cc. This is source inspection only; no package was installed and no network-isolation or target-PC test was run.
+
+### Published package and integrity boundary
+
+- The npm package is published as unscoped hyperframes, while the source workspace manifest names @hyperframes/cli; the upstream publish workflow rewrites the package name before npm publish.
+- The release workflow checks out an immutable release commit, builds the workspace, and publishes the CLI package to npm. This is useful release-process evidence, but it is not an npm provenance attestation and does not reveal the published tarball's dist.integrity.
+- Public npm version history confirms hyperframes@0.9.46 was published, but the registry's version metadata/tarball integrity could not be retrieved in this inspection. The benchmark's installed tarball therefore cannot yet be cryptographically matched to the source tag.
+- Source manifests identify direct dependencies, but the workspace uses internal workspace packages and caret ranges for many external dependencies. Without exact published package metadata and resolved lock data, a complete transitive licence inventory remains unavailable.
+
+### Build-time assets and font coverage
+
+- The CLI build runs build:fonts, build:runtime and build:copy. The copy stage includes generated runtime, Studio assets, templates, skills, player bundles, inspector runtime and GSAP vendor files. This is a wider distribution surface than the CLI manifest alone.
+- The font generator embeds WOFF2 data as base64 data URIs in a generated TypeScript module. It reads selected weights from canonical @fontsource packages and explicitly selects files containing the -latin- subset.
+- The inspected canonical family list includes Inter, Montserrat, Outfit, Nunito, Oswald, League Gothic, Archivo Black, Space Mono, IBM Plex Mono, JetBrains Mono, EB Garamond, Playfair Display, Source Code Pro, Noto Sans JP, Roboto, Open Sans, Lato and Poppins. It does not include a Bengali-specific family or Bengali subset in this generator.
+- This does not prove Bengali rendering is impossible: user-supplied/system fonts or browser fallback may work. It means deterministic Bengali glyph coverage, shaping and font redistribution cannot be claimed from the bundled canonical font set. Bengali যুক্তাক্ষর/কারচিহ্ন must be tested with an explicit font path and its licence/notice.
+- Exact generated font files and applicable per-font licence/notice texts were not available in the recovered benchmark archive. Do not assume every embedded font has the same licence merely because the CLI declares Apache-2.0.
+
+### Network and privacy behavior observed in source
+
+- Production defaults set telemetryEnabled=true. Normal CLI startup shows a first-run telemetry disclosure, tracks command/system metadata, and queues events to PostHog at https://us.i.posthog.com/batch/. Payload properties include CLI version, OS/architecture, Node version, CPU count/model, total memory, CI/WSL/agent runtime metadata and command/render event properties. The source sets $ip=null in the event payload.
+- The first-run disclosure says usage data is collected; source comments/docs state paths and composition content are not collected. After HeyGen sign-in, events can be linked to the HeyGen username/account; the first-run notice warns that account email and username are linked.
+- Telemetry opt-outs exist through HYPERFRAMES_NO_TELEMETRY=1, DO_NOT_TRACK=1, or the hyperframes telemetry disable preference. These controls disable telemetry specifically; they are not equivalent to a network-disabled build.
+- The normal CLI path also checks the npm registry for updates (two-hour cache in this tag's source). HYPERFRAMES_NO_UPDATE_CHECK=1 is an opt-out. Background auto-install has additional guards and is skipped for unattended/CI runs, but the update-check path itself is a separate outbound request.
+- The browser manager can download a managed Chrome Headless Shell when no suitable cached/system browser is available. This is an explicit external runtime download path; it must be provisioned and pinned or disabled/redirected for a strict offline installation.
+- The inspected engine network policy blocks selected private/local address ranges for certain fetch/capture paths. That is not a global egress-deny policy and does not establish offline operation.
+
+Adoption implication: unmodified production CLI behavior is not a no-network default. A Voxora adapter would need explicit opt-outs plus a verified runtime/browser provisioning strategy, or a narrowly scoped integration that excludes telemetry/update/publish/cloud features. No hidden upload can be permitted in Voxora's core workflow.
+
+### Updated evidence status
+
+| Gate | New evidence | Status |
+|---|---|---|
+| Immutable source | Tag resolves to exact source commit | Established |
+| npm package identity | Publish workflow rewrites source package name to hyperframes; version is listed publicly | Partial |
+| npm tarball integrity/provenance | Registry metadata and tarball integrity unavailable in this pass | Open |
+| Direct/transitive dependency closure | Source manifests identify direct families; no exact resolved published graph | Open |
+| Bundled font assets | Generator embeds selected Latin WOFF2 subsets from Fontsource packages | Partial |
+| Font licence notices | Exact generated files and notices not preserved | Open |
+| Bengali typography | No Bengali family/subset in canonical embedded list; fallback behavior untested | Open |
+| Telemetry/privacy | Production default enabled; explicit opt-outs; signed-in identity linkage documented | Established from source |
+| Update network calls | npm registry background check present; opt-out exists | Established from source |
+| Browser provisioning | Managed Chrome download path present | Established from source |
+| Strict offline operation | No global egress-deny evidence or isolated run | Open |
+| Target PC performance | Not tested on 8GB Windows target | Open |
+
+Source files inspected at the immutable tag include packages/cli/package.json, packages/cli/scripts/build-fonts.mjs, packages/cli/scripts/build-runtime.ts, packages/cli/scripts/build-copy.mjs, packages/core/scripts/generate-font-data.ts, packages/core/package.json, packages/cli/src/telemetry/client.ts, packages/cli/src/telemetry/config.ts, packages/cli/src/telemetry/policy.ts, packages/cli/src/telemetry/transport.ts, packages/cli/src/utils/updateCheck.ts, packages/cli/src/utils/autoUpdate.ts, packages/cli/src/browser/manager.ts, and packages/engine/src/utils/networkPolicy.ts. Public npm version history and official CLI documentation were also checked. This remains an engineering audit, not legal advice.
