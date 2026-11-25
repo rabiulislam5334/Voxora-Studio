@@ -262,6 +262,7 @@ Preserve recovered rules: first scene role is intro; last scene is outro only wi
 - Hardware: Windows, i5-8250U, 8 GB RAM, NVIDIA 940MX 4 GB; memory pressure is material.
 - Isolated workspace: D:\Voxora-TS02-Benchmark. Voxora source/dependencies were not changed.
 - **No winner declared.** Do not rerun the same benchmark. Fill only missing decision-matrix evidence. FFmpeg remains final encoding/mux.
+- Remotion v4.0.543 licence eligibility reviewed; individual personal-use category is explicit, but third-party Voxora desktop-app redistribution remains NOT CLEARED pending written vendor clarification. See [TS-02 Remotion Licence Audit](./TS-02_REMOTION_LICENSE_AUDIT.md).
 
 ### VXP-07 — ElevenLabs-inspired Sound & Voice System (R-6; Engine 6)
 
