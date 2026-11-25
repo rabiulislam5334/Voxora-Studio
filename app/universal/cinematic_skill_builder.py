@@ -38,12 +38,23 @@ class CinematicSkillShot:
     counter_caption: Optional[str] = None
     director_shot_id: Optional[str] = None
     image_path: Optional[str] = None
+    camera_preset: str = "standard"
 
 
 class CinematicSkillFilmBuilder:
     """Build an upstream Film from exact Voxora line timings and optional shot cues."""
 
     SUPPORTED_KINDS = frozenset({"card", "title", "counter", "image"})
+    CAMERA_PRESETS = {
+        "standard": (1.0, 1750, 0.48),
+        "reveal": (1.12, 1500, 0.52),
+        "map_wide": (0.86, 2050, 0.42),
+        "diagram_focus": (1.08, 1600, 0.48),
+        "evidence_detail": (1.22, 1350, 0.56),
+        "timeline_wide": (0.92, 1950, 0.44),
+        "action": (1.05, 1600, 0.50),
+        "environment_wide": (0.88, 2100, 0.42),
+    }
 
     @staticmethod
     def _stage_image(narration_doc, image_path: str) -> tuple[str, float]:
@@ -259,6 +270,11 @@ class CinematicSkillFilmBuilder:
                     f"unsupported visual kind {shot.kind!r}; "
                     f"choose one of {sorted(self.SUPPORTED_KINDS)}"
                 )
+            if shot.camera_preset not in self.CAMERA_PRESETS:
+                raise CinematicSkillFilmBuildError(
+                    f"unsupported camera preset {shot.camera_preset!r}; "
+                    f"choose one of {sorted(self.CAMERA_PRESETS)}"
+                )
             if shot.kind == "image" and not shot.image_path:
                 raise CinematicSkillFilmBuildError("image shots require image_path")
             if shot.kind != "image" and shot.image_path is not None:
@@ -266,7 +282,11 @@ class CinematicSkillFilmBuilder:
 
             x = index * 3600.0
             y = 0.0
-            film.shot(line.start_seconds, x, y, 1.0, radius=1750, strength=0.48)
+            zoom, radius, strength = self.CAMERA_PRESETS[shot.camera_preset]
+            film.shot(
+                line.start_seconds, x, y, zoom,
+                radius=radius, strength=strength,
+            )
 
             if shot.kind == "image":
                 key, aspect = self._stage_image(narration_doc, shot.image_path)

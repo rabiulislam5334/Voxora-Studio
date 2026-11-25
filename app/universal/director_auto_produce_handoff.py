@@ -30,6 +30,19 @@ _INTENT_KIND = {
     DirectorIntent.ILLUSTRATIVE: "card",
 }
 
+# Map semantic Director intents to bounded camera motion presets. These are
+# configuration keys consumed by the existing Cinematic Skill camera spline.
+_INTENT_CAMERA_PRESET = {
+    DirectorIntent.QUESTION_REVEAL: "reveal",
+    DirectorIntent.MAP: "map_wide",
+    DirectorIntent.DIAGRAM: "diagram_focus",
+    DirectorIntent.EVIDENCE: "evidence_detail",
+    DirectorIntent.TIMELINE: "timeline_wide",
+    DirectorIntent.CHARACTER_ACTION: "action",
+    DirectorIntent.ENVIRONMENT: "environment_wide",
+    DirectorIntent.ILLUSTRATIVE: "standard",
+}
+
 
 def build_cinematic_skill_handoff(
     plan: DirectorPlan,
@@ -116,5 +129,6 @@ def build_cinematic_skill_handoff(
             title=shot.shot_type.replace("_", " ").title(),
             body=(line.caption or line.spoken_text,),
             director_shot_id=shot.shot_id,
+            camera_preset=_INTENT_CAMERA_PRESET[shot.intent],
         ))
     return tuple(result)

@@ -139,3 +139,10 @@ def test_handoff_expands_one_director_shot_over_its_multiple_narration_units():
 
     assert [item.line_id for item in shots] == [1, 2]
     assert [item.director_shot_id for item in shots] == [merged.shot_id, merged.shot_id]
+
+
+def test_handoff_maps_director_intents_to_profile_safe_camera_presets():
+    script, source, plan, doc = _fixture()
+    shots = build_cinematic_skill_handoff(plan, **_args(script, source, doc))
+    assert shots[0].camera_preset == "reveal"
+    assert shots[1].camera_preset == "diagram_focus"
