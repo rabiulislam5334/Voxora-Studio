@@ -244,7 +244,7 @@ Preserve recovered rules: first scene role is intro; last scene is outro only wi
 | Subphase | Deliverable | Status |
 |---|---|---|
 | 06.1 | Motion Canvas / HyperFrames / Remotion comparative benchmark | DONE — user evaluation, 14–15 Nov 2026 |
-| 06.2 | Formal matrix: quality, speed, memory, Bengali typography, portability, license, determinism | PLANNED |
+| 06.2 | Formal matrix: quality, speed, memory, Bengali typography, portability, license, determinism | IN PROGRESS — evidence matrix recorded in [VXP_06_MOTION_FRAMEWORK_DECISION_MATRIX.md](../architecture/VXP_06_MOTION_FRAMEWORK_DECISION_MATRIX.md); previous benchmark results transcribed, missing comparable/resource/Unicode/licence evidence remains open |
 | 06.3 | Select primary adapter and document limitations | BLOCKED — final decision not recorded |
 | 06.4 | Renderer-neutral motion scene/animation contract | PLANNED |
 | 06.5 | Implement selected adapter in isolation | BLOCKED by 06.3 |
