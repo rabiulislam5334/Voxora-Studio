@@ -100,3 +100,12 @@ Source inspection at upstream tag v0.9.46 (commit 43132411c86b23a55134afaf261d77
 - The npm version history confirms hyperframes@0.9.46 was published, but not its tarball integrity. No package install, network-isolated execution or target-PC benchmark was performed.
 
 The lead-candidate assessment is now more qualified: HyperFrames remains the most promising candidate from the user's visual benchmark, but default telemetry/update behavior, managed-browser downloads, missing Bengali font coverage and unclosed npm/runtime licence evidence prevent adoption approval. Do not bundle or integrate it until the remaining gates are resolved. VXP-06.3 remains BLOCKED; no framework is selected.
+
+
+### HyperFrames 0.9.46 npm/font lock follow-up
+
+The immutable upstream publish workflow runs on GitHub-hosted Ubuntu with `id-token: write` and publishes the CLI using `npm publish` without an explicit `--provenance` flag. npm trusted publishing can generate provenance automatically, so this is OIDC-compatible evidence—not proof that trusted publishing was configured for this version. The exact npm `dist.integrity`, registry signature and build attestation could not be retrieved; provenance is **unverified**, not confirmed absent.
+
+The same upstream tag's `bun.lock` pins all 18 Fontsource build packages to exact versions with SHA-512 integrity values. The core font generator embeds selected WOFF2 subsets into generated source. This closes the source-build dependency-version question for those fonts, but not the exact licence/notice question: Fontsource requires per-family licence review and the collection includes OFL-1.1, Apache-2.0 and Ubuntu Font License families. The exact licence files for these 18 locked artifacts remain open. The canonical generator still selects Latin subsets only; Bengali shaping remains unverified.
+
+See [the detailed candidate licence audit](./VXP_06_MOTION_CANDIDATE_LICENSE_AUDIT.md), section “HyperFrames 0.9.46 publish-workflow and embedded-font lock follow-up”. No framework is selected; VXP-06.3 remains BLOCKED.

@@ -244,8 +244,8 @@ Preserve recovered rules: first scene role is intro; last scene is outro only wi
 | Subphase | Deliverable | Status |
 |---|---|---|
 | 06.1 | Motion Canvas / HyperFrames / Remotion comparative benchmark | DONE — user evaluation, 14–15 Nov 2026 |
-| 06.2 | Formal matrix: quality, speed, memory, Bengali typography, portability, license, determinism | IN PROGRESS — original workspace recovered; Motion Canvas (112-entry) and Remotion (407-entry) lockfiles inventoried; HyperFrames CLI 0.9.46 is command-pinned but tarball/dependency closure is missing; Windows binary/runtime licence gates documented |
-| 06.3 | Select primary adapter and document limitations | BLOCKED — HyperFrames exact package provenance, candidate binary/browser/font notices, local-only verification and Remotion product-redistribution eligibility remain unresolved |
+| 06.2 | Formal matrix: quality, speed, memory, Bengali typography, portability, license, determinism | IN PROGRESS — original workspace recovered; Motion Canvas (112-entry) and Remotion (407-entry) lockfiles inventoried; HyperFrames 0.9.46 source release workflow and 18 exact Fontsource build-package pins recorded; npm tarball integrity/attestation, per-font notices, browser/binary closure and local-only verification remain open |
+| 06.3 | Select primary adapter and document limitations | BLOCKED — HyperFrames npm provenance/integrity and font notices remain unverified; candidate binary/browser closure, local-only verification and Remotion product-redistribution eligibility remain unresolved |
 | 06.4 | Renderer-neutral motion scene/animation contract | PLANNED |
 | 06.5 | Implement selected adapter in isolation | BLOCKED by 06.3 |
 | 06.6 | Preview/render parity and deterministic tests | BLOCKED by 06.5 |
