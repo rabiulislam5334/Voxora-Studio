@@ -1,7 +1,7 @@
 # VXP-06.2 — Motion Framework Decision Matrix
 
-> Status: IN PROGRESS — prior user-run benchmark evidence transcribed; apples-to-apples, platform, typography, memory and licence evidence remain incomplete.
-> Baseline: `main` at `7d1bcc251fac53a98fea8104ca059dd148bd0a89` (2026-11-25).
+> Status: IN PROGRESS — original workspace recovered; Motion Canvas and Remotion lockfiles inventoried; HyperFrames package closure and binary/runtime licensing remain open.
+> Baseline: `main` at `19c7b4383f5a1b547970ca47bf77927715e47c83` (2026-11-25).
 > Parent: [Master Product Plan](../PLANNING/README.md), VXP-06 / TS-02.
 
 ## 1. Decision scope
@@ -50,7 +50,7 @@ Legend: **Observed** = directly recorded above; **Partial** = some evidence exis
 | Headless/automation suitability | Unknown | Partial: CLI version used | Partial: CLI/browser render used | Repeatable unattended invocation, structured progress and errors |
 | Determinism / reproducibility | Unknown | Unknown | Unknown | Same inputs/settings produce stable frame sequence or documented variance |
 | Cancellation / recovery | Unknown | Unknown | Unknown | Cancel mid-render, cleanup, retry and no partial final publication |
-| Licence / redistribution | Unknown for exact dependency closure | Unknown for exact dependency closure | Unknown for exact dependency closure | Audit exact versions, transitive packages, browser/binaries and notices |
+| Licence / redistribution | Lockfile: 112 entries; Windows exporter installs GPLv3 FFmpeg + GPL-3.0 FFprobe binaries; one dependency has no licence metadata | CLI command pins 0.9.46, but root-only lockfile has no tarball integrity/dependency graph; Apache-2.0 upstream reference only | Lockfile: 407 entries; 8 packages lack licence metadata; Windows compositor includes FFmpeg binaries; custom Remotion licence applies | Close exact binary/runtime notices and product redistribution terms before adoption |
 | $0 local-first operation | Unknown for complete dependency/runtime path | Partial: CLI benchmark was local | Partial: software-render benchmark was local | No mandatory paid account, hosted service or hidden upload |
 | FFmpeg handoff | Not yet proven in this comparison | Not yet proven in this comparison | Observed silent H.264 output for sample | Feed validated frames/video to existing FFmpeg pipeline without duplicate mux ownership |
 
@@ -79,6 +79,6 @@ A controlled run is justified only if the original artifacts cannot fill the dec
 
 **No primary framework selected.** Keep the existing Voxora motion contracts and renderer adapters independent. Continue using the already integrated Cinematic Skill adapter only for its documented documentary/evidence-board strengths, subject to its separate licence and target-PC gates. Do not make Motion Canvas, HyperFrames or Remotion a mandatory dependency yet.
 
-The preliminary top-level licence findings and exact remaining adoption gates are recorded in [VXP_06_MOTION_CANDIDATE_LICENSE_AUDIT.md](./VXP_06_MOTION_CANDIDATE_LICENSE_AUDIT.md). Motion Canvas (MIT) and HyperFrames (Apache-2.0) have permissive top-level terms, but exact benchmark package provenance and dependency/runtime closure are not verified. Remotion 4.0.543 uses a custom Free/Company License: eligible individuals may create commercial videos, but embedding/redistributing it inside Voxora is not cleared. No candidate is approved for bundling or selected.
+The recovered package and licence evidence is recorded in [VXP_06_MOTION_CANDIDATE_LICENSE_AUDIT.md](./VXP_06_MOTION_CANDIDATE_LICENSE_AUDIT.md). Motion Canvas has an exact 112-entry lockfile, but its installed Windows FFmpeg/FFprobe binaries declare GPLv3/GPL-3.0. HyperFrames' project scripts pin CLI 0.9.46, but its root-only lockfile preserves no tarball integrity or dependency graph. Remotion 4.0.543 has an exact 407-entry lockfile, while eight package entries lack licence metadata and its Windows compositor includes FFmpeg binaries. No candidate is approved for bundling or selected.
 
-The final selection (VXP-06.3) remains BLOCKED until original benchmark manifests/lockfiles identify exact packages, direct/transitive and binary/font notices are audited, local-only behavior is verified, and Remotion's product-distribution boundary is resolved if it remains a candidate. A capability-based multi-adapter architecture remains valid; the product's permanent 2D/2.5D/3D/4D/Hybrid scope must not be reduced to whichever candidate wins this comparison.
+The final selection (VXP-06.3) remains BLOCKED until HyperFrames package provenance, candidate binary/browser/font notices, local-only behavior and Remotion's product-distribution boundary are resolved. A capability-based multi-adapter architecture remains valid; the product's permanent 2D/2.5D/3D/4D/Hybrid scope must not be reduced to whichever candidate wins this comparison.
