@@ -78,3 +78,18 @@ Upstream references: [Remotion v4.0.543 release](https://github.com/remotion-dev
 **No candidate is approved for bundling or selected as the primary framework.** The recovered workspace closes the earlier Motion Canvas and Remotion lockfile gaps, but exposes material Windows binary licensing questions: Motion Canvas' exporter installed GPLv3/GPL-3.0 FFmpeg/FFprobe binaries, while Remotion's Windows compositor package includes FFmpeg binaries without a declared package licence. HyperFrames is pinned in the benchmark command to 0.9.46, but its downloaded tarball and dependency closure were not preserved.
 
 VXP-06.3 remains **BLOCKED** until HyperFrames package/runtime provenance, native/browser binary and font notices, local-only behavior and Remotion product-distribution eligibility (if still considered) are resolved. This audit does not reduce the permanent 2D, 2.5D, 3D, 4D/time-based 3D or Hybrid product capabilities.
+
+
+## 7. HyperFrames 0.9.46 immutable upstream-source inspection (2026-11-25)
+
+The exact upstream Git tag is now recoverable: `v0.9.46` resolves to commit `43132411c86b23a55134afaf261d77f3785168cc` in `heygen-com/hyperframes`. This is stronger source provenance than the previous unpinned current-main reference, but it does **not** prove that the npm tarball used by the benchmark was byte-for-byte built from this commit.
+
+The tag's `packages/cli/package.json` identifies `@hyperframes/cli@0.9.46`, declares Apache-2.0, and requires Node.js >=22. Its direct runtime dependencies include `@hono/node-server`, `@puppeteer/browsers`, `puppeteer-core`, `fontkit`, `sharp` (optional), and other packages. The CLI manifest also declares internal workspace packages including core, engine, producer, parsers, lint and studio-server as development/build dependencies. The tagged producer/engine manifests additionally declare Puppeteer and Puppeteer Core dependencies. These manifests provide an auditable dependency map to investigate; they are not a resolved npm lockfile and cannot establish exact transitive versions or integrity hashes.
+
+The official rendering guide documents local mode using Puppeteer/Chromium and the system FFmpeg, while Docker mode supplies a pinned Chrome/font environment. Therefore local operation is a supported path, but the exact 0.9.46 browser payload, FFmpeg binary expectations, font sources and network behavior still require verification. Do not assume the Docker route is suitable for the target PC or mandatory-free merely because local mode exists.
+
+**Newly established:** immutable upstream tag/commit, exact CLI package name/version, top-level Apache-2.0 declaration, Node >=22 engine floor, and declared direct dependency families.
+
+**Still open:** npm tarball dist.integrity and provenance attestation; exact installed package contents matching the tag; resolved transitive graph and per-package licences; bundled/downloaded Chromium and font notices; FFmpeg build/licence and whether Voxora can delegate encoding to its existing FFmpeg pipeline; network-disabled behavior; actual 8GB Windows target-PC performance.
+
+Sources inspected: upstream tag ref and files at `v0.9.46` (commit above), `packages/cli/package.json`, `packages/producer/package.json`, `packages/engine/package.json`, and official local/Docker rendering documentation. This remains an engineering audit, not legal advice.
