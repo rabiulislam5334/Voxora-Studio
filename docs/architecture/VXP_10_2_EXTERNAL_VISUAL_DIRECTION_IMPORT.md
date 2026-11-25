@@ -24,6 +24,23 @@ profile data instead of introducing a parallel planning model.
 ## Scope
 
 This is the local JSON interchange/validation foundation. A Claude-specific
-prompt/export workflow, UI file picker, external provider integration and
-additional interchange schemas remain future work. No network access, paid
-API, cloud upload or new dependency is introduced.
+prompt/export workflow, external provider integration and additional
+interchange schemas remain future work. No network access, paid API, cloud
+upload or new dependency is introduced.
+
+
+## Auto Produce UI integration
+
+The supplied-narration Auto Produce workspace accepts an optional local JSON file.
+The UI loads it only after constructing the active `NarrationSource`, then
+validates it against that source, the current profile ID and the profile's
+actual visual style family. The script fingerprint is the normalized spoken
+text sent to the aligner (after existing narration-markup removal and sentence
+segmentation), not the raw editor buffer.
+
+The imported plan is shown as an external proposal and still requires the
+same explicit approval confirmation as the internal Director plan. Invalid or
+stale external packages stop production with a diagnostic; they never silently
+fall back to the internal plan. When no package is selected, the existing
+internal Production Director path remains unchanged. Both paths reuse the
+existing approved Director handoff and Auto Produce renderer.

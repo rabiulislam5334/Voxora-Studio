@@ -322,7 +322,7 @@ Do not introduce parallel rendering or silent engine fallback without a separate
 
 ### VXP-10 — AI Production Director and Auto Produce (R-7; orchestration layer)
 
-**10.2 implementation update (in progress):** A local JSON interchange foundation is being added using the existing DirectorPlan schema. Packages are bound to the exact script fingerprint, narration source and active profile; imported plans require explicit approval. This does not yet add a Claude-specific generator or UI file picker.
+**10.2 implementation update (PR #127 merged; importer CI VERIFIED):** A local JSON interchange foundation uses the existing DirectorPlan schema. Packages are bound to the active normalized spoken-script fingerprint, narration source and channel profile; imported plans require explicit review. The Auto Produce UI integration is now in progress: optional JSON selection, active-input validation, plan preview and explicit approval. This does not add a Claude-specific generator or remote provider.
 
 
 This is the main automation milestone. It integrates existing engines; it must not duplicate them.
