@@ -15,7 +15,6 @@ from app.universal.asset_library import VisualAssetLibrary
 from app.universal.auto_produce_plan import create_auto_produce_plan
 from app.universal.cinematic_skill_auto_produce import CinematicSkillAutoProduceWorkflow
 from app.universal.models import UniversalState
-from app.universal.production_director import ProductionDirector
 from app.universal.profiles.models import ChannelProfile
 from app.universal.supplied_narration_input import build_line_aligned_narration_source
 from app.workers.cancel import CancelToken
