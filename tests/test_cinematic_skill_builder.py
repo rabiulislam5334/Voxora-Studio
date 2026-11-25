@@ -178,3 +178,23 @@ def test_image_shot_rejects_missing_or_invalid_local_asset(tmp_path):
                 1, kind="image", image_path=str(tmp_path / "missing.png"),
             )],
         )
+
+
+def test_director_camera_presets_change_camera_zoom_deterministically(tmp_path):
+    doc = make_doc(tmp_path)
+    shots = [
+        CinematicSkillShot(1, camera_preset="evidence_detail"),
+        CinematicSkillShot(2, camera_preset="map_wide"),
+    ]
+    film = CinematicSkillFilmBuilder(engine_module=fake_engine()).build(doc, shots)
+    assert [key[3] for key in film.cam_keys] == [1.22, 0.86]
+    assert film.cam_keys[0][4] == {"radius": 1350, "strength": 0.56}
+    assert film.cam_keys[1][4] == {"radius": 2050, "strength": 0.42}
+
+
+def test_unknown_camera_preset_is_rejected(tmp_path):
+    doc = make_doc(tmp_path)
+    with pytest.raises(CinematicSkillFilmBuildError, match="unsupported camera preset"):
+        CinematicSkillFilmBuilder(engine_module=fake_engine()).build(
+            doc, [CinematicSkillShot(1, camera_preset="arbitrary")],
+        )
