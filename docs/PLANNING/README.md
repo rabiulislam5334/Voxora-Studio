@@ -558,7 +558,7 @@ Exact PR mapping for some older foundations still needs Git-history reconciliati
 | ID | Question | Status | Rule |
 |---|---|---|---|
 | TS-01 | Canonical timebase | DONE in Rev 0.4: 141,120,000 ticks/sec | Do not rerun absent regression/new requirement |
-| TS-02 | Motion framework comparison | User benchmark done; formal decision pending | Do not repeat benchmark; fill missing matrix evidence |
+| TS-02 | Motion framework comparison | User benchmark done; formal decision pending; HyperFrames exact registry attestation and OFL notice closure remain open | Do not repeat benchmark; close exact package evidence, font redistribution notices and local-only validation before VXP-06.3 |
 | TS-03 | Composition serialization/storage | OPEN | Decide before persistent animated composition schema |
 | TS-04 | Prompt-based graphics coverage | OPEN | Template/rule-first; measure editable drafts |
 | TS-05 | Preview/memory/Tkinter adequacy | OPEN | Prototype and measure on target PC |
@@ -625,7 +625,7 @@ A phase is DONE only when:
 1. Reconcile the PR registry against repository history, including merged PRs #115, #118 and #119 and their exact implementation boundaries.
 2. Keep the historical 29 Modular Systems transcription deferred by product-owner decision; do not block active product work on that archive.
 3. Complete the requirement-to-implementation traceability matrix against merged PRs and current Core code.
-4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment.
+4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment. HyperFrames v0.9.46 source review confirms all 18 embedded Fontsource families are OFL-1.1, but the CLI build path does not copy their notices; exact npm registry integrity/signature/provenance and the published archive remain unverified (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
 5. Validate the optional Stable-ts script/audio word aligner on real English and Bangla narration; audit exact CPU PyTorch/torchaudio wheels; evolve the deterministic narration-line-to-Film builder toward semantic script/shot planning, then render and review a 20–30 second sequence on the target PC (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
 6. Design the script-first Auto Caption pipeline and multilingual caption acceptance matrix.
 7. Define advanced animation/render quality acceptance criteria and integrate them into the Auto Produce production graph.
