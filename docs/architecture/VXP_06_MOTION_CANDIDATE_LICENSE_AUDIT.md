@@ -143,3 +143,72 @@ Adoption implication: unmodified production CLI behavior is not a no-network def
 | Target PC performance | Not tested on 8GB Windows target | Open |
 
 Source files inspected at the immutable tag include packages/cli/package.json, packages/cli/scripts/build-fonts.mjs, packages/cli/scripts/build-runtime.ts, packages/cli/scripts/build-copy.mjs, packages/core/scripts/generate-font-data.ts, packages/core/package.json, packages/cli/src/telemetry/client.ts, packages/cli/src/telemetry/config.ts, packages/cli/src/telemetry/policy.ts, packages/cli/src/telemetry/transport.ts, packages/cli/src/utils/updateCheck.ts, packages/cli/src/utils/autoUpdate.ts, packages/cli/src/browser/manager.ts, and packages/engine/src/utils/networkPolicy.ts. Public npm version history and official CLI documentation were also checked. This remains an engineering audit, not legal advice.
+
+
+### HyperFrames 0.9.46 publish-workflow and embedded-font lock follow-up (2026-11-25)
+
+This follow-up narrows two previously open evidence questions using the immutable upstream tag `v0.9.46` at commit `43132411c86b23a55134afaf261d77f3785168cc`.
+
+#### npm publish/provenance: workflow is OIDC-capable, attestation still unverified
+
+- The release workflow's `publish` job runs on `ubuntu-latest`, uses the `npm-publish` GitHub environment, and grants `contents: write` plus `id-token: write`.
+- It configures Node 24 with `registry-url: https://registry.npmjs.org`, builds from the immutable release checkout with `bun install --frozen-lockfile`, and publishes the unscoped CLI package with `npm publish --access public --tag "$DIST_TAG"`.
+- The CLI publish command does **not** include an explicit `--provenance` flag. However, npm documents that trusted publishing via GitHub Actions can automatically generate provenance without that flag. The observed OIDC permission is compatible with that mechanism, but the repository workflow alone does not prove that the npm package's trusted-publisher configuration was enabled for this release.
+- Direct requests for the exact registry version metadata and attestation endpoint were inaccessible in this inspection. Therefore the `hyperframes@0.9.46` tarball `dist.integrity`, registry signature, and any build-provenance attestation remain **unverified**. Do not describe provenance as absent; the evidence only supports “not verified”.
+- The upstream source workflow is evidence of a controlled release build, not cryptographic proof that the benchmark's installed tarball is byte-for-byte that build.
+
+References:
+- [Immutable upstream publish workflow](https://github.com/heygen-com/hyperframes/blob/43132411c86b23a55134afaf261d77f3785168cc/.github/workflows/publish.yml)
+- [npm trusted publishing and automatic provenance](https://docs.npmjs.com/trusted-publishers/)
+- [npm provenance verification](https://docs.npmjs.com/viewing-package-provenance/)
+
+#### Exact build-lock evidence for embedded Fontsource packages
+
+The upstream `bun.lock` at the same immutable tag records exact package versions and SHA-512 tarball integrity values for all 18 Fontsource packages used by the core font generator. The release workflow runs `bun install --frozen-lockfile`; the CLI build runs the core font generator and embeds the selected WOFF2 data into generated source before publishing.
+
+| Font package | Locked version |
+|---|---:|
+| `@fontsource/archivo-black` | 5.2.8 |
+| `@fontsource/eb-garamond` | 5.2.7 |
+| `@fontsource/ibm-plex-mono` | 5.2.7 |
+| `@fontsource/inter` | 5.2.8 |
+| `@fontsource/jetbrains-mono` | 5.2.8 |
+| `@fontsource/lato` | 5.2.7 |
+| `@fontsource/league-gothic` | 5.2.8 |
+| `@fontsource/montserrat` | 5.2.8 |
+| `@fontsource/noto-sans-jp` | 5.2.9 |
+| `@fontsource/nunito` | 5.2.7 |
+| `@fontsource/open-sans` | 5.2.7 |
+| `@fontsource/oswald` | 5.2.8 |
+| `@fontsource/outfit` | 5.2.8 |
+| `@fontsource/playfair-display` | 5.2.8 |
+| `@fontsource/poppins` | 5.2.7 |
+| `@fontsource/roboto` | 5.2.10 |
+| `@fontsource/source-code-pro` | 5.2.7 |
+| `@fontsource/space-mono` | 5.2.9 |
+
+The lockfile includes a SHA-512 SRI value for each package tarball; these values are preserved in the immutable upstream [bun.lock](https://github.com/heygen-com/hyperframes/blob/43132411c86b23a55134afaf261d77f3785168cc/bun.lock). This establishes exact source-build dependency pins, **not** the CLI npm tarball integrity and not a complete redistribution clearance.
+
+#### Font licence boundary
+
+- Fontsource's v5 migration notes say packages include per-package `LICENSE` files. Its repository guidance explicitly says to read the licence for each font and notes that the collection includes OFL-1.1, Apache-2.0 and Ubuntu Font License fonts.
+- The exact licence text and copyright/attribution notice for each of the 18 locked package versions have not yet been individually inspected from their exact package artifacts. Therefore do not mark the embedded font set as uniformly OFL-1.1 or cleared for redistribution.
+- The generator still selects `-latin-` WOFF2 subsets. The exact dependency lock does not change the prior Bengali coverage limitation: there is no Bengali-specific family/subset in the canonical embedded list.
+
+References:
+- [Fontsource v5 per-package licence metadata and LICENSE files](https://fontsource.org/docs/getting-started/migrate-v5)
+- [Fontsource licensing guidance](https://github.com/fontsource/font-files#licensing)
+
+#### Updated gate interpretation
+
+| Gate | Follow-up evidence | Status |
+|---|---|---|
+| Immutable source release | Tag and source commit are fixed | Established |
+| npm publish workflow | GitHub-hosted release job has OIDC permission; CLI uses plain npm publish | Established |
+| npm trusted-publisher configuration | Not visible in source; registry attestation could not be retrieved | Open |
+| CLI npm tarball `dist.integrity` | Exact version metadata unavailable in this inspection | Open |
+| Fontsource build dependency identity | 18 exact versions and SHA-512 SRI values recorded in upstream lockfile | Established for source build |
+| Exact per-font licence/notice | Exact package licence texts not individually inspected | Open |
+| Bengali font coverage/shaping | Latin-only canonical embedded subset selection; shaping untested | Open |
+
+No package was installed, no external code was run, no network-isolation test or target-PC benchmark was performed, and no framework was selected. VXP-06.3 remains BLOCKED. This is an engineering evidence update, not legal advice.
