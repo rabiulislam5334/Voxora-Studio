@@ -201,7 +201,7 @@ def import_visual_direction_package(
             raise VisualDirectionImportError(f"{field} must be an object")
         scene_shots = _string_tuple(item.get("shot_ids"), f"{field}.shot_ids", maximum_items=MAX_SHOTS)
         if not scene_shots or any(shot_id not in set(shot_ids) for shot_id in scene_shots):
-            raise VisualDirectionImportError(f"{field} references unknown shots")
+            raise VisualDirectionImportError(f"{field}.shot_ids must be non-empty and reference known shots")
         scene_units = _string_tuple(item.get("narration_unit_ids"), f"{field}.narration_unit_ids", maximum_items=MAX_SHOTS)
         try:
             role = SceneRole(item.get("role"))
