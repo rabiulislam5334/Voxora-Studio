@@ -12,6 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from app.core.logger import get_logger
 from app.universal.asset_library import VisualAssetLibrary
+from app.universal.auto_produce_plan import create_auto_produce_plan
 from app.universal.cinematic_skill_auto_produce import CinematicSkillAutoProduceWorkflow
 from app.universal.models import UniversalState
 from app.universal.production_director import ProductionDirector
@@ -39,6 +40,7 @@ class AutoProduceTab(ttk.Frame):
         self._target_path: Path | None = None
         self._staging_path: Path | None = None
         self._audio_var = tk.StringVar()
+        self._visual_direction_var = tk.StringVar()
         self._language_var = tk.StringVar(value="en")
         self._folder_var = tk.StringVar(value=str(ctx.config.output_dir))
         self._name_var = tk.StringVar()
@@ -85,6 +87,20 @@ class AutoProduceTab(ttk.Frame):
         ttk.Entry(inputs, textvariable=self._name_var, width=42).grid(
             row=3, column=1, sticky="w", pady=(10, 0)
         )
+        ttk.Label(inputs, text="Visual direction JSON (optional)", style="App.TLabel").grid(
+            row=4, column=0, sticky="w", padx=(0, 10), pady=(10, 0)
+        )
+        ttk.Entry(inputs, textvariable=self._visual_direction_var).grid(
+            row=4, column=1, sticky="ew", pady=(10, 0)
+        )
+        ttk.Button(
+            inputs, text="Browse JSON...", style="Secondary.TButton",
+            command=self._browse_visual_direction,
+        ).grid(row=4, column=2, padx=(8, 0), pady=(10, 0))
+        ttk.Button(
+            inputs, text="Clear", style="Secondary.TButton",
+            command=lambda: self._visual_direction_var.set(""),
+        ).grid(row=4, column=3, padx=(6, 0), pady=(10, 0))
 
         info = ttk.Frame(self, style="Card.TFrame", padding=12)
         info.grid(row=3, column=0, sticky="ew", pady=(16, 10))
@@ -128,6 +144,15 @@ class AutoProduceTab(ttk.Frame):
         )
         if path:
             self._audio_var.set(path)
+
+    def _browse_visual_direction(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Choose external visual-direction package",
+            filetypes=[("Visual direction JSON", "*.json"), ("All files", "*.*")],
+        )
+        if path:
+            self._visual_direction_var.set(path)
+            self._message.configure(text="Visual-direction package selected. It will be validated against the current script, narration source and profile before approval.")
 
     def _browse_folder(self) -> None:
         path = filedialog.askdirectory(
@@ -215,7 +240,12 @@ class AutoProduceTab(ttk.Frame):
             aligned_script, narration_source = build_line_aligned_narration_source(
                 script, language=language,
             )
-            plan = ProductionDirector().create_plan(narration_source, profile)
+            visual_direction_path = self._visual_direction_var.get().strip()
+            plan = create_auto_produce_plan(
+                narration_source,
+                profile,
+                visual_direction_path=visual_direction_path or None,
+            )
         except Exception as exc:
             self._message.configure(text=str(exc))
             return
@@ -224,9 +254,13 @@ class AutoProduceTab(ttk.Frame):
             f"{shot.shot_type}: {shot.visual_prompt}"
             for shot in plan.shots[:8]
         ]
+        plan_origin = (
+            "External visual-direction package" if visual_direction_path
+            else "Internal Production Director"
+        )
         preview = (
-            f"Profile: {profile.display_name}\n"
-            f"Scenes: {len(plan.scenes)} · Shots: {len(plan.shots)}\n\n"
+            f"Plan source: {plan_origin}\n"
+            f"Profile: {profile.display_name}\n            f"Scenes: {len(plan.scenes)} · Shots: {len(plan.shots)}\n\n"
             + "\n".join(preview_lines)
         )
         if len(plan.shots) > 8:
@@ -263,7 +297,7 @@ class AutoProduceTab(ttk.Frame):
             self._last_dir = folder
             self._progress.configure(value=0)
             self._stage.configure(text="Starting Auto Produce...")
-            self._message.configure(text="Aligning supplied narration and preparing the approved Director plan.")
+            self._message.configure(text=f"Aligning supplied narration and preparing the approved {plan_origin.lower()} plan.")
             runner = partial(
                 workflow.run,
                 script=aligned_script,
