@@ -2,7 +2,7 @@
 
 > Status: Active planning baseline (PR #119 merged; VXP-00 registry reconciliation in progress)
 > Canonical location: docs/PLANNING/README.md
-> Last reconciled: 2026-11-21
+> Last reconciled: 2026-11-27
 
 ## 0. Non-negotiable product identity and outcome
 
@@ -627,7 +627,7 @@ A phase is DONE only when:
 1. Reconcile the PR registry against repository history, including merged PRs #115, #118 and #119 and their exact implementation boundaries.
 2. Keep the historical 29 Modular Systems transcription deferred by product-owner decision; do not block active product work on that archive.
 3. Complete the requirement-to-implementation traceability matrix against merged PRs and current Core code.
-4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment. HyperFrames v0.9.46 source review confirms all 18 embedded Fontsource families are OFL-1.1, but the CLI build path does not copy their notices; exact npm registry integrity/signature/provenance and the published archive remain unverified (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
+4. Finish the TS-02 formal decision matrix using the already completed Motion Canvas / HyperFrames / Remotion results. Do not repeat the same experiment. For HyperFrames v0.9.46, the supplied tarball SHA-512/SHA-1 now match registry metadata and the 774-file published archive is inspected; the archive embeds 18 Fontsource families but includes only 3 matching OFL notices and no package-root Apache-2.0 licence text. Registry signature records and a SLSA provenance endpoint are present, but cryptographic signature verification/raw attestation, font/package licence closure, native LGPL review, browser/offline and target-PC gates remain open (see [TS-02_HYPERFRAMES_REGISTRY_ARCHIVE_AUDIT.md](./TS-02_HYPERFRAMES_REGISTRY_ARCHIVE_AUDIT.md)).
 5. Validate the optional Stable-ts script/audio word aligner on real English and Bangla narration; audit exact CPU PyTorch/torchaudio wheels; evolve the deterministic narration-line-to-Film builder toward semantic script/shot planning, then render and review a 20–30 second sequence on the target PC (see [CINEMATIC_SKILL_AUDIT.md](./CINEMATIC_SKILL_AUDIT.md)).
 6. Design the script-first Auto Caption pipeline and multilingual caption acceptance matrix.
 7. Define advanced animation/render quality acceptance criteria and integrate them into the Auto Produce production graph.
