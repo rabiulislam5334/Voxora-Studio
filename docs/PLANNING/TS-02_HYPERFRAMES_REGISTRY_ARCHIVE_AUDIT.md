@@ -3,7 +3,7 @@
 > Audit date: 2026-11-25  
 > Source ref: `heygen-com/hyperframes@v0.9.46`  
 > Registry package: `hyperframes@0.9.46` (the monorepo CLI is renamed before publish)  
-> Result: **SOURCE WORKFLOW VERIFIED; REGISTRY METADATA AND PUBLISHED TARBALL NOT VERIFIED.**  
+> Result: **REGISTRY METADATA AND EXACT PUBLISHED TARBALL SHA-512 VERIFIED; SIGNATURE/RAW ATTESTATION AND REDISTRIBUTION CLOSURE STILL OPEN.**  
 > This is an evidence record, not a framework selection or legal opinion.
 
 ## 1. Source-level facts verified against the immutable upstream tag
@@ -129,3 +129,74 @@ For each of the 18 Fontsource packages listed in the master audit, retrieve the 
 | TS-02 primary framework selection | **NOT SELECTED** |
 
 No framework has been selected. No HyperFrames package was installed, no npm tarball was downloaded, and no Voxora runtime/source code was changed in this audit. The next evidence step is to run the reproducible commands from a network-enabled workstation and attach the raw outputs/archive hashes to the decision record.
+
+
+## 6. User-supplied registry and published-archive evidence — 2026-11-27
+
+The user supplied `HyperFrames-Audit.zip`, containing the exact `hyperframes-0.9.46.tgz`, version-specific `registry.json`, an npm lockfile and the installed Windows `node_modules` tree. The archive was inspected without installing or executing HyperFrames and without rerunning the TS-02 benchmark.
+
+### 6.1 Registry identity and integrity — VERIFIED
+
+Captured from the supplied version-specific registry metadata:
+
+- Package/version: `hyperframes@0.9.46`.
+- Registry tarball URL: `https://registry.npmjs.org/hyperframes/-/hyperframes-0.9.46.tgz`.
+- Registry `dist.integrity`: `sha512-Izx/LaXc2dxpKQli0AzWkAGKJ8tp2RI3gMcuWnYYDPhXSaMnA98TsgTMQqRIzexyPABvwnl5BJ05f+zlOnUHKQ==`.
+- Independently computed SHA-512 of the supplied 8,233,504-byte tarball: **exact match**.
+- Registry SHA-1: `d18f36f71a662c6b8b343d4791d7b8525b7ce93a`; independently computed SHA-1: **exact match**.
+- Registry file count: 774; inspected tar archive regular-file count: **774**.
+- Registry `gitHead`: `43132411c86b23a55134afaf261d77f3785168cc`, matching the immutable upstream v0.9.46 source commit already audited.
+- Registry metadata identifies the publisher as `GitHub Actions <npm-oidc-no-reply@github.com>`, npm `11.19.1`, Node `24.22.2`.
+
+This establishes that the supplied tarball bytes match the version-specific registry integrity metadata and that the registry source commit matches the audited upstream tag.
+
+### 6.2 Registry signatures and provenance — METADATA PRESENT; CRYPTOGRAPHIC VERIFICATION OPEN
+
+- `dist.signatures` contains **two signature records**, both carrying key ID `SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U`.
+- `dist.attestations` contains the version-specific npm attestations endpoint and declares predicate type `https://slsa.dev/provenance/v1`.
+- The ZIP does not contain the output of `npm audit signatures` or the raw attestation response. Therefore the signature records are captured from registry metadata, but their cryptographic verification and the SLSA provenance statement's subject/workflow identity are **NOT YET VERIFIED**.
+- Do not describe signatures or provenance as absent.
+
+### 6.3 Published archive and font notices — ARCHIVE GAP CONFIRMED
+
+The exact published tarball contains 774 files and was inspected directly:
+
+- The bundled generated font-data chunk contains embedded data entries for all **18** locked Fontsource families: Archivo Black, EB Garamond, IBM Plex Mono, Inter, JetBrains Mono, Lato, League Gothic, Montserrat, Noto Sans JP, Nunito, Open Sans, Oswald, Outfit, Playfair Display, Poppins, Roboto, Source Code Pro and Space Mono.
+- The archive contains only **three** matching per-family OFL notice files: EB Garamond, Inter and JetBrains Mono. It also contains six standalone WOFF2 files for those same three families.
+- The other **15 embedded Fontsource families have no corresponding per-family OFL notice file** in the published archive.
+- No package-root `LICENSE`, `LICENCE`, `NOTICE` or `COPYING` file is present, although the package manifest declares Apache-2.0. The archive does contain a separate Unicode contract licence file; that does not replace the package's Apache licence text or the missing font notices.
+
+This upgrades the earlier source-level finding: the per-font notice gap is now confirmed in the **published npm archive itself**, not merely inferred from the build-copy source.
+
+### 6.4 npm dependency lock and Windows native payload — INVENTORIED; REDISTRIBUTION REVIEW OPEN
+
+- The supplied npm lockfile uses lockfile version 3 and contains 127 package records including the root package (126 dependency records).
+- All 126 dependency records have a declared licence field in the lock metadata. The inventory includes MIT, Apache-2.0, ISC, BSD-3-Clause, CC0-1.0, 0BSD, LGPL-3.0-or-later and combined licence expressions.
+- The installed Windows x64 tree includes optional `sharp@0.35.5` and `@img/sharp-win32-x64@0.35.5`, including native `.node` and libvips DLL files. Its package metadata declares `Apache-2.0 AND LGPL-3.0-or-later`; its included `LICENSE` file is Apache-2.0 text. The LGPL component and the precise optional-runtime distribution boundary still need review before bundling.
+- The CLI package manifest declares Node.js `>=22` and external FFmpeg as a requirement in its README. No FFmpeg binary was found in the npm tarball file list.
+
+The lockfile inventory is not a complete legal clearance of every dependency or native binary.
+
+### 6.5 Updated gate status
+
+| Gate | Updated result |
+|---|---|
+| Exact registry package/version and tarball URL | **VERIFIED** |
+| Registry SHA-512 vs supplied tarball | **VERIFIED — exact match** |
+| Registry SHA-1 vs supplied tarball | **VERIFIED — exact match** |
+| Immutable source commit identity | **VERIFIED — gitHead matches v0.9.46 source commit** |
+| Registry signature records | **PRESENT IN METADATA; npm cryptographic audit output not supplied** |
+| SLSA provenance | **ATTESTATION ENDPOINT/PREDICATE PRESENT; raw statement not verified** |
+| Exact published tarball contents | **VERIFIED — 774 files inspected** |
+| Embedded 18-family font set | **VERIFIED IN ARCHIVE** |
+| Per-font OFL notices | **BLOCKED — only 3 of 18 corresponding notices present** |
+| Package Apache-2.0 licence text | **BLOCKED — no package-root licence/notice file in archive** |
+| npm dependency lock | **INVENTORIED — 126 dependency records** |
+| Windows sharp/libvips native dependency | **PRESENT; LGPL component review open** |
+| Telemetry/update opt-out, pre-provisioned browser, offline render | **NOT VERIFIED** |
+| Target-PC resource/performance/cancellation | **NOT VERIFIED** |
+| HyperFrames redistribution clearance / VXP-06.3 | **BLOCKED — do not bundle or integrate yet** |
+
+### 6.6 Evidence boundary
+
+No HyperFrames command was executed from the supplied installation. No network-isolated render, target-PC performance test, browser acquisition test or cancellation test was performed. The archive inspection does not clear the font, Apache package licence, LGPL/native dependency, browser or FFmpeg redistribution obligations. HyperFrames remains the preferred lead for gated evaluation only; no framework winner is selected.
