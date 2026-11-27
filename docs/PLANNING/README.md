@@ -651,3 +651,8 @@ The 14 planned channel profiles and their creative rules, preferred visual treat
 - TS-02 benchmark workspace: D:\Voxora-TS02-Benchmark — isolated user-run framework evaluation.
 
 **Authority rule:** this file organizes delivery; the recovered Master Specification remains the source for original requirements. If a conflict is found, record it and resolve it with the user rather than silently changing either source.
+
+
+### TS-02 font-notice closure follow-up — 2026-11-27
+
+The exact 18 Fontsource package versions and SHA-512 integrity pins from the immutable HyperFrames v0.9.46 `bun.lock` are now recorded in [TS-02_HYPERFRAMES_FONT_NOTICE_CLOSURE.md](./TS-02_HYPERFRAMES_FONT_NOTICE_CLOSURE.md). The supplied published CLI archive contains embedded data for 18 families but only 3 matching per-family OFL notices; 15 notices are absent, and the package-root Apache-2.0 text is absent. The archive inspection did not retain the identities of the three notices, so no family-level coverage is inferred. This is a documentation-only audit increment: no framework selected, no runtime integration, and the font redistribution gate remains BLOCKED. The detailed record defines the exact-package hash, notice mapping, corrected-archive and CI acceptance requirements.
