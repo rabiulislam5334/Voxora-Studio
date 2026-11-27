@@ -300,19 +300,52 @@ class StableTsNarrationAligner:
         try:
             refined_words = validate_refined_alignment(result, lines, duration)
         except CinematicSkillAlignmentError as refinement_error:
-            # The constrained pass can collapse a short function word to an
-            # instant cue. Fall back only to the independently measured
-            # first-pass word timings; never synthesize or stretch timestamps.
+            # First try the original full-align result. If it also contains
+            # instant words, rerun full alignment with a larger token window
+            # and without silence skipping/suppression. Unlike align_words(),
+            # full align() retains Stable-ts' fallback mechanisms.
             try:
                 refined_words = validate_refined_alignment(
                     first_pass_result, lines, duration
                 )
             except CinematicSkillAlignmentError as first_pass_error:
-                raise CinematicSkillAlignmentError(
-                    "both constrained and first-pass word alignment failed; "
-                    f"refinement: {refinement_error}; "
-                    f"first pass: {first_pass_error}"
-                ) from refinement_error
+                try:
+                    recovery_result = model.align(
+                        str(audio),
+                        "\\n".join(lines),
+                        language=language,
+                        original_split=True,
+                        stream=True,
+                        verbose=False,
+                        token_step=200,
+                        nonspeech_skip=None,
+                        fast_mode=False,
+                        suppress_silence=False,
+                    )
+                    if recovery_result is None:
+                        raise CinematicSkillAlignmentError(
+                            "recovery alignment returned no result"
+                        )
+                    validate_first_pass_ranges(
+                        getattr(recovery_result, "segments", None), lines
+                    )
+                    refined_words = validate_refined_alignment(
+                        recovery_result, lines, duration
+                    )
+                except Exception as recovery_error:
+                    if isinstance(recovery_error, CinematicSkillAlignmentError):
+                        recovery_detail = str(recovery_error)
+                    else:
+                        recovery_detail = (
+                            f"{type(recovery_error).__name__}: {recovery_error}"
+                        )
+                    raise CinematicSkillAlignmentError(
+                        "constrained, first-pass, and recovery word alignment "
+                        "failed; "
+                        f"refinement: {refinement_error}; "
+                        f"first pass: {first_pass_error}; "
+                        f"recovery: {recovery_detail}"
+                    ) from refinement_error
 
         cues = []
         word_offset = 0
