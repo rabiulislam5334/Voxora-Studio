@@ -200,3 +200,65 @@ The lockfile inventory is not a complete legal clearance of every dependency or 
 ### 6.6 Evidence boundary
 
 No HyperFrames command was executed from the supplied installation. No network-isolated render, target-PC performance test, browser acquisition test or cancellation test was performed. The archive inspection does not clear the font, Apache package licence, LGPL/native dependency, browser or FFmpeg redistribution obligations. HyperFrames remains the preferred lead for gated evaluation only; no framework winner is selected.
+
+
+## 7. User-supplied npm signature audit and raw provenance — 2026-11-27
+
+The user supplied the output of `npm audit signatures`:
+
+```text
+audited 74 packages in 6s
+74 packages have verified registry signatures
+24 packages have verified attestations
+```
+
+The user also supplied the raw version-specific npm attestation response for `hyperframes@0.9.46`. The response contains both the npm publish attestation predicate (`https://github.com/npm/attestation/tree/main/specs/publish/v0.1`) and SLSA provenance v1 (`https://slsa.dev/provenance/v1`).
+
+### 7.1 Package subject and archive digest — MATCHED
+
+Both attestation subjects identify:
+
+- Package: `pkg:npm/hyperframes@0.9.46`.
+- SHA-512: `233c7f2da5dcd9dc69290962d00cd690018a27cb69d9123780c72e5a76180cf85749a32703df13b204cc42a448cdec723c006fc27979049d397fece53a750729`.
+
+This hex digest exactly equals the independently computed SHA-512 of the supplied 8,233,504-byte tarball and the hex-decoded registry `dist.integrity` value recorded in §6.1. Thus the npm publish attestation and SLSA provenance refer to the same exact archive already matched to registry metadata.
+
+### 7.2 SLSA builder identity and source — PRESENT IN RAW ATTESTATION
+
+The decoded SLSA v1 statement identifies:
+
+- Source repository: `https://github.com/heygen-com/hyperframes`.
+- Workflow: `.github/workflows/publish.yml`.
+- Workflow ref: `refs/heads/main`.
+- Resolved source commit: `43132411c86b23a55134afaf261d77f3785168cc`.
+- GitHub Actions run: `43602505718`, attempt `1`.
+- Builder: GitHub-hosted Actions runner.
+- Certificate identity is scoped to the HyperFrames repository's publish workflow on `main`.
+
+The source commit matches the immutable v0.9.46 source commit and registry `gitHead` recorded in §6.1.
+
+### 7.3 Verification boundary
+
+- The user's npm CLI output reports **74 verified registry signatures** and **24 verified attestations** for the audited package set.
+- The raw HyperFrames attestation response independently binds both attestation predicates to the exact `hyperframes@0.9.46` tarball digest.
+- The supplied text does not include the `npm audit signatures --json --include-attestations` per-package report. Therefore the aggregate CLI counts are recorded as reported, while no claim is made that the text output alone identifies HyperFrames as one of the 24 individually verified attestations.
+- The raw bundle includes Sigstore verification material, certificate identity, transparency-log entries and inclusion proofs. This audit records their contents and matching subject; it does not independently re-run Sigstore cryptographic verification against the trust roots/log checkpoint.
+
+**Updated result:** package-specific npm publish attestation and SLSA provenance are **PRESENT AND SUBJECT-DIGEST-MATCHED**. npm CLI aggregate signature/attestation verification is **REPORTED PASS**. Independent per-package npm JSON verification evidence is **NOT SUPPLIED**.
+
+### 7.4 Gate status update
+
+| Gate | Updated result |
+|---|---|
+| Registry signature records | **PRESENT; npm audit reports 74 verified signatures in audited package set** |
+| HyperFrames npm publish attestation | **PRESENT; exact package/version and archive SHA-512 matched** |
+| HyperFrames SLSA provenance | **PRESENT; exact archive SHA-512, repository, workflow, main ref and source commit matched** |
+| Per-package npm JSON verification record | **NOT SUPPLIED** |
+| Independent Sigstore re-verification by this audit | **NOT PERFORMED** |
+| Font/package licence notices | **BLOCKED — published archive gap remains** |
+| Sharp/libvips LGPL review | **OPEN** |
+| Browser, FFmpeg, offline/local-only and telemetry controls | **NOT VERIFIED** |
+| Target-PC performance and cancellation | **NOT VERIFIED** |
+| HyperFrames redistribution clearance / VXP-06.3 | **BLOCKED — do not bundle or integrate** |
+
+This evidence closes the earlier **missing raw attestation** evidence gap, but it does not clear redistribution or runtime gates and does not select HyperFrames as the production framework.
