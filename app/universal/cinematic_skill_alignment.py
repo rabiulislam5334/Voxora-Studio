@@ -283,7 +283,7 @@ class StableTsNarrationAligner:
                 inplace=False,
                 stream=True,
                 verbose=False,
-                suppress_silence=True,
+                suppress_silence=False,
             )
         except Exception as exc:
             raise CinematicSkillAlignmentError(
