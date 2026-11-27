@@ -1,6 +1,6 @@
 # VXP-06.2 — Motion Framework Decision Matrix
 
-> Status: IN PROGRESS — original workspace recovered; Motion Canvas and Remotion lockfiles inventoried; HyperFrames package closure and binary/runtime licensing remain open.
+> Status: IN PROGRESS — exact HyperFrames 0.9.46 npm tarball SHA-512 matched to registry metadata and 774-file archive inspected; font/package licence notices, signature/provenance verification and runtime redistribution closure remain open.
 > Baseline: `main` at `19c7b4383f5a1b547970ca47bf77927715e47c83` (2026-11-25).
 > Parent: [Master Product Plan](../PLANNING/README.md), VXP-06 / TS-02.
 
@@ -109,3 +109,54 @@ The immutable upstream publish workflow runs on GitHub-hosted Ubuntu with `id-to
 The same upstream tag's `bun.lock` pins all 18 Fontsource build packages to exact versions with SHA-512 integrity values. The core font generator embeds selected WOFF2 subsets into generated source. This closes the source-build dependency-version question for those fonts, but not the exact licence/notice question: Fontsource requires per-family licence review and the collection includes OFL-1.1, Apache-2.0 and Ubuntu Font License families. The exact licence files for these 18 locked artifacts remain open. The canonical generator still selects Latin subsets only; Bengali shaping remains unverified.
 
 See [the detailed candidate licence audit](./VXP_06_MOTION_CANDIDATE_LICENSE_AUDIT.md), section “HyperFrames 0.9.46 publish-workflow and embedded-font lock follow-up”. No framework is selected; VXP-06.3 remains BLOCKED.
+
+
+## 7. Reconciled decision update — 2026-11-27
+
+This section reconciles the benchmark record above with the subsequent version-pinned audits in:
+
+- [Remotion v4.0.543 licence eligibility audit](../PLANNING/TS-02_REMOTION_LICENSE_AUDIT.md) (PR #138; Windows and Ubuntu CI passed; PR remains unmerged at the time of this update).
+- [HyperFrames v0.9.46 registry/archive audit](../PLANNING/TS-02_HYPERFRAMES_REGISTRY_ARCHIVE_AUDIT.md) (PR #139; Windows and Ubuntu CI passed; PR remains unmerged at the time of this update).
+
+### 7.1 Updated candidate assessment
+
+| Candidate | Positive evidence | Decision-critical unresolved risks | Current role |
+|---|---|---|---|
+| HyperFrames 0.9.46 | Best user-assessed visual result in the recorded workload; 3D elements were added; local CLI workflow was exercised; immutable upstream source tag and Apache-2.0 source manifest were inspected | Published npm tarball identity/integrity/signature/provenance not captured; actual archive and exact font notices not inspected; source build has no explicit per-font notice-copy step; default telemetry and update checks require opt-out; managed browser may download; Bengali font/shaping coverage is not established; offline/local-only behavior and target-PC resource use remain unverified | **PREFERRED LEAD FOR THE NEXT GATED EVALUATION — NOT SELECTED OR CLEARED FOR INTEGRATION** |
+| Remotion 4.0.543 | User benchmark produced a 1080p/30 FPS H.264 output; individual free-use category permits eligible individuals to create commercial or non-commercial videos/images and modify for their own custom use | Pinned licence does not expressly establish third-party Windows desktop-app redistribution; written vendor clarification is needed; 407-entry dependency/browser/binary notice closure and target-PC reliability remain open; software rendering and an initial Chrome Headless Shell timeout were recorded | **SECONDARY CANDIDATE — PERSONAL EVALUATION ELIGIBLE, PRODUCT REDISTRIBUTION NOT CLEARED** |
+| Motion Canvas | Existing 29-second sample completed in 39 seconds | User judged visual quality weak; Windows exporter installs GPLv3 FFmpeg and GPL-3.0 FFprobe binaries; dependency/licence closure and capability evidence remain incomplete | **DEPRIORITIZED; DO NOT REPEAT THE SAME BENCHMARK** |
+
+The recorded wall times are not comparable because the workloads and output settings were not controlled. The lead-candidate preference is based on the user's visual assessment and demonstrated local CLI/3D workflow, not a claim that HyperFrames is faster than Remotion or proven to use less memory.
+
+### 7.2 Decision
+
+**Do not declare a production framework winner yet.** For the next focused evaluation, prioritize HyperFrames as the lead candidate and keep Remotion as the fallback candidate. This narrows the work without weakening the product's local-first, $0-cost, licensing, privacy or target-PC requirements.
+
+HyperFrames may not be added as a mandatory dependency, bundled into the desktop installer, or invoked in Auto Produce until all of the following are evidenced:
+
+1. Exact npm registry metadata, tarball SHA-512/integrity, signature and provenance status are captured; absence must be recorded only if the registry/tool explicitly reports absence.
+2. The exact published archive and all 18 pinned Fontsource package archives are inspected; required notices are retained or the font packaging path is corrected.
+3. Telemetry and update checks are disabled by default in the Voxora invocation, and the browser is pre-provisioned/pinned without a hidden download or network requirement.
+4. The exact runtime/dependency/browser/FFmpeg redistribution obligations are closed for the intended Voxora distribution model.
+5. A narrow, isolated local-only invocation succeeds on the documented Windows target PC with measured RAM/VRAM, CPU, disk and render time, including a cancellation/cleanup check.
+
+If HyperFrames fails a mandatory gate, stop and reassess Remotion's exact desktop distribution route; do not silently relax the gate or switch to an unreviewed framework.
+
+### 7.3 Work that can proceed without framework selection
+
+The existing `app/universal/motion.py`, `motion_raster_renderer.py`, `motion_video.py` and `motion_timeline.py` foundations already provide renderer-independent scalar keyframes, camera transforms, deterministic frame evaluation, PNG frame rendering, sequential silent MP4 encoding and timeline/audio handoff.
+
+Do not duplicate or replace these modules. Continue renderer-neutral contracts and tests only where a concrete missing requirement is identified. Framework-specific adapter implementation remains gated by VXP-06.3. The permanent 2D, 2.5D, 3D, 4D/time-based 3D and Hybrid capabilities remain architecture requirements; none is removed or made dependent on one framework.
+
+
+## 8. Supplied HyperFrames 0.9.46 registry and archive verification — 2026-11-27
+
+The user supplied the exact npm tarball, registry metadata, npm lockfile and Windows installed dependency tree. The tarball's independently computed SHA-512 and SHA-1 both match the version-specific registry metadata; its 774 regular files match the registry file count. Registry `gitHead` matches immutable upstream commit `43132411c86b23a55134afaf261d77f3785168cc`.
+
+Registry metadata contains two signature records and a SLSA v1 provenance attestation endpoint. The ZIP does not include `npm audit signatures` output or the raw attestation statement, so cryptographic signature verification and provenance subject/workflow validation remain open.
+
+The published archive embeds generated font data for all 18 locked Fontsource families but contains only three corresponding OFL notice files (EB Garamond, Inter and JetBrains Mono). The other 15 embedded families have no matching per-family OFL notice in the archive. The package archive also contains no package-root Apache-2.0 LICENSE/NOTICE file despite declaring Apache-2.0. This confirms the font notice gap in the actual published tarball.
+
+The supplied lockfile has 126 dependency records with licence metadata. The installed Windows x64 tree includes optional `sharp@0.35.5` and `@img/sharp-win32-x64@0.35.5` with native Node/libvips binaries; the latter declares `Apache-2.0 AND LGPL-3.0-or-later`. The LGPL component and native redistribution boundary remain open. No FFmpeg binary was found in the npm tarball.
+
+**Current decision:** exact tarball identity/integrity is VERIFIED; registry signature records and a provenance endpoint are PRESENT but not cryptographically/raw-attestation verified; published font and package licence notice closure is BLOCKED; browser pre-provisioning, telemetry/update opt-out, offline/local-only operation, FFmpeg/dependency redistribution and target-PC performance/cancellation remain NOT VERIFIED. HyperFrames remains the preferred lead for gated evaluation only. VXP-06.3 remains BLOCKED; no framework is selected.
