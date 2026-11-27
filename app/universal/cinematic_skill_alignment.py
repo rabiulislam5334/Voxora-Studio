@@ -265,6 +265,8 @@ class StableTsNarrationAligner:
 
         validate_first_pass_ranges(getattr(result, "segments", None), lines)
 
+        first_pass_result = result
+
         # Stable-ts' align() establishes script-line ranges, but its first-pass
         # fallback can leave instant words or stretch a boundary word across
         # trailing silence. Re-align each word inside those measured line
@@ -295,7 +297,22 @@ class StableTsNarrationAligner:
                 "Stable-ts could not refine the first-pass word alignment"
             )
 
-        refined_words = validate_refined_alignment(result, lines, duration)
+        try:
+            refined_words = validate_refined_alignment(result, lines, duration)
+        except CinematicSkillAlignmentError as refinement_error:
+            # The constrained pass can collapse a short function word to an
+            # instant cue. Fall back only to the independently measured
+            # first-pass word timings; never synthesize or stretch timestamps.
+            try:
+                refined_words = validate_refined_alignment(
+                    first_pass_result, lines, duration
+                )
+            except CinematicSkillAlignmentError as first_pass_error:
+                raise CinematicSkillAlignmentError(
+                    "both constrained and first-pass word alignment failed; "
+                    f"refinement: {refinement_error}; "
+                    f"first pass: {first_pass_error}"
+                ) from refinement_error
 
         cues = []
         word_offset = 0
