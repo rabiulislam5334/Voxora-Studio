@@ -326,9 +326,11 @@ class StableTsNarrationAligner:
                         raise CinematicSkillAlignmentError(
                             "recovery alignment returned no result"
                         )
-                    validate_first_pass_ranges(
-                        getattr(recovery_result, "segments", None), lines
-                    )
+                    # Recovery may return one combined segment even when
+                    # original_split=True. Validate the flattened exact word
+                    # sequence and measured timestamps instead of requiring
+                    # one segment per source line; line grouping is restored
+                    # below from the original script token counts.
                     refined_words = validate_refined_alignment(
                         recovery_result, lines, duration
                     )
