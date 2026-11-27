@@ -312,7 +312,7 @@ class StableTsNarrationAligner:
                 try:
                     recovery_result = model.align(
                         str(audio),
-                        "\\n".join(lines),
+                        "\n".join(lines),
                         language=language,
                         original_split=True,
                         stream=True,
