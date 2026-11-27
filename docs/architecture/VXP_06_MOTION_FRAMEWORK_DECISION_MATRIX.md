@@ -1,6 +1,6 @@
 # VXP-06.2 — Motion Framework Decision Matrix
 
-> Status: IN PROGRESS — original workspace recovered; Motion Canvas and Remotion lockfiles inventoried; HyperFrames package closure and binary/runtime licensing remain open.
+> Status: IN PROGRESS — exact HyperFrames 0.9.46 tarball identity/integrity and raw npm/SLSA attestation subject/source identity are matched; published font/package notices and runtime redistribution gates remain open.
 > Baseline: `main` at `19c7b4383f5a1b547970ca47bf77927715e47c83` (2026-11-25).
 > Parent: [Master Product Plan](../PLANNING/README.md), VXP-06 / TS-02.
 
@@ -147,3 +147,16 @@ If HyperFrames fails a mandatory gate, stop and reassess Remotion's exact deskto
 The existing `app/universal/motion.py`, `motion_raster_renderer.py`, `motion_video.py` and `motion_timeline.py` foundations already provide renderer-independent scalar keyframes, camera transforms, deterministic frame evaluation, PNG frame rendering, sequential silent MP4 encoding and timeline/audio handoff.
 
 Do not duplicate or replace these modules. Continue renderer-neutral contracts and tests only where a concrete missing requirement is identified. Framework-specific adapter implementation remains gated by VXP-06.3. The permanent 2D, 2.5D, 3D, 4D/time-based 3D and Hybrid capabilities remain architecture requirements; none is removed or made dependent on one framework.
+
+
+## 9. HyperFrames registry, archive and provenance reconciliation — 2026-11-27
+
+This section supersedes the earlier provisional evidence statements in §§7–8 where they say that the exact npm tarball, raw attestation or provenance subject could not be verified. The detailed evidence record is [TS-02_HYPERFRAMES_REGISTRY_ARCHIVE_AUDIT.md](../PLANNING/TS-02_HYPERFRAMES_REGISTRY_ARCHIVE_AUDIT.md), §§6–7.
+
+- The supplied `hyperframes@0.9.46` tarball SHA-512 and SHA-1 exactly match version-specific npm registry metadata; all 774 regular archive files were inspected.
+- The raw npm publish and SLSA v1 attestation statements both identify `pkg:npm/hyperframes@0.9.46` and the exact archive SHA-512. The SLSA statement identifies `heygen-com/hyperframes`, `.github/workflows/publish.yml`, `refs/heads/main`, source commit `43132411c86b23a55134afaf261d77f3785168cc`, and Actions run `43602505718`.
+- The user's npm audit output reports 74 verified registry signatures and 24 verified attestations across the audited package set. Per-package JSON output was not supplied, and this review did not independently re-run Sigstore cryptographic verification. Record these boundaries; do not overstate them.
+- The published archive contains embedded font data for 18 Fontsource families but only three matching per-family OFL notices. Fifteen corresponding notices are missing; the package-root Apache-2.0 licence text is also absent.
+- The installed Windows dependency tree includes native sharp/libvips payload with an LGPL-3.0-or-later component; its redistribution boundary remains open. Browser pre-provisioning, FFmpeg/runtime obligations, telemetry/update opt-out, offline/local-only operation and target-PC performance/cancellation are not verified.
+
+**Updated decision:** HyperFrames remains the preferred lead for the next gated evaluation, not a selected or cleared production framework. VXP-06.2 remains IN PROGRESS; VXP-06.3 remains BLOCKED. Do not bundle or invoke HyperFrames in Auto Produce until all licence, runtime, privacy, offline and target-PC gates close. No benchmark was rerun and no Voxora runtime code was changed.
